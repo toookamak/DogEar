@@ -3,7 +3,19 @@ export type Status = "待整理" | "稍后读" | "已归档";
 export type ViewMode = "grid" | "list" | "board" | "tags";
 export type SortKey = "recent" | "title" | "domain";
 export type SyncPhase = "idle" | "syncing" | "success" | "error";
-export type ThemeMode = "light" | "dark" | "system";
+// TODO(pending): 新增主题方案（Claude / ElevenLabs / Mistral / Supabase / Cal / Notion）标为待定，
+// 后续主题设计评审后再做样式与色彩收敛。现仅作为原型集成占位。
+export type ThemeMode =
+  | "light"
+  | "dark"
+  | "system"
+  | "glass"
+  | "claude"
+  | "elevenlabs"
+  | "mistral"
+  | "supabase"
+  | "cal"
+  | "notion";
 
 export type SectionKey =
   | "inbox"
