@@ -7,7 +7,18 @@ const THEME_STORAGE_KEY = "dogear-theme";
 
 function initialTheme(): ThemeMode {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored === "light" || stored === "dark" || stored === "system") {
+  if (
+    stored === "light" ||
+    stored === "dark" ||
+    stored === "system" ||
+    stored === "glass" ||
+    stored === "claude" ||
+    stored === "elevenlabs" ||
+    stored === "mistral" ||
+    stored === "supabase" ||
+    stored === "cal" ||
+    stored === "notion"
+  ) {
     return stored;
   }
   return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -15,7 +26,7 @@ function initialTheme(): ThemeMode {
     : "light";
 }
 
-function resolveTheme(theme: ThemeMode): "light" | "dark" {
+function resolveTheme(theme: ThemeMode): Exclude<ThemeMode, "system"> {
   if (theme === "system") {
     return window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
