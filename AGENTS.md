@@ -58,7 +58,7 @@ DogEar/
 
 ## 4. 组件规范
 
-- 原型组件遵循 `docs/COMPONENTS-原型版.md`，正式工程组件遵循 `docs/COMPONENTS.md`（原子设计：Atoms → Molecules → Organisms → Templates → Pages）
+- 【待定】原型组件遵循 `docs/COMPONENTS-原型版.md`，正式工程组件遵循 `docs/COMPONENTS.md`（原子设计：Atoms → Molecules → Organisms → Templates → Pages）
 
 - 新建组件前必搜对应注册表，按“合并对照表”判定复用/扩展/新建，禁止重复造轮子
 
@@ -66,9 +66,9 @@ DogEar/
 
 ## 5. 开发规范
 
-- **存储**：本地优先 + 异步同步，`showInNav` 持久化，开关关闭不丢 `page_tab/docker_items`
+- **存储**：【待定】本地优先 + 异步同步，`showInNav` 持久化，开关关闭不丢 `page_tab/docker_items`
 
-- **关联**：工作台控“是否显示”（全部/按规则-或/自定义搜索勾选/隐藏），导航页控布局，规则先做或
+- **关联**：【待定】工作台控“是否显示”（全部/按规则-或/自定义搜索勾选/隐藏），导航页控布局，规则先做或
 
 - **AI**：Skill 需自描述 `/.well-known/capabilities`，`save` 回显，`batch_organize` 标 experimental，需确认才生效
 
@@ -82,7 +82,7 @@ DogEar/
 
 - 文档与代码分离提交，文档变更同步更新 `docs/README.md` 与 PRD 版本记录
 
-- **身份匿名化（强制）**：所有提交必须使用 `DogEar <15047523+maxxie6418@users.noreply.github.com>`（GitHub noreply 邮箱，避免暴露真实邮箱）。禁止使用真实个人姓名/邮箱提交，禁止在提交信息、分支名、Tag、文件内容中写入个人身份信息（姓名、私人邮箱、手机号、家庭地址等）
+- **身份匿名化（强制）**：所有提交必须使用匿名化邮箱（GitHub noreply 邮箱，避免暴露真实邮箱）。禁止使用真实个人姓名/邮箱提交，禁止在提交信息、分支名、Tag、文件内容中写入个人身份信息（姓名、个性化用户名、私人邮箱、手机号、家庭地址等）
 
 - **GitHub 隐私设置**：账号需开启 `Settings → Emails → Keep my email addresses private`，本地 `git config user.email` 必须与 GitHub noreply 邮箱保持一致
 
@@ -98,7 +98,7 @@ DogEar/
 
 - ❌ 自行精简非核心功能（需确认）
 
-- ❌ 提交中包含个人身份信息（真实姓名/私人邮箱/手机号等），或使用 `dogear@noreply.local` 等非 GitHub 关联邮箱提交
+- ❌ 提交中包含个人身份信息（真实姓名/个性化用户名/私人邮箱/手机号等），以及相关密钥或ID
 
 - ❌ 未经确认执行历史重写（filter-branch/新根提交）、强制推送、删除远端仓库等不可逆操作
 
