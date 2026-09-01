@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DogEar · 标签视图卡片样式探索</title>
+  <style>
+    /* ===== 设计 token：与 workbench tokens.css 同源 ===== */
+    :root {
+      color-scheme: light;
+      --canvas: #faf9f5;
+      --panel: #ffffff;
+      --panel-raised: #f6f4ef;
+      --panel-hover: #efede6;
+      --panel-overlay: rgba(250, 249, 245, 0.94);
+      --line: #e9e5dc;
+      --line-strong: #d3cdbf;
+      --text: #2e2a23;
+      --muted: #716b5e;
+      --faint: #a29b8c;
+      --amber: #cf6a43;
+      --amber-strong: #b8562f;
+      --amber-soft: rgba(207, 106, 67, 0.09);
+      --mint: #3f7a5c;
+      --mint-soft: rgba(63, 122, 92, 0.09);
+      --blue: #3f6d96;
+      --blue-soft: rgba(63, 109, 150, 0.09);
+      --indigo: #5d5a94;
+      --indigo-soft: rgba(93, 90, 148, 0.09);
+      --rust: #8f6a45;
+      --rust-soft: rgba(143, 106, 69, 0.09);
+      --slate: #636c7c;
+      --slate-soft: rgba(99, 108, 124, 0.11);
+      --font-sans: "Manrope", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --font-serif: "Newsreader", Georgia, "Songti SC", serif;
+      --font-mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+      --radius-sm: 5px;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --shadow-sm: 0 1px 2px rgba(88, 72, 44, 0.07);
+      --cols: 3;
+    }
+
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --canvas: #16150f;
+      --panel: #1e1d15;
+      --panel-raised: #26241b;
+      --panel-hover: #2d2a20;
+      --panel-overlay: rgba(22, 21, 15, 0.95);
+      --line: #363228;
+      --line-strong: #4c4638;
+      --text: #e8e2d5;
+      --muted: #a8a294;
+      --faint: #736e61;
+      --amber: #d97a4e;
+      --amber-strong: #ea8d5f;
+      --amber-soft: rgba(217, 122, 78, 0.14);
+      --mint: #7fbf9a;
+      --mint-soft: rgba(127, 191, 154, 0.14);
+      --blue: #7dafd6;
+      --blue-soft: rgba(125, 175, 214, 0.14);
+      --indigo: #8f8ac8;
+      --indigo-soft: rgba(143, 138, 200, 0.15);
+      --rust: #c19168;
+      --rust-soft: rgba(193, 145, 104, 0.14);
+      --slate: #8b93a3;
+      --slate-soft: rgba(139, 147, 163, 0.15);
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--canvas);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    /* ===== 顶栏 ===== */
+    .top {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 22px;
+      background: var(--panel-overlay);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .brand-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: var(--amber);
+      color: #fff9f1;
+      font-family: var(--font-serif);
+      font-size: 13px;
+      font-weight: 700;
+      transform: translateY(2px);
+    }
+
+    .brand-mode {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      letter-spacing: 0.16em;
+      color: var(--faint);
+      font-weight: 400;
+    }
+
+    .top-note {
+      flex: 1;
+      font-size: 12px;
+      color: var(--faint);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .seg-control { display: inline-flex; }
+
+    .seg-btn {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .seg-btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+    .seg-btn:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+    .seg-btn + .seg-btn { border-left: none; }
+
+    .seg-btn.active {
+      background: var(--amber);
+      border-color: var(--amber);
+      color: #fff9f1;
+    }
+
+    .theme-btn {
+      height: 28px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .theme-btn:hover { background: var(--panel-hover); }
+
+    /* ===== 页面骨架 ===== */
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 30px 22px 60px; }
+
+    .hero h1 { font-size: 20px; font-weight: 750; letter-spacing: 0.01em; }
+
+    .hero .kicker {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      color: var(--amber-strong);
+      margin-bottom: 6px;
+    }
+
+    .hero .sub { margin-top: 6px; font-size: 13px; color: var(--muted); max-width: 720px; }
+
+    .sec { margin-top: 36px; }
+
+    .sec-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+
+    .sec-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--amber-soft);
+      color: var(--amber-strong);
+      border: 1px solid var(--line);
+    }
+
+    .sec-title { font-size: 15px; font-weight: 700; }
+    .sec-desc { font-size: 12.5px; color: var(--muted); }
+    .sec-chips {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--faint);
+      margin-bottom: 14px;
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+      gap: 10px 12px;
+    }
+
+    /* ===== 来源色（与工作台来源色板同源） ===== */
+    .s-blue   { background: var(--blue-soft);   color: var(--blue); }
+    .s-amber  { background: var(--amber-soft);  color: var(--amber-strong); }
+    .s-mint   { background: var(--mint-soft);   color: var(--mint); }
+    .s-rust   { background: var(--rust-soft);   color: var(--rust); }
+    .s-indigo { background: var(--indigo-soft); color: var(--indigo); }
+    .s-slate  { background: var(--slate-soft);  color: var(--slate); }
+
+    /* ===== 跳转按钮（公共） ===== */
+    .go-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      flex: 0 0 28px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      text-decoration: none;
+      transition: color 0.14s ease, background 0.14s ease, border-color 0.14s ease;
+    }
+
+    .go-btn:hover {
+      background: var(--amber);
+      border-color: var(--amber);
+      color: #fff9f1;
+    }
+
+    .go-btn.sm { width: 24px; height: 24px; flex-basis: 24px; font-size: 11px; }
+
+    .t1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .t2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ===== A · 横条书签卡 ===== */
+    .tagbar {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 9px 10px 9px 9px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      cursor: pointer;
+      min-width: 0;
+      transition: border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .tagbar:hover { border-color: var(--line-strong); background: var(--panel-raised); }
+
+    .ico {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .ico.sm {
+      width: 28px;
+      height: 28px;
+      flex-basis: 28px;
+      border-radius: var(--radius-sm);
+    }
+
+    .ico .mono-fallback {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .ico.sm .mono-fallback { font-size: 12px; }
+
+    .ico .fav {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: 4px;
+      background: var(--panel);
+      display: none;
+    }
+
+    .ico.sm .fav { padding: 3px; }
+    .ico .fav.ok { display: block; }
+    .ico .fav.ok + .mono-fallback { display: none; }
+
+    .tb-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .tb-title { font-size: 13.5px; font-weight: 650; color: var(--text); }
+    .tb-sub { font-size: 12px; color: var(--muted); }
+
+    /* ===== B · 瘦身网格卡 ===== */
+    .taggrid-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      cursor: pointer;
+      min-width: 0;
+      transition: border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .taggrid-card:hover { border-color: var(--line-strong); background: var(--panel-raised); }
+
+    .tg-head { display: flex; align-items: center; gap: 8px; }
+    .tg-head .tg-title { flex: 1; min-width: 0; }
+
+    .tg-title { font-size: 13.5px; font-weight: 650; color: var(--text); }
+    .tg-sub {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+      height: 36px;
+    }
+
+    /* ===== C · 大首字母招牌卡 ===== */
+    .monofeat {
+      display: flex;
+      align-items: stretch;
+      min-height: 88px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      cursor: pointer;
+      min-width: 0;
+      overflow: hidden;
+      transition: border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .monofeat:hover { border-color: var(--line-strong); background: var(--panel-raised); }
+
+    .mf-tab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      flex: 0 0 56px;
+      font-family: var(--font-mono);
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .mf-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      padding: 11px 13px;
+    }
+
+    .mf-title { font-size: 13.5px; font-weight: 650; color: var(--text); }
+    .mf-sub { font-size: 12px; color: var(--muted); }
+
+    .mf-go {
+      align-self: center;
+      margin-right: 11px;
+      opacity: 0;
+      transform: translateX(-3px);
+      transition: opacity 0.16s ease, transform 0.16s ease;
+    }
+
+    .monofeat:hover .mf-go { opacity: 1; transform: translateX(0); }
+
+    /* ===== D · 胶囊行卡 ===== */
+    .tagpill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 8px 7px 8px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      cursor: pointer;
+      min-width: 0;
+      transition: border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .tagpill:hover { border-color: var(--line-strong); background: var(--panel-raised); }
+
+    .tp-mono {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      border-radius: 50%;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+
+    .tp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .tp-title { font-size: 13px; font-weight: 650; color: var(--text); }
+    .tp-sub { font-size: 11.5px; color: var(--muted); }
+
+    /* ===== 对比表 & 页脚 ===== */
+    .cmp { margin-top: 44px; }
+    .cmp table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .cmp th, .cmp td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      text-align: left;
+      background: var(--panel);
+    }
+    .cmp th { background: var(--panel-raised); font-weight: 650; white-space: nowrap; }
+    .cmp td:first-child { font-weight: 650; white-space: nowrap; }
+
+    footer {
+      margin-top: 30px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--faint);
+      text-align: center;
+    }
+
+    @media (max-width: 760px) {
+      .demo-grid { grid-template-columns: 1fr; }
+      .top-note { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <span class="brand"><span class="brand-mark">折</span>DogEar<span class="brand-mode">TAB VIEW</span></span>
+    <span class="top-note">标签视图 · 只显示 网页名 + 简介 + 跳转按钮 —— 四个方向供选型</span>
+    <span class="seg-control" id="colSeg">
+      <button type="button" class="seg-btn" data-cols="2">2 列</button>
+      <button type="button" class="seg-btn active" data-cols="3">3 列</button>
+      <button type="button" class="seg-btn" data-cols="4">4 列</button>
+    </span>
+    <button type="button" class="theme-btn" id="themeBtn">🌙 深色</button>
+  </header>
+
+  <div class="wrap">
+    <div class="hero">
+      <div class="kicker">DogEar · 折耳书签 — 标签视图卡片探索</div>
+      <h1>标签卡片样式：四个方向</h1>
+      <p class="sub">
+        作为导航页式视图，每张卡只保留 <b>网页名 / 简介 / 跳转按钮</b>，不展示标签、状态与日期。
+        四个方向分别吸收了现有 <b>列表行</b>（A）、<b>网格卡</b>（B）、<b>网格封面带</b>（C）与 <b>极简胶囊</b>（D）的基因；
+        可切换列数对比密度，右上角切换深浅主题。卡片可点击模拟「点卡片进详情」，↗ 模拟「跳原链接」。
+      </p>
+    </div>
+
+    <section class="sec">
+      <div class="sec-head">
+        <span class="sec-badge">A</span>
+        <span class="sec-title">横条书签卡</span>
+        <span class="sec-desc">横向条状、信息单行排布，密度最高，最接近浏览器书签 / 导航站手感</span>
+      </div>
+      <div class="sec-chips">站点图标 · 名称 1 行 · 简介 1 行 · ↗ 常驻（源自列表行基因）</div>
+      <div class="demo-grid" id="grid-a"></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <span class="sec-badge">B</span>
+        <span class="sec-title">瘦身网格卡</span>
+        <span class="sec-desc">保留网格卡的外框、圆角与 hover 语言，去掉封面带 / 标签 / 状态，只留核心三件</span>
+      </div>
+      <div class="sec-chips">站点图标 + 名称 + ↗ 同排 · 简介独立 2 行（按你的布局反馈调整）</div>
+      <div class="demo-grid" id="grid-b"></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <span class="sec-badge">C</span>
+        <span class="sec-title">大首字母招牌卡</span>
+        <span class="sec-desc">左侧大面积来源色块作视觉锚点，扫视定位最快；↗ hover 浮现，正文最干净</span>
+      </div>
+      <div class="sec-chips">来源色招牌 · 名称 2 行 · 简介 2 行 · ↗ hover 浮现（源自网格封面带基因）</div>
+      <div class="demo-grid" id="grid-c"></div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <span class="sec-badge">D</span>
+        <span class="sec-title">胶囊行卡</span>
+        <span class="sec-desc">大圆角胶囊、单行高度，最轻量；简介压缩为一行，适合一屏大量条目</span>
+      </div>
+      <div class="sec-chips">圆形首字母标 · 名称 1 行 · 简介 1 行 · ↗ 常驻（极简折中）</div>
+      <div class="demo-grid" id="grid-d"></div>
+    </section>
+
+    <section class="cmp">
+      <table>
+        <thead>
+          <tr><th>方向</th><th>一屏密度</th><th>扫视定位</th><th>视觉重心</th><th>适合场景</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>A 横条书签卡</td><td>★★★★★</td><td>★★★★</td><td>标题优先、安静</td><td>大量书签快速定位，最像导航页</td></tr>
+          <tr><td>B 瘦身网格卡</td><td>★★★☆☆</td><td>★★★★☆</td><td>均衡</td><td>与现有网格视图观感最一致，迁移成本低</td></tr>
+          <tr><td>C 大首字母招牌卡</td><td>★★★☆☆</td><td>★★★★★</td><td>来源色招牌、记忆点强</td><td>常用站点入口，靠颜色/首字母肌肉记忆</td></tr>
+          <tr><td>D 胶囊行卡</td><td>★★★★☆</td><td>★★★☆☆</td><td>最轻量</td><td>临时清单 / 精选入口，轻松感强</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>DogEar · 折耳书签 — 标签卡片样式探索 · 草稿稿本，尚未定稿。选出方向编号（可附修改意见），即可在工作台落地为第四种视图。</footer>
+  </div>
+
+  <script>
+    const ITEMS = [
+      { t: "React 官方文档", e: "声明式 UI 库完整指南，涵盖 Hooks、并发特性与 SSR", d: "react.dev", src: "blue", ch: "R" },
+      { t: "MDN Web Docs", e: "Web 技术权威参考，HTML/CSS/JS API 逐条速查", d: "developer.mozilla.org", src: "blue", ch: "M" },
+      { t: "Tailwind CSS", e: "原子化 CSS 框架，用类名直接组合出设计系统", d: "tailwindcss.com", src: "amber", ch: "T" },
+      { t: "Vite", e: "下一代前端构建工具，毫秒级冷启动与即时热更新", d: "vitejs.dev", src: "amber", ch: "V" },
+      { t: "GitHub · facebook/react", e: "用于构建 Web 与原生用户界面的声明式开源库", d: "github.com", src: "slate", ch: "G" },
+      { t: "少数派", e: "高效工作与数字生活内容平台，工具评测与方法论", d: "sspai.com", src: "mint", ch: "少" },
+      { t: "阮一峰的网络日志", e: "科技爱好者周刊，每周分享技术趋势与开源项目", d: "ruanyifeng.com", src: "rust", ch: "阮" },
+      { t: "Can I Use", e: "浏览器兼容性速查表，特性支持逐版本对照", d: "caniuse.com", src: "indigo", ch: "C" },
+      { t: "Figma", e: "协作界面设计工具，原型、设计系统与交付一站完成", d: "figma.com", src: "indigo", ch: "F" },
+      { t: "Hacker News", e: "技术社区热榜，创业与技术圈的一手资讯", d: "news.ycombinator.com", src: "slate", ch: "Y" }
+    ];
+
+    const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+
+    const goBtn = (it, sm) =>
+      `<a class="go-btn${sm ? " sm" : ""}" href="https://${esc(it.d)}/" target="_blank" rel="noopener noreferrer"
+         aria-label="打开原链接" title="打开原链接 · ${esc(it.d)}" onclick="event.stopPropagation()">↗</a>`;
+
+    const icoHtml = (it, sm) => `
+      <span class="ico${sm ? " sm" : ""}">
+        <img class="fav" alt="" data-domain="${esc(it.d)}"
+             data-fallback="https://icons.duckduckgo.com/ip3/${esc(it.d)}.ico" />
+        <span class="mono-fallback s-${it.src}">${esc(it.ch)}</span>
+      </span>`;
+
+    const tpl = {
+      a: (it) => `
+        <article class="tagbar" tabindex="0" role="link" data-url="https://${esc(it.d)}/" aria-label="${esc(it.t)}">
+          ${icoHtml(it)}
+          <span class="tb-main">
+            <span class="tb-title t1">${esc(it.t)}</span>
+            <span class="tb-sub t1">${esc(it.e)}</span>
+          </span>
+          ${goBtn(it)}
+        </article>`,
+      b: (it) => `
+        <article class="taggrid-card" tabindex="0" role="link" data-url="https://${esc(it.d)}/" aria-label="${esc(it.t)}">
+          <span class="tg-head">
+            ${icoHtml(it, true)}
+            <span class="tg-title t1">${esc(it.t)}</span>
+            ${goBtn(it, true)}
+          </span>
+          <span class="tg-sub t2">${esc(it.e)}</span>
+        </article>`,
+      c: (it) => `
+        <article class="monofeat" tabindex="0" role="link" data-url="https://${esc(it.d)}/" aria-label="${esc(it.t)}">
+          <span class="mf-tab s-${it.src}">${esc(it.ch)}</span>
+          <span class="mf-main">
+            <span class="mf-title t2">${esc(it.t)}</span>
+            <span class="mf-sub t2">${esc(it.e)}</span>
+          </span>
+          ${goBtn(it, true).replace('class="go-btn sm"', 'class="go-btn sm mf-go"')}
+        </article>`,
+      d: (it) => `
+        <article class="tagpill" tabindex="0" role="link" data-url="https://${esc(it.d)}/" aria-label="${esc(it.t)}">
+          <span class="tp-mono s-${it.src}">${esc(it.ch)}</span>
+          <span class="tp-main">
+            <span class="tp-title t1">${esc(it.t)}</span>
+            <span class="tp-sub t1">${esc(it.e)}</span>
+          </span>
+          ${goBtn(it, true)}
+        </article>`
+    };
+
+    Object.entries(tpl).forEach(([key, fn]) => {
+      document.getElementById(`grid-${key}`).innerHTML = ITEMS.map(fn).join("");
+    });
+
+    const tryLoad = (img, url) => {
+      img.onload = () => img.classList.add("ok");
+      img.src = url;
+    };
+
+    document.querySelectorAll("img.fav").forEach((img) => {
+      img.onerror = () => {
+        const fb = img.dataset.fallback;
+        if (fb) {
+          img.dataset.fallback = "";
+          tryLoad(img, fb);
+        }
+      };
+      tryLoad(img, `https://${img.dataset.domain}/favicon.ico`);
+    });
+
+    document.addEventListener("click", (event) => {
+      const card = event.target.closest("[data-url]");
+      if (card) window.open(card.dataset.url, "_blank", "noopener");
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      const card = event.target.closest?.("[data-url]");
+      if (card) window.open(card.dataset.url, "_blank", "noopener");
+    });
+
+    const root = document.documentElement;
+    const themeBtn = document.getElementById("themeBtn");
+
+    const applyTheme = (mode) => {
+      if (mode === "dark") root.dataset.theme = "dark";
+      else delete root.dataset.theme;
+      themeBtn.textContent = mode === "dark" ? "☀️ 浅色" : "🌙 深色";
+      try { localStorage.setItem("tab-explorer-theme", mode); } catch {}
+    };
+
+    let saved = null;
+    try { saved = localStorage.getItem("tab-explorer-theme"); } catch {}
+    applyTheme(saved || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+
+    themeBtn.addEventListener("click", () =>
+      applyTheme(root.dataset.theme === "dark" ? "light" : "dark")
+    );
+
+    document.getElementById("colSeg").addEventListener("click", (event) => {
+      const btn = event.target.closest(".seg-btn");
+      if (!btn) return;
+      root.style.setProperty("--cols", btn.dataset.cols);
+      document.querySelectorAll("#colSeg .seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    });
+  </script>
+</body>
+</html>

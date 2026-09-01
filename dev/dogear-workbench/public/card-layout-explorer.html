@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DogEar · 卡片分区设计探索</title>
+<style>
+  :root {
+    --paper: #f4f1ea;
+    --surface: #ffffff;
+    --ink: #1d1b16;
+    --ink-2: #5c574b;
+    --ink-3: #9a9384;
+    --line: #e2ddcf;
+    --line-2: #d3ccb9;
+    --amber: #c96a2c;
+    --amber-soft: #f9e6d5;
+    --blue: #3b6fd4;
+    --blue-soft: #e3ebfa;
+    --mint: #2f9e7a;
+    --mint-soft: #e0f2ea;
+    --red: #c4453c;
+    --red-soft: #f8e3e0;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    line-height: 1.55;
+    padding-bottom: 80px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 28px; }
+
+  .hero { padding: 46px 0 30px; }
+  .kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; letter-spacing: 2px; color: var(--amber);
+    font-weight: 700; text-transform: uppercase;
+  }
+  .kicker::before { content: ""; width: 22px; height: 2px; background: var(--amber); border-radius: 2px; }
+  h1 { font-size: 34px; font-weight: 800; margin: 12px 0 6px; letter-spacing: .5px; }
+  .sub { color: var(--ink-2); font-size: 15px; max-width: 720px; }
+  .sub b { color: var(--ink); }
+
+  section { margin-top: 42px; }
+  .sec-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .sec-h .no {
+    font-size: 13px; font-weight: 800; color: var(--amber);
+    border: 1.5px solid var(--amber); border-radius: 6px;
+    padding: 1px 7px; line-height: 1.4;
+  }
+  .sec-h h2 { font-size: 20px; font-weight: 800; }
+  .sec-h .note { font-size: 13px; color: var(--ink-3); }
+
+  .grid { display: grid; gap: 14px; }
+  .g5 { grid-template-columns: repeat(5, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+
+  .zone {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 14px 12px;
+  }
+  .zone .z-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px;
+    font-size: 15px; margin-bottom: 8px;
+  }
+  .zone h3 { font-size: 14px; font-weight: 800; margin-bottom: 3px; }
+  .zone .z-role { font-size: 11.5px; color: var(--ink-2); margin-bottom: 9px; line-height: 1.45; }
+  .zone .z-list { font-size: 11.5px; color: var(--ink-3); line-height: 1.7; }
+  .zone .z-list .plus { color: var(--mint); }
+  .zone .z-list .minus { color: var(--red); }
+
+  .preset-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  }
+  .preset-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(29,27,22,.08); border-color: var(--line-2); }
+  .preset-card.active { border-color: var(--amber); box-shadow: 0 0 0 2px var(--amber-soft); }
+  .preset-card h3 { font-size: 14.5px; font-weight: 800; }
+  .preset-card .p-desc { font-size: 12px; color: var(--ink-2); }
+  .preset-card .load {
+    align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--amber);
+    border: 1px solid var(--amber); border-radius: 999px; padding: 3px 12px;
+    margin-top: 2px;
+  }
+  .preset-card:hover .load { background: var(--amber); color: #fff; }
+  .mini-stage {
+    background: var(--paper); border: 1px dashed var(--line-2); border-radius: 8px;
+    padding: 12px; display: flex; justify-content: center;
+  }
+  .mini-wrap { width: 150px; }
+  .mini-wrap card-preview { zoom: 1; }
+
+  .mixer {
+    display: grid; grid-template-columns: 380px 1fr; gap: 22px; align-items: start;
+  }
+  .panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .zgroup { padding-bottom: 12px; border-bottom: 1px dashed var(--line); }
+  .zgroup:last-child { border-bottom: 0; padding-bottom: 0; }
+  .zgroup .zg-h { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 800; margin-bottom: 8px; }
+  .zgroup .zg-h .z-chip {
+    font-size: 10.5px; font-weight: 800; color: var(--amber); background: var(--amber-soft);
+    border-radius: 5px; padding: 1px 6px;
+  }
+  .opt {
+    display: flex; gap: 8px; align-items: flex-start;
+    padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 12.5px;
+  }
+  .opt:hover { background: var(--paper); }
+  .opt input { margin-top: 2px; accent-color: var(--amber); }
+  .opt .o-name { font-weight: 700; }
+  .opt .o-desc { color: var(--ink-3); font-size: 11.5px; }
+  .opt.checked { background: var(--amber-soft); }
+  .opt.checked .o-name { color: var(--amber); }
+
+  .stage-wrap {}
+  .stage-frame {
+    background: var(--paper); border: 1px dashed var(--line-2); border-radius: var(--radius);
+    padding: 30px 24px; display: flex; justify-content: center; align-items: flex-start;
+    min-height: 380px;
+  }
+  .shelf {
+    position: relative; width: 320px;
+  }
+  .shelf .ghost {
+    position: absolute; inset: 0; transform: translate(14px, 14px);
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); z-index: 0;
+  }
+  .shelf .ghost2 { transform: translate(26px, 26px); z-index: 0; }
+  .shelf .live { position: relative; z-index: 1; }
+
+  .summary-line {
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+    font-size: 12px; color: var(--ink-2); margin-top: 12px;
+  }
+  .summary-line .tag {
+    background: var(--surface); border: 1px solid var(--line-2); border-radius: 6px;
+    padding: 2px 8px; font-size: 11.5px; color: var(--ink-2);
+  }
+  .summary-line .tag b { color: var(--amber); }
+  code-block { font-size: 11.5px; }
+  .codebox {
+    background: #211f1a; color: #e8e4da; border-radius: 8px; padding: 12px 14px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 11.5px;
+    line-height: 1.65; overflow-x: auto; white-space: pre; margin-top: 10px;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line-2); background: var(--surface); color: var(--ink);
+    border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--amber); color: var(--amber); }
+  .btn.primary { background: var(--amber); border-color: var(--amber); color: #fff; }
+  .btn.primary:hover { background: #b45a22; color: #fff; }
+
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #efe9db; font-size: 12px; letter-spacing: .5px; }
+  tr:last-child td { border-bottom: 0; }
+  td .opt-chip {
+    display: inline-block; font-size: 11.5px; border-radius: 5px; padding: 1px 7px; margin: 2px 4px 2px 0;
+    color: var(--ink); background: var(--paper);
+  }
+  td .recommend { background: var(--amber-soft); color: var(--amber); font-weight: 700; }
+
+  footer { margin-top: 54px; color: var(--ink-3); font-size: 12.5px; border-top: 1px solid var(--line); padding-top: 16px; }
+
+  card-preview { display: block; background: var(--surface); border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(29,27,22,.06); min-width: 0; }
+  card-preview .cp-cover { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+  card-preview .cp-mono {
+    width: 20px; height: 20px; border-radius: 6px; background: var(--panel-ov, rgba(0,0,0,.14));
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff;
+  }
+  card-preview .cp-src { font-size: 10.5px; font-weight: 800; letter-spacing: 1.2px; color: inherit; opacity: .85; }
+  card-preview .cp-body { padding: 10px 12px 11px; }
+  card-preview .cp-title { font-size: 13px; font-weight: 800; line-height: 1.4; margin-bottom: 5px; }
+  card-preview .cp-excerpt { font-size: 11.5px; color: var(--ink-2); line-height: 1.55; margin-bottom: 8px; }
+  card-preview .cp-excerpt.two { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  card-preview .cp-excerpt.none { display: none; }
+  card-preview .cp-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  card-preview .cp-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  card-preview .cp-chip {
+    font-size: 10.5px; border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 7px; color: var(--ink-2);
+  }
+  card-preview .cp-domain {
+    font-family: ui-monospace, Consolas, monospace; font-size: 10.5px; color: var(--ink-3);
+    margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;
+  }
+  card-preview .cp-foot { display: flex; align-items: center; gap: 8px; }
+  card-preview .cp-pill {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700;
+    border-radius: 999px; padding: 2px 9px; border: 1px solid currentColor;
+  }
+  card-preview .cp-pill::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  card-preview .cp-pill.dot-only { border: 0; background: transparent; padding: 0; }
+  card-preview .cp-pill.dot-only::before { width: 7px; height: 7px; }
+  card-preview .cp-track { flex: 1; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+  card-preview .cp-track i { display: block; height: 100%; background: var(--blue); border-radius: 4px; }
+  card-preview.p-always .cp-open { opacity: 1; }
+  card-preview.p-hover .cp-open { opacity: 0; }
+  card-preview.p-hover:hover .cp-open { opacity: 1; }
+  .cp-cover .cp-open { margin-left: auto; }
+  .src-dot-row .cp-open,
+  .src-inline-row .cp-open { margin-left: auto; }
+  card-preview .cp-open {
+    margin-left: auto; display: inline-block;
+    width: 18px; height: 18px; border: 1px solid var(--line-2); border-radius: 50%;
+    text-align: center; line-height: 16px; font-size: 10px; text-decoration: none; color: var(--ink-3);
+  }
+  card-preview .cp-open:hover { border-color: var(--amber); color: var(--amber); }
+
+  .cp-cv-edge { height: 6px; padding: 0; }
+  .cp-cover.opt-band-C { display: none; }
+  .cp-thumb-l { display: flex; gap: 10px; }
+  .cp-thumb { width: 64px; height: 48px; border-radius: 6px; flex: 0 0 auto; }
+  .cp-thumb-l .cp-thumb-r { flex-direction: row-reverse; }
+  .thumb-strip { background: linear-gradient(135deg, var(--amber-soft), var(--mint-soft)); }
+  .thumb-art { background: linear-gradient(135deg, #dfc9e8, #c9d8f2); }
+  .thumb-none { display: none; }
+  .src-dot-row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--ink-3); }
+  .src-dot-row .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .src-inline-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 10.5px; color: var(--ink-3); }
+  .cp-status-top { position: relative; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">DogEar · 工作台书签卡片</div>
+    <h1>卡片分区设计探索</h1>
+    <p class="sub">把一张卡片拆成 <b>五个信息区块</b>，每个区块单独决定展示方式，自由组合、互不干扰。下方有<b>预设模板</b>可直接加载，也可以在<b>自定义搭配</b>里逐区挑选，右侧实时预览。最后附<b>信息展示方式速查表</b>，方便你逐类挑拣。</p>
+  </header>
+
+  <section id="schema">
+    <div class="sec-h"><span class="no">01</span><h2>分区地图：每块放什么</h2><span class="note">原则：识别信息在上、内容信息居中、状态信息置底，操作按钮不占正文空间</span></div>
+    <div class="grid g5">
+      <div class="zone">
+        <span class="z-icon" style="background:var(--blue-soft)">⬡</span>
+        <h3>A. 来源带</h3>
+        <div class="z-role">回答「这书签来自哪里」，兼作卡片身份识别</div>
+        <div class="z-list"><span class="plus">+</span> 来源（Raindrop/插件/AI）、域名首字母<br><span class="minus">−</span> 不放标题、不放日期</div>
+      </div>
+      <div class="zone">
+        <span class="z-icon" style="background:var(--amber-soft)">T</span>
+        <h3>B. 标题区</h3>
+        <div class="z-role">全文标题，允许截断两行，是点击进详情的主入口</div>
+        <div class="z-list"><span class="plus">+</span> 标题（可带缩略图）<br><span class="minus">−</span> 不放链接按钮（放来源带/操作位）</div>
+      </div>
+      <div class="zone">
+        <span class="z-icon" style="background:var(--red-soft)">¶</span>
+        <h3>C. 摘要区</h3>
+        <div class="z-role">内容预览，帮助「扫一眼就能判断值不值得点」</div>
+        <div class="z-list"><span class="plus">+</span> 摘录/总结 1–3 行<br><span class="minus">−</span> 紧凑卡可不放</div>
+      </div>
+      <div class="zone">
+        <span class="z-icon" style="background:var(--mint-soft)">#</span>
+        <h3>D. 元数据区</h3>
+        <div class="z-role">标签、域名等「事实信息」，安静、可跳过</div>
+        <div class="z-list"><span class="plus">+</span> 标签、域名、字数<br><span class="minus">−</span> 不放状态（状态归 E）</div>
+      </div>
+      <div class="zone">
+        <span class="z-icon" style="background:#f0e8d8">◉</span>
+        <h3>E. 状态区</h3>
+        <div class="z-role">待整理/稍后读/已归档 + 阅读进度，一眼掌握队列位置</div>
+        <div class="z-list"><span class="plus">+</span> 状态、进度条<br><span class="minus">−</span> 不放标签、不放来源</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="presets">
+    <div class="sec-h"><span class="no">02</span><h2>预设模板</h2><span class="note">四种思路，点击卡片加载到右侧实时预览</span></div>
+    <div class="grid g4" id="preset-grid"></div>
+  </section>
+
+  <section id="mixer">
+    <div class="sec-h"><span class="no">03</span><h2>自定义搭配</h2><span class="note">每个区块选一种做法，右侧实时预览；底部有组合摘要与实现骨架</span></div>
+    <div class="mixer">
+      <div class="panel" id="controls"></div>
+      <div class="stage-wrap">
+        <div class="stage-frame">
+          <div class="shelf">
+            <div class="ghost"></div>
+            <div class="ghost ghost2"></div>
+            <div id="live-slot" class="live"></div>
+          </div>
+        </div>
+        <div class="summary-line" id="summary-line"></div>
+        <div style="margin-top:14px">
+          <button class="btn primary" id="copy-btn">复制组合说明</button>
+          <div class="codebox" id="codebox"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="ref">
+    <div class="sec-h"><span class="no">04</span><h2>信息展示方式速查表</h2><span class="note">标橙 = 推荐首选</span></div>
+    <table>
+      <thead><tr><th style="width:110px">信息类型</th><th>可选展示方式</th><th style="width:190px">建议</th></tr></thead>
+      <tbody>
+        <tr><td><b>来源</b></td><td><span class="opt-chip recommend">彩色来源条（monogram+来源名）</span><span class="opt-chip">来源圆点 + 域名行</span><span class="opt-chip">并入元数据（小字）</span><span class="opt-chip">不展示</span></td><td>层级模式用色条；极简模式并入元数据</td></tr>
+        <tr><td><b>标题</b></td><td><span class="opt-chip recommend">两行截断纯标题</span><span class="opt-chip">标题 + 左缩略图</span><span class="opt-chip">标题 + 右缩略图</span></td><td>内容站用缩略图，纯链接收藏用纯标题</td></tr>
+        <tr><td><b>摘要</b></td><td><span class="opt-chip recommend">两行截断</span><span class="opt-chip">不展示</span><span class="opt-chip">全文</span><span class="opt-chip">悬停展开</span></td><td>网格密度高时用两行；列表模式可全文</td></tr>
+        <tr><td><b>标签</b></td><td><span class="opt-chip">灰色 outline chip（#号前缀）</span><span class="opt-chip recommend">实色浅底 chip</span><span class="opt-chip">纯文本逗号分隔</span><span class="opt-chip">不展示</span></td><td>标签是元数据，避免用状态色</td></tr>
+        <tr><td><b>状态</b></td><td><span class="opt-chip recommend">实色胶囊徽标</span><span class="opt-chip">圆点 + 文字</span><span class="opt-chip">卡片左缘色条</span><span class="opt-chip">顶部色点</span></td><td>徽标最明显；左缘色条省空间</td></tr>
+        <tr><td><b>域名</b></td><td><span class="opt-chip recommend">等宽小字（右下）</span><span class="opt-chip">favicon + 域名</span><span class="opt-chip">并入来源带</span></td><td>右下与状态同行，弱化处理</td></tr>
+        <tr><td><b>进度</b></td><td><span class="opt-chip recommend">细进度条</span><span class="opt-chip">百分比文字</span><span class="opt-chip">不展示</span></td><td>只在「稍后读」显示</td></tr>
+        <tr><td><b>操作</b></td><td><span class="opt-chip recommend">常驻 ↗ 原链接</span><span class="opt-chip">hover 显示 ↗+选择</span><span class="opt-chip">全部并入卡片点击</span></td><td>原链接常用 → 常驻；选择/更多 → hover</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>DogEar · 折耳书签 — 卡片分区设计探索 · 草稿稿本，尚未定稿。挑选完毕后告知组合编号，即可在原型工作台落地。</footer>
+</div>
+
+<script>
+  const cfg = {
+    sourceZone: "band",
+    title: "plain",
+    excerpt: "two",
+    meta: "chipsRight",
+    status: "pill",
+    action: "always"
+  };
+
+  const ZONES = [
+    { key: "sourceZone", h: "A · 来源带", opts: [
+      { v: "band",    n: "彩色来源条", d: "monogram + 来源名，颜色=来源（蓝/琥珀/薄荷）" },
+      { v: "dotrow",  n: "来源点 + 域名行", d: "顶部一行圆点+来源小字，色条去掉" },
+      { v: "inline",  n: "并入元数据", d: "封面取消，来源降级为元数据小字" }
+    ]},
+    { key: "title", h: "B · 标题区", opts: [
+      { v: "plain",      n: "两行截断纯标题", d: "干净，最省空间" },
+      { v: "thumb-l",    n: "标题 + 左缩略图", d: "图片在左，正文感强" },
+      { v: "thumb-r",    n: "标题 + 右缩略图", d: "图片在右，标题优先" }
+    ]},
+    { key: "excerpt", h: "C · 摘要区", opts: [
+      { v: "two",   n: "两行截断", d: "平衡密度与信息量" },
+      { v: "none",  n: "不展示", d: "紧凑卡，只读标题" },
+      { v: "full",  n: "全文", d: "长摘要卡片，密度低" }
+    ]},
+    { key: "meta", h: "D · 元数据区", opts: [
+      { v: "chipsRight", n: "标签左 + 域名右", d: "一行两用，工整" },
+      { v: "chipsInline",n: "标签 + 域名并排", d: "元数据成组，弱化域名" },
+      { v: "statusOnly", n: "只有状态", d: "元数据并入状态行" }
+    ]},
+    { key: "status", h: "E · 状态区", opts: [
+      { v: "pill",     n: "实色胶囊徽标", d: "待整理琥珀/稍后读蓝/归档薄荷" },
+      { v: "dottext",  n: "圆点 + 文字", d: "轻量，不占视觉重心" },
+      { v: "edge",     n: "卡片左缘色条", d: "状态外置，正文区更干净" }
+    ]},
+    { key: "action", h: "操作钮", opts: [
+      { v: "always", n: "↗ 常驻显示", d: "原链接随时可点" },
+      { v: "hover",  n: "hover 显示", d: "↗ + 选择钮悬停浮现" }
+    ]}
+  ];
+
+  const PRESETS = [
+    {
+      h: "信息分层 Classic", d: "来源带 → 标题 → 摘要 → 元数据 → 状态，五块齐全，功能最完整",
+      cfg: { sourceZone: "band", title: "plain", excerpt: "two", meta: "chipsRight", status: "pill", action: "always" }
+    },
+    {
+      h: "紧凑型 Compact", d: "无摘要、无封面条，一屏多卡，适合高密度扫读",
+      cfg: { sourceZone: "dotrow", title: "plain", excerpt: "none", meta: "chipsRight", status: "dottext", action: "always" }
+    },
+    {
+      h: "杂志型 Editorial", d: "左侧缩略图 + 全文摘要，内容站观感，信息量最大",
+      cfg: { sourceZone: "inline", title: "thumb-l", excerpt: "full", meta: "chipsInline", status: "edge", action: "hover" }
+    },
+    {
+      h: "极简型 Minimal", d: "去装饰、去封面，标题/域名/状态三点一线，最安静",
+      cfg: { sourceZone: "inline", title: "plain", excerpt: "none", meta: "statusOnly", status: "dottext", action: "hover" }
+    }
+  ];
+
+  const STATUS = { pending: { t: "待整理", c: "var(--amber)", cs: "var(--amber-soft)" }, later: { t: "稍后读", c: "var(--blue)", cs: "var(--blue-soft)" }, archive: { t: "已归档", c: "var(--mint)", cs: "var(--mint-soft)" } };
+  const SRCS = { raindrop: { t: "RAINDROP", c: "var(--blue)", cs: "var(--blue-soft)", m: "R" }, extension: { t: "插件", c: "var(--amber)", cs: "var(--amber-soft)", m: "E" }, ai: { t: "AI", c: "var(--mint)", cs: "var(--mint-soft)", m: "A" } };
+
+  function renderCard(opts) {
+    const st = STATUS.pending, s = SRCS.raindrop;
+    const openLink = `<a class="cp-open" href="#">↗</a>`;
+
+    let cover = "";
+    if (opts.sourceZone === "band") {
+      cover = `<div class="cp-cover" style="background:${s.cs}">
+        <span class="cp-mono" style="background:${s.c}">${s.m}</span>
+        <span class="cp-src" style="color:${s.c}">${s.t}</span>${openLink}
+      </div>`;
+    } else if (opts.sourceZone === "dotrow") {
+      cover = `<div class="cp-cover" style="border-bottom:1px solid var(--line);background:transparent;height:32px">
+        <span class="src-dot-row"><span class="dot" style="background:${s.c}"></span><b>${s.t}</b>${openLink}</span>
+      </div>`;
+    }
+
+    let srcInline = opts.sourceZone === "inline"
+      ? `<div class="src-inline-row"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:${s.c}"></span>${s.t}${openLink}</div>` : "";
+
+    const title = `<div class="cp-title">如何用「折耳」把散落的灵感收进一个地方，并且十年后还能找到</div>`;
+    const thumb = opts.title === "thumb-l" || opts.title === "thumb-r"
+      ? `<span class="${opts.title === "thumb-l" ? "thumb-strip" : "thumb-art"}" style="width:64px;height:48px;border-radius:6px;flex:0 0 auto"></span>` : "";
+    const titleZone = opts.title === "plain"
+      ? title
+      : `<div style="display:flex;gap:10px">${opts.title === "thumb-l" ? thumb + '<div style="min-width:0">' + title + "</div>" : '<div style="min-width:0">' + title + "</div>" + thumb}</div>`;
+
+    const excerpt = opts.excerpt === "none"
+      ? ""
+      : `<div class="cp-excerpt ${opts.excerpt}">这篇文章讲了三个小习惯：先用一句话捕获，再放到正确的位置，最后定期回访整理——仅此而已。</div>`;
+
+    let meta = "";
+    if (opts.meta === "chipsRight") {
+      meta = `<div class="cp-meta"><span class="cp-chips"><span class="cp-chip">#灵感</span><span class="cp-chip">#方法</span></span><span class="cp-domain">sspai.com</span></div>`;
+    } else if (opts.meta === "chipsInline") {
+      meta = `<div class="cp-meta"><span class="cp-chips"><span class="cp-chip">#灵感</span><span class="cp-chip">#方法</span></span><span class="cp-domain" style="margin-left:0;max-width:none">sspai.com</span></div>`;
+    }
+
+    const isLater = st === STATUS.later;
+    const trackHTML = isLater
+      ? `<span class="cp-track" style="flex:1"><i style="width:64%"></i></span>`
+      : `<span style="flex:1"></span>`;
+    const pillHTML = `<span class="cp-pill" style="color:${st.c};background:${st.cs};border-color:${st.c}">${st.t}</span>`;
+    const dotHTML = `<span class="cp-pill dot-only" style="color:${st.c}">${st.t}</span>`;
+
+    let foot = "";
+    if (opts.status === "pill") foot = `<div class="cp-foot">${pillHTML}${trackHTML}</div>`;
+    else if (opts.status === "dottext") foot = `<div class="cp-foot">${dotHTML}${trackHTML}</div>`;
+    else foot = `<div class="cp-foot">${trackHTML}</div>`;
+
+    if (opts.meta === "statusOnly") {
+      meta = "";
+      foot = foot.replace("</div>", `<span class="cp-domain" style="margin-left:auto">sspai.com</span></div>`);
+    }
+
+    const edgeBar = opts.status === "edge"
+      ? `<span style="display:block;position:absolute;left:0;top:0;bottom:0;width:4px;background:${st.c}"></span>` : "";
+    return `<card-preview class="p-${opts.action}" style="position:relative">${edgeBar}${cover}<div class="cp-body">${srcInline}${titleZone}${excerpt}${meta}${foot}</div></card-preview>`;
+  }
+
+  function buildControls() {
+    const el = document.getElementById("controls");
+    el.innerHTML = ZONES.map(zg => `
+      <div class="zgroup">
+        <div class="zg-h"><span class="z-chip">${zg.h}</span></div>
+        ${zg.opts.map(o => `
+          <label class="opt ${cfg[zg.key] === o.v ? "checked" : ""}">
+            <input type="radio" name="${zg.key}" value="${o.v}" ${cfg[zg.key] === o.v ? "checked" : ""}>
+            <span><span class="o-name">${o.n}</span><br><span class="o-desc">${o.d}</span></span>
+          </label>`).join("")}
+      </div>`).join("");
+    el.querySelectorAll("input").forEach(i => i.addEventListener("change", () => {
+      const k = i.name;
+      cfg[k] = i.value;
+      el.querySelectorAll(`input[name=${k}]`).forEach(r => r.closest(".opt").classList.toggle("checked", r.checked));
+      refresh();
+    }));
+  }
+
+  function buildPresets() {
+    const el = document.getElementById("preset-grid");
+    el.innerHTML = PRESETS.map((p, idx) => `
+      <div class="preset-card" data-i="${idx}">
+        <h3>${p.h}</h3>
+        <p class="p-desc">${p.d}</p>
+        <div class="mini-stage"><div class="mini-wrap">${renderCard(p.cfg)}</div></div>
+        <span class="load">加载此方案</span>
+      </div>`).join("");
+    el.querySelectorAll(".preset-card").forEach(c => c.addEventListener("click", () => {
+      const idx = +c.dataset.i;
+      Object.assign(cfg, JSON.parse(JSON.stringify(PRESETS[idx].cfg)));
+      buildControls();
+      refresh();
+    }));
+  }
+
+  function refresh() {
+    const slot = document.getElementById("live-slot");
+    slot.innerHTML = renderCard(cfg);
+    const line = document.getElementById("summary-line");
+    const names = {};
+    ZONES.forEach(zg => zg.opts.forEach(o => { if (cfg[zg.key] === o.v) names[zg.h] = o.n; }));
+    line.innerHTML = Object.entries(names).map(([k, v]) => `<span class="tag">${k} <b>${v}</b></span>`).join("");
+    const code = document.getElementById("codebox");
+    code.textContent = "// 组合骨架\n" + ZONES.map(zg => `  ${zg.key}: "${cfg[zg.key]}"  // ${names[zg.h]}`).join("\n");
+  }
+
+  document.getElementById("copy-btn").addEventListener("click", async () => {
+    const names = {}; ZONES.forEach(zg => zg.opts.forEach(o => { if (cfg[zg.key] === o.v) names[zg.h] = o.n; }));
+    const txt = "DogEar 卡片组合\n" + Object.entries(names).map(([k, v]) => `${k}: ${v}`).join("\n");
+    try { await navigator.clipboard.writeText(txt); document.getElementById("copy-btn").textContent = "已复制 ✓"; setTimeout(() => document.getElementById("copy-btn").textContent = "复制组合说明", 1200); } catch (e) {}
+  });
+
+  buildPresets();
+  buildControls();
+  refresh();
+</script>
+</body>
+</html>
