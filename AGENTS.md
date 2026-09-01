@@ -82,6 +82,10 @@ DogEar/
 
 - 文档与代码分离提交，文档变更同步更新 `docs/README.md` 与 PRD 版本记录
 
+- **身份匿名化（强制）**：所有提交必须使用 `DogEar <15047523+maxxie6418@users.noreply.github.com>`（GitHub noreply 邮箱，避免暴露真实邮箱）。禁止使用真实个人姓名/邮箱提交，禁止在提交信息、分支名、Tag、文件内容中写入个人身份信息（姓名、私人邮箱、手机号、家庭地址等）
+
+- **GitHub 隐私设置**：账号需开启 `Settings → Emails → Keep my email addresses private`，本地 `git config user.email` 必须与 GitHub noreply 邮箱保持一致
+
 ## 7. 禁止事项
 
 - ❌ 不经确认定技术选型/框架
@@ -93,6 +97,10 @@ DogEar/
 - ❌ 跳过注册登记、跨层级依赖
 
 - ❌ 自行精简非核心功能（需确认）
+
+- ❌ 提交中包含个人身份信息（真实姓名/私人邮箱/手机号等），或使用 `dogear@noreply.local` 等非 GitHub 关联邮箱提交
+
+- ❌ 未经确认执行历史重写（filter-branch/新根提交）、强制推送、删除远端仓库等不可逆操作
 
 > 任何需求先理解与计划，确认后再改。
 
