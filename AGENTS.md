@@ -14,11 +14,11 @@
 
 ## 2. 文档规范
 
-- **PRD 为源**：`docs/DogEar · 折耳书签 — 需求说明书.md` 为唯一源，`docs/` 其余文件为落地细化
+- **PRD 为源**：`docs/` 下当前活跃的《需求说明书》为唯一源（版本化文件名，以 `docs/` 内最新版为准），其余文档为落地细化
 
-- **版本**：PRD 头部 `v0.3.x`，`docs/` 各文件头部标版本与日期，关联 PRD 版本
+- **版本**：PRD 头部以版本化文件名标识（当前 `v1.0.x` 系列），`docs/` 各文件头部标版本与日期，关联 PRD 版本
 
-- **索引**：新增/修改 `docs/` 需同步更新 `docs/README.md`
+- **索引**：新增/修改 `docs/` 需同步更新对应索引（当前入口为 `docs/README.md` / `docs/Draft/README.md`，以实际存在者为准）
 
 - **归档**：时效已过、不再指导后续开发的文档移入 `docs/归档/`，索引同步标注归档理由
 
@@ -28,12 +28,10 @@
 
 ```
 DogEar/
-├── docs/                             # 设计文档（PRD 亦在此）
-│   ├── README.md                     # 文档索引（总入口）
-│   ├── DogEar · 折耳书签 — 需求说明书.md  # PRD 源
-│   ├── MVP验收清单.md / 落地拆解.md
-│   ├── DATA_MODEL.md / DESIGN.md / 技术方案路线.md
-│   ├── API.md / Skill API合约.md / 同步引擎细化.md
+├── docs/                             # 设计文档（PRD 亦在此，文件可能版本化更名，不硬编码具体文件名）
+│   ├── README.md / Draft/README.md   # 文档索引（以实际存在者为准）
+│   ├── 需求说明书（活跃版本）           # PRD 源（以 docs/ 内最新版本号文件为准）
+│   ├── 落地细化文档                    # MVP验收清单 / 拆解 / 数据模型 / 设计 / API 等
 │   └── 归档/                         # 已过期文档（数据模型草案/实施计划/组件注册表/原型与设置页规格/过程档案等，仅追溯）
 ├── AGENTS.md                         # 本文件
 ├── README.md                         # 项目说明
@@ -58,7 +56,7 @@ DogEar/
 
 ## 4. 组件规范
 
-- 【待定】原型组件遵循 `docs/COMPONENTS-原型版.md`，正式工程组件遵循 `docs/COMPONENTS.md`（原子设计：Atoms → Molecules → Organisms → Templates → Pages）
+- 组件注册表与组件规范文档以 `docs/` 内实际存在且未归档的版本为准（原型版 / 正式版按文档标注区分），原子设计：Atoms → Molecules → Organisms → Templates → Pages
 
 - 新建组件前必搜对应注册表，按“合并对照表”判定复用/扩展/新建，禁止重复造轮子
 
