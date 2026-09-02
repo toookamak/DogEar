@@ -117,11 +117,20 @@ export default function AppShell({ bm, theme, onThemeChange }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [settingsOpen]);
 
+  useEffect(() => {
+    if (!state.detailOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") bm.closeDetail();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state.detailOpen, bm]);
+
   return (
     <div className="app-shell">
       <TopBar onToggleSidebar={bm.toggleSidebar} onMockSave={bm.mockSaveBookmark} />
 
-      <div className={`workspace${state.detailOpen ? " detail-open" : ""}`}>
+      <div className="workspace">
         <Sidebar
           nav={nav as NavKey}
           tag={state.filters.tag}
@@ -260,7 +269,15 @@ export default function AppShell({ bm, theme, onThemeChange }: Props) {
           )}
         </main>
 
-        {/* 右区：可折叠工具面板（默认收起） */}
+        {/* 右区：可折叠工具面板（默认收起）——覆盖式浮层；面板外点击由遮罩拦截并收起 */}
+        <button
+          type="button"
+          className={`detail-backdrop${state.detailOpen ? " open" : ""}`}
+          aria-label="收起详情"
+          aria-hidden={!state.detailOpen}
+          tabIndex={state.detailOpen ? 0 : -1}
+          onClick={bm.closeDetail}
+        />
         <DetailPanel
           bookmark={bm.selectedBookmark}
           open={state.detailOpen}

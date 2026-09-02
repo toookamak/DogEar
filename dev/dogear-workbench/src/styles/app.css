@@ -52,7 +52,6 @@
 :root[data-theme="claude"] .tabs-card,
 :root[data-theme="claude"] .list-view,
 :root[data-theme="claude"] .modal,
-:root[data-theme="claude"] .detail-panel,
 :root[data-theme="claude"] .theme-menu {
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.65) inset,
@@ -223,7 +222,6 @@
 :root[data-theme="claude-dark"] .tabs-card,
 :root[data-theme="claude-dark"] .list-view,
 :root[data-theme="claude-dark"] .modal,
-:root[data-theme="claude-dark"] .detail-panel,
 :root[data-theme="claude-dark"] .theme-menu {
   box-shadow:
     0 1px 0 rgba(255, 248, 240, 0.05) inset,
@@ -2681,49 +2679,71 @@
   }
 }
 
-/* ---------- 详情面板（右区：可折叠工具面板，默认收起） ---------- */
+/* ---------- 详情面板（右缘覆盖式浮层：悬浮于内容之上，不推挤主区） ---------- */
 
-/* 停靠式右区：作为 .workspace 网格第三列，展开时主区自适应收窄 */
-.workspace {
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 0;
+/* 详情为 fixed 浮层，从右缘滑入；.workspace 保持 sidebar + main 两列，宽度恒定。 */
+
+/* 详情遮罩：打开时铺在内容之上（浮层之下），点击任意面板外区域即收起详情 */
+.detail-backdrop {
+  position: fixed;
+  inset: var(--topbar-h) 0 var(--statusbar-h) 0;
+  z-index: var(--z-detail-backdrop);
+  border: none;
+  padding: 0;
+  background: var(--scrim);
+  cursor: default;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0s linear 0.2s;
 }
 
-.workspace.detail-open {
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--detail-w);
+.detail-backdrop.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease;
 }
 
 .detail-panel {
-  grid-column: 3;
-  position: relative;
+  position: fixed;
+  top: var(--topbar-h);
+  right: 0;
+  bottom: var(--statusbar-h);
+  z-index: var(--z-detail);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-  width: 0;
-  opacity: 0;
-  pointer-events: none;
+  width: min(var(--detail-w), calc(100vw - 24px));
   background: var(--panel);
-  border-left: 1px solid transparent;
+  border-left: 1px solid var(--line);
+  box-shadow: -18px 0 46px var(--drawer-shadow);
+  transform: translateX(105%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
   transition:
-    width 0.26s ease,
-    opacity 0.2s ease;
+    transform 0.26s ease,
+    opacity 0.2s ease,
+    visibility 0s linear 0.26s;
 }
 
 .detail-panel.open {
-  width: var(--detail-w);
+  transform: translateX(0);
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
-  border-left-color: var(--line);
+  transition:
+    transform 0.26s ease,
+    opacity 0.2s ease;
 }
 
-/* 收起动画期间保持内容宽度，避免文字回流挤压 */
+/* 面板内部滚动：内容区占满剩余高度 */
 .detail-panel .detail-topline,
 .detail-panel .detail-content,
 .detail-panel .empty-detail {
-  width: var(--detail-w);
+  width: 100%;
   box-sizing: border-box;
-  flex: 0 0 auto;
 }
 
 .detail-panel .detail-content {
@@ -3046,32 +3066,6 @@
   color: var(--text);
 }
 
-/* ---------- 响应式：中等宽度 ---------- */
-
-@media (max-width: 1180px) {
-  .workspace,
-  .workspace.detail-open {
-    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 0;
-  }
-
-  /* 窄屏退回覆盖式滑出 */
-  .detail-panel {
-    grid-column: auto;
-    position: fixed;
-    top: var(--topbar-h);
-    right: 0;
-    bottom: var(--statusbar-h);
-    width: 0;
-    z-index: var(--z-detail);
-    border-left: 1px solid var(--line);
-    box-shadow: -18px 0 46px var(--drawer-shadow);
-  }
-
-  .detail-panel.open {
-    width: min(var(--detail-w), calc(100vw - 48px));
-  }
-}
-
 /* ---------- 响应式：窄屏 ---------- */
 
 @media (max-width: 840px) {
@@ -3098,8 +3092,7 @@
     display: block;
   }
 
-  .workspace,
-  .workspace.detail-open {
+  .workspace {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -3126,14 +3119,8 @@
     grid-template-columns: repeat(3, 78vw);
   }
 
+  /* 窄屏：详情浮层贴近屏幕右缘，宽度受限以免溢出 */
   .detail-panel {
-    grid-column: auto;
-    width: min(380px, 100vw);
-  }
-
-  .detail-panel .detail-topline,
-  .detail-panel .detail-content,
-  .detail-panel .empty-detail {
     width: min(var(--detail-w), 100vw);
   }
 }

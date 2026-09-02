@@ -69,6 +69,7 @@
   --detail-w: clamp(380px, 40vw, 780px);
 
   --z-sidebar: 40;
+  --z-detail-backdrop: 45;
   --z-detail: 50;
   --z-selection: 60;
   --z-sync: 55;
