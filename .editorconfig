@@ -1,0 +1,20 @@
+# DogEar 仓库级编辑器配置（最小预防集）
+# 背景：PRD/技术总纲多次出现"表格列宽被拉伸、** 与 _ 被自动转义、列表间被插空行"的无意义改动。
+# 本配置用于抑制编辑器/格式化工具的自动重排；表格列宽与加粗标记是文档源码的一部分，不得被工具改写。
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = false
+
+# Markdown：表格列宽对齐依赖行尾空格与分隔符长度，禁止任何自动"整理"
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# 配置文件与代码仍保留常见默认
+[*.{json,yml,yaml,js,ts,tsx,css}]
+trim_trailing_whitespace = true
