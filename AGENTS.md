@@ -68,14 +68,6 @@ DogEar/
 
 ## 5. 开发规范
 
-- **存储**：【待定】本地优先 + 异步同步，`showInNav` 持久化，开关关闭不丢 `page_tab/docker_items`
-
-- **关联**：【待定】工作台控“是否显示”（全部/按规则-或/自定义搜索勾选/隐藏），导航页控布局，规则先做或
-
-- **AI**：Skill 需自描述 `/.well-known/capabilities`，`save` 回显，`batch_organize` 标 experimental，需确认才生效
-
-- **同步**：`sync_queue` 顺序消费，30s 推 / 5min 拉可配，429 指数退避，冲突保留两端可单/全选，轻 Toast 提示限频
-
 - **备份**：轻（HTML/CSV/MD）/中（+配置）/重（快照）三档，日志有限保留 5000/30天可改
 
 ## 6. 提交规范
