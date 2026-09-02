@@ -11,13 +11,10 @@ function initialTheme(): ThemeMode {
     stored === "light" ||
     stored === "dark" ||
     stored === "system" ||
-    stored === "glass" ||
     stored === "claude" ||
-    stored === "elevenlabs" ||
-    stored === "mistral" ||
-    stored === "supabase" ||
-    stored === "cal" ||
-    stored === "notion"
+    stored === "claude-dark" ||
+    stored === "notion" ||
+    stored === "notion-dark"
   ) {
     return stored;
   }

@@ -35,19 +35,16 @@ const STATUS_DOT: Record<Status, string> = {
   已归档: "dot-mint",
 };
 
-// TODO(pending): 以下六套主题（Claude / ElevenLabs / Mistral / Supabase / Cal / Notion）标为待定，
+// TODO(pending): 以下四套主题（Claude / Claude Dark / Notion / Notion Dark）标为待定，
 // 后续与设计评审主题时再统一收敛。当前仅作为原型集成占位，菜单项保留以便预览切换。
 const THEME_OPTIONS = [
   { value: "light", label: "浅色", Icon: SunIcon },
   { value: "dark", label: "深色", Icon: MoonIcon },
   { value: "system", label: "跟随系统", Icon: MonitorIcon },
-  { value: "glass", label: "玻璃", Icon: GlassIcon },
   { value: "claude", label: "Claude", Icon: ClaudeIcon },
-  { value: "elevenlabs", label: "ElevenLabs", Icon: ElevenLabsIcon },
-  { value: "mistral", label: "Mistral", Icon: MistralIcon },
-  { value: "supabase", label: "Supabase", Icon: SupabaseIcon },
-  { value: "cal", label: "Cal.com", Icon: CalIcon },
+  { value: "claude-dark", label: "Claude 深色", Icon: ClaudeDarkIcon },
   { value: "notion", label: "Notion", Icon: NotionIcon },
+  { value: "notion-dark", label: "Notion 深色", Icon: NotionDarkIcon },
 ] as const;
 
 function SunIcon() {
@@ -76,37 +73,20 @@ function MonitorIcon() {
   );
 }
 
-function GlassIcon() {
-  return (
-    <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="5" width="18" height="14" rx="3" />
-      <path d="M8 15.5 10.5 13l2.5 2 3.5-4 2 2.5" />
-    </svg>
-  );
-}
-
 function ClaudeIcon() {
   return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18" /></svg>;
 }
 
-function ElevenLabsIcon() {
-  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9v6M8 6v12M12 3v18M16 7v10M20 9v6" /></svg>;
-}
-
-function MistralIcon() {
-  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m4 17 4-10 4 10 4-10 4 10" /></svg>;
-}
-
-function SupabaseIcon() {
-  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 16c0-6 2-9 8-10-1 5 2 8 6 9-2 4-5 6-9 6-3 0-5-2-5-5Z" /></svg>;
-}
-
-function CalIcon() {
-  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M8 2v4M16 2v4M3 9h18" /></svg>;
+function ClaudeDarkIcon() {
+  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18" /><circle cx="12" cy="12" r="8.5" /></svg>;
 }
 
 function NotionIcon() {
   return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 3h10l4 4v14H5z" /><path d="M15 3v5h4M9 11h6M9 15h6" /></svg>;
+}
+
+function NotionDarkIcon() {
+  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 3h10l4 4v14H5z" fill="currentColor" stroke="none" /><path d="M15 3v5h4M9 11h6M9 15h6" stroke="var(--canvas)" /></svg>;
 }
 
 function GearIcon() {

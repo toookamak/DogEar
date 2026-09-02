@@ -76,7 +76,7 @@
   --z-modal: 65;
 }
 
-/* TODO(pending): 以下六套主题变量（Claude / ElevenLabs / Mistral / Supabase / Cal / Notion）标为待定。
+/* TODO(pending): 以下四套主题变量（Claude / Claude Dark / Notion / Notion Dark）标为待定。
    当前实现仅作为原型样式占位，方案收敛与正式设计评审后将重写色板、阴影与语义 token。
    涵盖的 token：color-scheme / --canvas / --panel* / --line / --text / --amber / --mint / --red / --blue /
                  --indigo / --rust / --slate / --shadow* / --radius* / --btn-text / --scrim / --overlay-dim 等。
@@ -135,222 +135,6 @@
   --radius-lg: 22px;
 }
 
-:root[data-theme="elevenlabs"] {
-  color-scheme: dark;
-
-  --canvas: #0c0d10;
-  --panel: #181920;
-  --panel-raised: #1f2129;
-  --panel-hover: #262933;
-  --panel-overlay: rgba(15, 16, 20, 0.86);
-
-  --line: #2d2e36;
-  --line-strong: #4a4b56;
-  --line-soft: rgba(45, 46, 54, 0.6);
-
-  --text: #f6f2ec;
-  --on-accent: #17131b;
-  --muted: #a59f97;
-  --faint: #6b6863;
-
-  --amber: #e4c6ff;
-  --amber-strong: #f0dcff;
-  --amber-soft: rgba(228, 198, 255, 0.14);
-
-  --mint: #79f0c8;
-  --mint-soft: rgba(121, 240, 200, 0.14);
-
-  --red: #ff8da0;
-  --red-soft: rgba(255, 141, 160, 0.14);
-
-  --blue: #9fc9ff;
-  --blue-soft: rgba(159, 201, 255, 0.14);
-
-  --indigo: #b9a8ff;
-  --indigo-soft: rgba(185, 168, 255, 0.14);
-
-  --rust: #ffb87a;
-  --rust-soft: rgba(255, 184, 122, 0.14);
-
-  --slate: #b2b0c4;
-  --slate-soft: rgba(178, 176, 196, 0.14);
-
-  --shadow-sm: 0 6px 18px rgba(0, 0, 0, 0.32);
-  --shadow-lg: 0 36px 80px rgba(0, 0, 0, 0.55);
-
-  --btn-text: #17131b;
-  --scrim: rgba(2, 3, 6, 0.6);
-  --overlay-dim: rgba(2, 3, 6, 0.64);
-  --drawer-shadow: rgba(0, 0, 0, 0.6);
-  --modal-shadow: 0 32px 80px rgba(0, 0, 0, 0.65);
-
-  --radius-sm: 9px;
-  --radius: 16px;
-  --radius-lg: 24px;
-}
-
-:root[data-theme="mistral"] {
-  color-scheme: light;
-
-  --canvas: #fbfaf7;
-  --panel: #ffffff;
-  --panel-raised: #fffefa;
-  --panel-hover: #f1efe9;
-  --panel-overlay: rgba(251, 250, 247, 0.94);
-
-  --line: #e3e0d8;
-  --line-strong: #b8b4a8;
-  --line-soft: rgba(227, 224, 216, 0.6);
-
-  --text: #111111;
-  --on-accent: #17120b;
-  --muted: #5d5b56;
-  --faint: #a3a09a;
-
-  --amber: #f0a32e;
-  --amber-strong: #d98b16;
-  --amber-soft: rgba(240, 163, 46, 0.12);
-
-  --mint: #356f4d;
-  --mint-soft: rgba(53, 111, 77, 0.1);
-
-  --red: #b6402f;
-  --red-soft: rgba(182, 64, 47, 0.1);
-
-  --blue: #2e5b7e;
-  --blue-soft: rgba(46, 91, 126, 0.1);
-
-  --indigo: #4c4a73;
-  --indigo-soft: rgba(76, 74, 115, 0.1);
-
-  --rust: #8c5a2e;
-  --rust-soft: rgba(140, 90, 46, 0.1);
-
-  --slate: #6d6d6a;
-  --slate-soft: rgba(109, 109, 106, 0.12);
-
-  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.07);
-  --shadow-lg: 0 28px 56px rgba(0, 0, 0, 0.12);
-
-  --btn-text: #17120b;
-  --scrim: rgba(15, 13, 5, 0.3);
-  --overlay-dim: rgba(15, 13, 5, 0.36);
-  --drawer-shadow: rgba(15, 13, 5, 0.22);
-  --modal-shadow: 0 26px 64px rgba(15, 13, 5, 0.26);
-
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 16px;
-}
-
-:root[data-theme="supabase"] {
-  color-scheme: dark;
-
-  --canvas: #0f1d1b;
-  --panel: #152321;
-  --panel-raised: #1a2c2a;
-  --panel-hover: #1e3532;
-  --panel-overlay: rgba(15, 29, 27, 0.94);
-
-  --line: #2a4642;
-  --line-strong: #467066;
-  --line-soft: rgba(42, 70, 66, 0.6);
-
-  --text: #edf9f4;
-  --on-accent: #062219;
-  --muted: #9eb5ad;
-  --faint: #6a857c;
-
-  --amber: #3ecf8e;
-  --amber-strong: #6fe5ad;
-  --amber-soft: rgba(62, 207, 142, 0.16);
-
-  --mint: #3ecf8e;
-  --mint-soft: rgba(62, 207, 142, 0.14);
-
-  --red: #f97e7e;
-  --red-soft: rgba(249, 126, 126, 0.14);
-
-  --blue: #58c4ff;
-  --blue-soft: rgba(88, 196, 255, 0.14);
-
-  --indigo: #6ab3ff;
-  --indigo-soft: rgba(106, 179, 255, 0.14);
-
-  --rust: #f9a06a;
-  --rust-soft: rgba(249, 160, 106, 0.14);
-
-  --slate: #88a8a1;
-  --slate-soft: rgba(136, 168, 161, 0.14);
-
-  --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.28);
-  --shadow-lg: 0 30px 70px rgba(0, 0, 0, 0.45);
-
-  --btn-text: #062219;
-  --scrim: rgba(2, 8, 7, 0.6);
-  --overlay-dim: rgba(2, 8, 7, 0.65);
-  --drawer-shadow: rgba(0, 0, 0, 0.55);
-  --modal-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
-
-  --radius-sm: 5px;
-  --radius: 8px;
-  --radius-lg: 12px;
-}
-
-:root[data-theme="cal"] {
-  color-scheme: light;
-
-  --canvas: #fbfbfa;
-  --panel: #ffffff;
-  --panel-raised: #ffffff;
-  --panel-hover: #f0efec;
-  --panel-overlay: rgba(251, 251, 250, 0.95);
-
-  --line: #e5e4df;
-  --line-strong: #cccbc4;
-  --line-soft: rgba(229, 228, 223, 0.6);
-
-  --text: #161618;
-  --on-accent: #ffffff;
-  --muted: #6a6a72;
-  --faint: #a4a4a8;
-
-  --amber: #161618;
-  --amber-strong: #2c2c30;
-  --amber-soft: rgba(22, 22, 24, 0.07);
-
-  --mint: #2f7d51;
-  --mint-soft: rgba(47, 125, 81, 0.1);
-
-  --red: #d04a3e;
-  --red-soft: rgba(208, 74, 62, 0.1);
-
-  --blue: #2f5fb3;
-  --blue-soft: rgba(47, 95, 179, 0.1);
-
-  --indigo: #4f4f8a;
-  --indigo-soft: rgba(79, 79, 138, 0.1);
-
-  --rust: #8a5a35;
-  --rust-soft: rgba(138, 90, 53, 0.1);
-
-  --slate: #7a7a82;
-  --slate-soft: rgba(122, 122, 130, 0.12);
-
-  --shadow-sm: 0 3px 10px rgba(23, 23, 23, 0.06);
-  --shadow-lg: 0 30px 64px rgba(23, 23, 23, 0.14);
-
-  --btn-text: #ffffff;
-  --scrim: rgba(20, 20, 22, 0.32);
-  --overlay-dim: rgba(20, 20, 22, 0.36);
-  --drawer-shadow: rgba(20, 20, 22, 0.24);
-  --modal-shadow: 0 28px 64px rgba(20, 20, 22, 0.28);
-
-  --radius-sm: 12px;
-  --radius: 18px;
-  --radius-lg: 24px;
-}
-
 :root[data-theme="notion"] {
   color-scheme: light;
 
@@ -405,54 +189,112 @@
   --radius-lg: 14px;
 }
 
-[data-theme="glass"] {
+:root[data-theme="claude-dark"] {
   color-scheme: dark;
 
-  --canvas: #08111f;
-  --panel: rgba(18, 30, 49, 0.68);
-  --panel-raised: rgba(27, 42, 67, 0.74);
-  --panel-hover: rgba(46, 64, 96, 0.72);
-  --panel-overlay: rgba(9, 18, 32, 0.78);
+  --canvas: #262624;
+  --panel: #2f2e2b;
+  --panel-raised: #38362f;
+  --panel-hover: #403e37;
+  --panel-overlay: rgba(38, 38, 36, 0.95);
 
-  --line: rgba(169, 202, 255, 0.18);
-  --line-strong: rgba(185, 216, 255, 0.34);
-  --line-soft: rgba(169, 202, 255, 0.11);
+  --line: #45423a;
+  --line-strong: #5a564a;
+  --line-soft: rgba(69, 66, 58, 0.6);
 
-  --text: #edf5ff;
-  --on-accent: #07101e;
-  --muted: #a9bad0;
-  --faint: #72839a;
+  --text: #f0eee6;
+  --on-accent: #1f1d18;
+  --muted: #a8a294;
+  --faint: #6e6a5e;
 
-  --amber: #7fd7ff;
-  --amber-strong: #a6e3ff;
-  --amber-soft: rgba(127, 215, 255, 0.16);
+  --amber: #d97757;
+  --amber-strong: #e89274;
+  --amber-soft: rgba(217, 119, 87, 0.16);
 
-  --mint: #9de7ca;
-  --mint-soft: rgba(157, 231, 202, 0.14);
+  --mint: #7fbf9a;
+  --mint-soft: rgba(127, 191, 154, 0.14);
 
-  --red: #ff9c9c;
-  --red-soft: rgba(255, 156, 156, 0.14);
+  --red: #d4766a;
+  --red-soft: rgba(212, 118, 106, 0.14);
 
-  --blue: #9bc8ff;
-  --blue-soft: rgba(155, 200, 255, 0.15);
+  --blue: #7dafd6;
+  --blue-soft: rgba(125, 175, 214, 0.14);
 
-  --indigo: #c1b6ff;
-  --indigo-soft: rgba(193, 182, 255, 0.15);
+  --indigo: #a39ac9;
+  --indigo-soft: rgba(163, 154, 201, 0.15);
 
-  --rust: #e0b98f;
-  --rust-soft: rgba(224, 185, 143, 0.14);
+  --rust: #c19168;
+  --rust-soft: rgba(193, 145, 104, 0.14);
 
-  --slate: #b2c0d6;
-  --slate-soft: rgba(178, 192, 214, 0.14);
+  --slate: #8b93a3;
+  --slate-soft: rgba(139, 147, 163, 0.15);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.42);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 20px 52px rgba(0, 0, 0, 0.5);
 
-  --btn-text: #05101d;
-  --scrim: rgba(1, 5, 13, 0.52);
-  --overlay-dim: rgba(1, 5, 13, 0.58);
-  --drawer-shadow: rgba(0, 0, 0, 0.48);
-  --modal-shadow: 0 24px 72px rgba(0, 0, 0, 0.56);
+  --btn-text: #fff8f0;
+  --scrim: rgba(8, 6, 4, 0.55);
+  --overlay-dim: rgba(8, 6, 4, 0.6);
+  --drawer-shadow: rgba(0, 0, 0, 0.55);
+  --modal-shadow: 0 28px 72px rgba(0, 0, 0, 0.6);
+
+  --radius-sm: 9px;
+  --radius: 14px;
+  --radius-lg: 22px;
+}
+
+:root[data-theme="notion-dark"] {
+  color-scheme: dark;
+
+  --canvas: #191919;
+  --panel: #202020;
+  --panel-raised: #252525;
+  --panel-hover: #2f2f2f;
+  --panel-overlay: rgba(25, 25, 25, 0.95);
+
+  --line: #2f2f2f;
+  --line-strong: #404040;
+  --line-soft: rgba(47, 47, 47, 0.6);
+
+  --text: #d4d4d4;
+  --on-accent: #191919;
+  --muted: #9b9b9b;
+  --faint: #6f6f6f;
+
+  --amber: #d4d4d4;
+  --amber-strong: #e8e8e8;
+  --amber-soft: rgba(212, 212, 212, 0.08);
+
+  --mint: #6fad8a;
+  --mint-soft: rgba(111, 173, 138, 0.14);
+
+  --red: #e0705f;
+  --red-soft: rgba(224, 112, 95, 0.14);
+
+  --blue: #6f9ee8;
+  --blue-soft: rgba(111, 158, 232, 0.14);
+
+  --indigo: #9089e0;
+  --indigo-soft: rgba(144, 137, 224, 0.15);
+
+  --rust: #c99a6b;
+  --rust-soft: rgba(201, 154, 107, 0.14);
+
+  --slate: #999fa8;
+  --slate-soft: rgba(153, 159, 168, 0.15);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.45);
+
+  --btn-text: #191919;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --overlay-dim: rgba(0, 0, 0, 0.6);
+  --drawer-shadow: rgba(0, 0, 0, 0.5);
+  --modal-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+
+  --radius-sm: 6px;
+  --radius: 9px;
+  --radius-lg: 14px;
 }
 
 :root[data-theme="dark"] {
