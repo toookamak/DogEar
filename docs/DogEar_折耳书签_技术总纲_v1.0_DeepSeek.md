@@ -200,7 +200,7 @@ DogEar
 
 **两条轨（互斥二选一，用户选定一种部署）**：
 
-- **轨 A · Cloudflare Workers**：D1 真源 + R2 内容 + KV 预留；Pages 托管前端；Cron Trigger 驱动同步/归档。
+- **轨 A · Cloudflare Workers**：D1 真源 + R2 内容 + KV 预留；Pages 托管前端；Cron Trigger 只跑**轻量定时任务**（≥1min）；本地↔真源同步由**客户端 flush** 驱动，不挂服务端 Cron。
 - **轨 B · Docker 自托管**：Bun(bun:sqlite) 或 Node(better-sqlite3) + 本地文件/挂载卷做 SQLite；内容存储接 S3 兼容服务（含 MinIO）；无 Cron 则用进程内调度器。
 
 ### 3.2 设计原则与取舍
@@ -281,6 +281,8 @@ DogEar/
 - **IndexedDB 缓存 + 真源（✅）**：实现"能连上本应用即可保存"的体验底座：断网可写缓存、联网对账。
 - **S3 API 内容层（✅，方向已定）**：Snapshot 大对象与结构化数据分离；R2 零出口费、可换 MinIO/其他 S3 兼容服务。
 - **Cron Trigger 而非 Durable Objects（⏳暂定）**：成本考量；若未来需要实时双向与多实例一致性，再评估 DO/队列。
+- **定时任务边界（✅，方向已定）**：Cron Trigger 最短粒度为 **1 分钟**，只承载**轻量任务**（触发通道拉取、Metadata 重抓调度、备份节流等）；本地↔真源同步由**客户端 flush** 承担（用户在线即推），不依赖亚分钟服务端定时。重任务（整页抓取、批量解析）不进 Worker 的 CPU/subrequest 预算，走浏览器端直传或 Track B/Docker（见 §6.4）。
+- **Cloudflare 进阶计费能力（💡方向性，可选层）**：Queues / Workflows / Durable Objects 作为**可选增强**（各自带免费额度与计费边界），仅在规模需要队列/编排/多实例一致性时引入；不挡核心路径，也不写入 MVP 关键路径（对应 §11 T-11）。
 - **KV（💡方向性）**：预留边缘缓存/会话；本期不绑定。
 
 ### 4.3 关键技术依赖清单
@@ -376,6 +378,7 @@ Scene ──< M:N >── Bookmark ──1:N── Archive（内容保全副本�
 - **Archive（内容保全副本）**：`id / bookmarkId / type(snapshot|reader-预留) / status / 资源引用 / createdAt / updatedAt`。
 - **Archive Record（归档记录，存真源）**：`archiveId / parser / parserVersion / source(server|browser|manual) / storageLocation(指向内容存储层) / createdAt`。
 - Snapshot 内容本体（HTML+CSS+资源）入**内容存储层**，不存关系库；浏览器端生成可直传对象存储（签名 URL），服务端只做编排与记录。
+- **能力边界（Track A）**：整页 Snapshot 依赖**有浏览器 DOM 的一端**（插件/工作台页面持有签名 URL 直传）。无 DOM 可用的触发源（Agent 保存后补做、纯服务端批量）在 Track A 上**只产出 Metadata**，不提供服务端整页抓取；整页快照需等浏览器端补做或 Track B/Docker（见 §6.4）。失败不影响 Bookmark（Link 成立）。
 
 #### 5.2.4 Archive Job（异步任务）
 
@@ -536,7 +539,7 @@ Scene ──< M:N >── Bookmark ──1:N── Archive（内容保全副本�
 ② 异步入 sync_queue       ← 联网后推送服务端真源，回填正式 id / 对账
    │
    ├──③ Metadata Job（异步，不阻塞保存）
-   │      Server Fetch（默认）→ 失败不阻塞；可后续重试
+   │      服务端轻量抓取描述字段（默认；仅 Metadata，不抓整页）→ 失败不阻塞；可后续重试
    │      产出写入 Bookmark（Raindrop 同构字段可同步；本地扩展字段仅存本地）
    ├──④ AI 理解/建议（异步）
    │      书签记忆（浅）：标题/类型/短理解 → 建议 1 个 Scene + 很少 Tag/Folder
@@ -591,14 +594,21 @@ Inbox（status=unread）
    ▼
 Archive Job 入队（type=snapshot|metadata；pending）
    ▼
-消费（顺序/并发受限）
-   ├── Browser Fetch：插件提供当前 DOM → 高保真直传内容存储层
-   ├── Server Fetch：服务端抓取 HTML+CSS+资源 → 压缩(gzip/brotli) → 直传 S3 API
-   ├── Manual：用户主动触发
+消费（顺序/并发受限；按触发源有无 DOM 分流）
+   ├── Browser（推荐，Track A 整页 Snapshot 主要路径）：插件/工作台持有当前 DOM → 直传内容存储层（签名 URL）
+   ├── Server（仅 Metadata）：服务端轻量抓取描述字段 → 写 Bookmark；不抓整页（Track A 不设服务端整页抓取）
+   ├── Docker（Track B 可选）：服务端整页抓取 HTML+CSS+资源 → 压缩(gzip/brotli) → 直传 S3 API
+   └── Manual：用户主动触发（无 DOM 时同 Browser 路径或降级）
    ▼
 completed：写 Archive + Archive Record（parser/version/source/storage_location）→ 更新卡片状态位
 failed：error 分类（fetch/parse/timeout/quota）→ 保留可重试/可取消；不影响 Bookmark
 ```
+
+**执行面分工（与 §4.2「定时任务边界」一致）**：
+
+- **Track A（Cloudflare Workers）**：整页 Snapshot 走 **Browser 直传**；服务端只做**轻量 Metadata** 抓取与 Job 编排。Worker 的 CPU/时长与 subrequest 预算不承载整页抓取；无 Cron 亚分钟、无重任务进 Worker（Cron ≥1min 仅轻任务）。
+- **Track B（Docker 自托管）**：可开**服务端整页抓取**（对应 §6.4 的 Docker 分支），补足无浏览器/Agent 批量场景。
+- 无 DOM 可用的触发源（Agent 保存后补做、纯服务端批量）在 Track A 上**只产出 Metadata**；需要整页快照时等浏览器端补做，或在 Track B 提供服务端抓取。
 
 **降级链（Reader 远期，架构预留）**：URL/DOM → 通用解析器 → 站点规则 → 用户手动选正文 → 仍失败则保留原 URL，Bookmark 不受影响。
 
@@ -612,13 +622,25 @@ failed：error 分类（fetch/parse/timeout/quota）→ 保留可重试/可取�
 
 ### 6.6 同步引擎（本地 ↔ 真源 ↔ 通道）
 
+同步拆为**两个平面**，避免把「本应用内联机」与「第三方通道轮询」混为一谈：
+
+**平面 1 · 本地 ↔ 真源（用户行为驱动，核心路径）**
+
 | 方向 | 触发 | 策略 |
 | --- | --- | --- |
-| 本地 → 真源 | 30s 合并窗口（可配）/ 立即 | 攒批推送，游标续传；成功后回填正式 id；失败保留队列重试 |
-| 真源 → 本地 | 5min 拉取（可配）/ 手动 | 增量（updatedAt/version 游标），不拉全量 |
+| 本地 → 真源 | **客户端立即 flush**（在线即推；合并窗口可配，如短暂攒批降请求数） | 攒批推送，游标续传；成功后回填正式 id；失败保留队列重试 |
+| 真源 → 本地 | 客户端拉取（可配）/ 手动 | 增量（updatedAt/version 游标），不拉全量 |
+
+**平面 2 · Raindrop 通道（可选，独立于本应用内联机）**
+
+| 方向 | 触发 | 策略 |
+| --- | --- | --- |
 | Raindrop 导入 | 用户启用输入源 | 首次可进 Inbox 或保持原路径；可走导入梳理页；首次梳理后新记录一律进 Inbox |
 | Raindrop 导出 | 用户启用导出方向 | Link 级存档，不带 Scene/Status/回收站语义；失败不阻塞本地 |
+| 拉取节奏 | **有在线客户端时轮询 / 无客户端时服务端 Cron ≥1min（Track A）** | 客户端 30s 级可行；服务端定时无亚分钟粒度。429 指数退避（1s/2s/4s…封顶），队列持久化 |
 | 冲突 | 任意双端改写 | 本地优先；冲突进 conflict 表保留两端，用户可单条/全部选择合并 |
+
+> 说明：Raindrop 轮询若依赖服务端定时，最短为 1 分钟（Cron Trigger 平台下限）；30s 级轮询只可能由**在线客户端**执行（浏览器不在线则不拉取）。「删掉 Cron 30s」即指此：本应用真源同步不挂服务端定时，亚分钟不可行也不必要。
 
 **可观测**：条/秒、时延、成功率、队列长度、429 次数须有日志与界面可见（同步状态栏）。
 
@@ -732,7 +754,7 @@ failed：error 分类（fetch/parse/timeout/quota）→ 保留可重试/可取�
 | 应用运行时 | Workers（含 Cron Trigger） | Bun 或 Node 进程 |
 | 数据库（真源） | D1（SQLite 兼容） | bun:sqlite / better-sqlite3 |
 | 内容存储（Archive 对象） | R2（S3 API） | 本地卷 或 自建 S3 兼容（MinIO 等） |
-| 定时任务 | Cron Triggers | 进程内 scheduler（Bun.cron / node-cron 或独立 job 容器） |
+| 定时任务 | Cron Triggers（仅轻任务，≥1min；同步不挂服务端定时，见 §6.6） | 进程内 scheduler（Bun.cron / node-cron 或独立 job 容器；无 Cron 粒度限制，可承载重任务） |
 | 部署方式 | `wrangler deploy` | `docker compose up -d` |
 | 公网鉴权 | 密码页 / URL Token / IP 白名单 | 同左 + 可选反代加一层 |
 
@@ -772,7 +794,8 @@ wrangler d1 create dogear_prod      # 建 D1，回填 binding 与 database_id
 wrangler r2 bucket create dogear-content   # 建 R2（Snapshot 内容）
 pnpm migrate:d1                       # 应用 Drizzle migration
 wrangler deploy                        # 发布 Workers + Pages
-wrangler deploy --cron 30s 推 / 5min 拉   # 定时同步走 Cron Trigger 配置（见 §6.6）
+# Cron Trigger 单独配置（见 wrangler.jsonc [triggers]）：只挂轻量任务（如通道拉取、Metadata 重抓调度），最短 1 分钟
+# 本地↔真源同步不由服务端定时驱动：客户端在线即 flush（见 §6.6）
 ```
 
 **Track B（Docker）**
@@ -787,7 +810,7 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 - [ ] migration 已应用到目标环境（D1 / SQLite 卷）
 - [ ] R2 / 内容卷 bucket 已建，`CONTENT_STORAGE` 指向正确
 - [ ] 各通道 Token 注入环境变量/秘密引用（Raindrop / Skill Bearer / S3）
-- [ ] Cron（Track A Trigger / Track B scheduler）已注册：30s 推送、5min 拉取增量
+- [ ] Cron（Track A Trigger / Track B scheduler）已注册：**仅轻量定时任务（≥1min，如通道拉取、Metadata 重抓调度、备份节流）**；本地↔真源同步由客户端 flush 驱动，不依赖服务端定时
 - [ ] 429 退避与审计保留（5000 条/30 天）参数按需配好
 - [ ] 首次登录鉴权（密码页 / URL Token / IP 白名单）验证通过
 
@@ -817,7 +840,7 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 | **M1 骨架** | 仓库结构与基础链路打通 | workspace 初始化（apps/web、apps/server、packages/db、packages/shared）；Drizzle schema v1；本地 SQLite + D1 双驱动 adapter 冒烟 | 一条 Bookmark 可从 Capture 接口写入并在工作台列表读出；类型/lint 通过 |
 | **M2 工作台核心** | 过关最小集：工作台能存 | 列表/搜索/筛选/详情；Scene/Status/Folder/Tag 单条与批量改；AI 建议分流（四落点）；回收站；操作日志 | 手工按 PRD §4.2 核心用例走通；600 条基线列表流畅 |
 | **M3 Agent 保存** | 过关最小集：Agent 能存 | Skill API（自描述 + 七个技能 + Bearer + 限速 + 审计） | 从外部 AI 平台调用 Skill 完成一次保存并回显；写操作留痕可查 |
-| **M4 数据通道与同步** | 通道可用 + 数据管理可选 | Raindrop/S3/WebDAV 通道适配（输入源/导出方向）；sync_queue 顺序消费；30s 推/5min 拉；429 退避；conflict 保留两端可合并 | 通道导入一次、导出一次；断网恢复后对账一致；冲突条目可见可合并 |
+| **M4 数据通道与同步** | 通道可用 + 数据管理可选 | Raindrop/S3/WebDAV 通道适配（输入源/导出方向）；sync_queue 顺序消费；**客户端立即 flush（本地↔真源）**；通道拉取走在线客户端或 Cron ≥1min；429 退避；conflict 保留两端可合并 | 通道导入一次、导出一次；断网恢复后对账一致；冲突条目可见可合并 |
 | **M5 归档与备份** | Snapshot 非默认可勾选 + 三档备份 | Archive/ArchiveJob 生命周期；Snapshot 捕获/失败重试；轻/中/重三档备份与恢复 | Snapshot 失败不回滚 Link；三档备份产物可导入还原 |
 | **M6 导航页（网页形态）** | 导航页核心框架 + 重新发现基础 | 网页形态导航页（规则/工具圈选）；访问记录落库；最近收藏/最近访问 | 导航页可浏览、可直达；展示范围与工作台配置一致 |
 
@@ -848,6 +871,8 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 | T-8 | Reader 相关字段预留在 Schema 中的深度 | 💡方向性 | 只做类型预留字段，不实现（§5.2.3）；避免过度建模 |
 | T-9 | KV 边缘缓存是否启用 | 💡方向性 | 默认不加；压测后再评估（§3.1/§4.1） |
 | T-10 | 匿名公开是否开放及范围 | ❓待决策 | 默认登录；匿名仅限标题/图标/URL 且排除 Inbox/私密，非默认（§8.2） |
+| T-11 | Cloudflare 进阶计费能力（Queues/Workflows/DO）是否引入 | 💡方向性 | 仅规模需要队列/编排/多实例一致性时评估；各自带免费额度与计费边界，作为可选层不挡核心路径（§4.2） |
+| T-12 | Archive 执行面分工：Track A 无 DOM 源（Agent 补做/批量）的整页快照策略 | ⏳暂定 | 默认只产 Metadata + 等浏览器补做；是否在 Track A 引入受限服务端抓取待评估（§5.2.3/§6.4） |
 
 > 定稿原则：与技术方案强相关的项在落地细化文档中收敛，不回流 PRD；PRD 冲突以 PRD v1.0.7 为准。
 
@@ -905,6 +930,7 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 | 版本 | 日期 | 作者 | 说明 |
 | --- | --- | --- | --- |
 | v1.0_DeepSeek | 2026-09-02 | DogEar 项目组（匿名） | 初稿：按 PRD v1.0.7 从产品+技术双视角重建技术总纲；与既有 v0.2 稿分离命名，独立成文 |
+| v1.0_DeepSeek（同步/归档平面修订） | 2026-09-02 | DogEar 项目组（匿名） | §6.6 拆「本地↔真源（客户端 flush）」与「Raindrop 通道（轮询+429）」两平面；删除 Cron 30s（平台下限 1min）；§6.4/§5.2.3 明确 Track A 整页 Snapshot 走浏览器直传、Server 仅 Metadata、Docker 可选整页抓取；§4.2/§11 补定时任务边界与 Cloudflare 进阶能力（Queues/Workflows/DO）可选层 |
 | v1.0_DeepSeek（增补） | 2026-09-02 | DogEar 项目组（匿名） | §5.7 新增字段与 Raindrop 映射总表：承接 PRD v1.0.7 附录 C（C.1–C.6 全量迁移）；PRD 附录 C 改为引用本小节，正文交叉引用同步更新 |
 
 > **文档维护说明**：本文档随项目开发进度持续更新。重大技术方案、架构或功能变更应同步修订本文档，并记录于文档变更记录中。凡与旧落地文档口径冲突处，一律以 PRD v1.0.7 与技术总纲 v1.0_DeepSeek 为准。
