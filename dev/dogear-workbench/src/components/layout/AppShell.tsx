@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSettings } from "@/hooks/useSettings";
-import type { SectionKey, ThemeMode } from "@/types";
+import { SCENES } from "@/data/mock";
+import { SYNC_METRICS } from "@/data/mockSettings";
+import type { NavKey, SceneDef, ThemeMode } from "@/types";
 import type { BookmarkAPI } from "@/types/bookmark-api";
 import TopBar from "@/components/layout/TopBar";
 import Sidebar from "@/components/layout/Sidebar";
@@ -16,6 +18,7 @@ import ToastRegion from "@/components/feedback/ToastRegion";
 import EmptyState from "@/components/feedback/EmptyState";
 import Skeleton from "@/components/feedback/Skeleton";
 import SettingsModal from "@/components/settings/SettingsModal";
+import NavPlaceholder from "@/components/nav/NavPlaceholder";
 
 interface Props {
   bm: BookmarkAPI;
@@ -23,38 +26,66 @@ interface Props {
   onThemeChange: (theme: ThemeMode) => void;
 }
 
-const SECTION_META: Record<SectionKey, { title: string; desc: string }> = {
+const NAV_META: Record<string, { title: string; desc: string }> = {
   inbox: {
-    title: "收件箱",
-    desc: "先处理新进入资料库的链接，再决定阅读、归档或交给 AI 整理。",
+    title: "待处理",
+    desc: "Inbox：新进入资料库的链接。可长期停留，不强制整理（PRD §2.0.2）。",
   },
-  later: {
-    title: "稍后读",
-    desc: "排入阅读队列的内容，按自己的节奏逐条消化。",
+  confirmed: {
+    title: "已确认",
+    desc: "已确认价值的书签，随时可以回看与检索。",
   },
-  archive: {
-    title: "已归档",
-    desc: "已完成整理的书签，随时可以回看与检索。",
+  shelved: {
+    title: "搁置",
+    desc: "暂不处理的收藏，仍可搜索与检索。",
   },
-  design: {
-    title: "设计参考",
-    desc: "灵感、排版与设计体系相关的收藏。",
-  },
-  engineering: {
-    title: "工程与工具",
-    desc: "框架、存储与工程实践相关的收藏。",
-  },
-  notes: {
-    title: "文章与笔记",
-    desc: "长文、观点与个人知识沉淀相关的收藏。",
+  navpage: {
+    title: "导航页",
+    desc: "M6 占位：网页形态导航页，待排期。",
   },
 };
 
+const SCENE_META_KEYS = new Map<string, SceneDef>(SCENES.map((s) => [s.key, s]));
+
+const FOLDER_TITLES: Record<string, string> = {
+  "fd-design": "设计参考",
+  "fd-engineering": "工程与工具",
+  "fd-notes": "文章与笔记",
+};
+
+function navMeta(nav: string) {
+  if (nav.startsWith("sc-")) {
+    const scene = SCENE_META_KEYS.get(nav);
+    if (scene) {
+      return {
+        title: scene.name,
+        desc: scene.description,
+        primaryAction: scene.primaryAction,
+        density: scene.density,
+      };
+    }
+  }
+  const folder = FOLDER_TITLES[nav];
+  if (folder) {
+    return { title: folder, desc: "按文件夹浏览（Folder 保持稳定、通常单属）。", primaryAction: undefined, density: "cozy" as const };
+  }
+  const base = NAV_META[nav];
+  return { title: base?.title ?? "工作台", desc: base?.desc ?? "", primaryAction: undefined, density: "cozy" as const };
+}
+
 export default function AppShell({ bm, theme, onThemeChange }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { state, visibleBookmarks, sectionStats, folderCounts, tagCounts } = bm;
+  const {
+    state,
+    visibleBookmarks,
+    sectionStats,
+    sceneCounts,
+    folderCounts,
+    tagCounts,
+  } = bm;
   const { settings, updateSettings } = useSettings();
-  const meta = SECTION_META[state.filters.section];
+  const nav: string = state.filters.section;
+  const meta = navMeta(nav);
   const selection = state.selection;
 
   const hasActiveFilters =
@@ -64,8 +95,18 @@ export default function AppShell({ bm, theme, onThemeChange }: Props) {
 
   const activeId = state.detailOpen ? state.selectedId : null;
 
+  // AERR 行为原型：进入 Scene 视图时应用该 Scene 的默认排序与信息密度（PRD §2.0.3）。
+  useEffect(() => {
+    if (nav.startsWith("sc-")) {
+      const scene = SCENE_META_KEYS.get(nav);
+      if (scene) bm.setSort(scene.defaultSort);
+    }
+    // 仅在切换导航时应用一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav]);
+
   const countLabel =
-    state.filters.section === "inbox" ? " 条待处理" : " 条收藏";
+    nav === "inbox" ? " 条待处理" : " 条收藏";
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -78,19 +119,20 @@ export default function AppShell({ bm, theme, onThemeChange }: Props) {
 
   return (
     <div className="app-shell">
-      <TopBar onToggleSidebar={bm.toggleSidebar} />
+      <TopBar onToggleSidebar={bm.toggleSidebar} onMockSave={bm.mockSaveBookmark} />
 
-      <div className="workspace">
+      <div className={`workspace${state.detailOpen ? " detail-open" : ""}`}>
         <Sidebar
-          section={state.filters.section}
+          nav={nav as NavKey}
           tag={state.filters.tag}
-          sectionStats={sectionStats}
+          statusCounts={sectionStats}
+          sceneCounts={sceneCounts}
           folderCounts={folderCounts}
           tagCounts={tagCounts}
           sidebarOpen={state.sidebarOpen}
           sync={state.sync}
           theme={theme}
-          onSection={bm.setSection}
+          onNav={bm.setSection}
           onTag={bm.setTag}
           onClose={() => bm.setSidebar(false)}
           onOpenSettings={() => setSettingsOpen(true)}
@@ -107,98 +149,118 @@ export default function AppShell({ bm, theme, onThemeChange }: Props) {
         )}
 
         <main className="main-content" id="workbench">
-          <section className="content-head">
-            <h1 className="page-title">
-              {meta.title}{" "}
-              <span className="page-count">{visibleBookmarks.length}</span>
-            </h1>
-          </section>
+          {nav === "navpage" ? (
+            <NavPlaceholder />
+          ) : (
+            <>
+              <section className="content-head">
+                <div>
+                  <h1 className="page-title">
+                    {meta.title}{" "}
+                    <span className="page-count">{visibleBookmarks.length}</span>
+                  </h1>
+                  <p className="page-desc">{meta.desc}</p>
+                </div>
+                {meta.primaryAction && (
+                  <button
+                    type="button"
+                    className="primary-action"
+                    onClick={() =>
+                      bm.notify({
+                        kind: "success",
+                        message: `Scene 主操作「${meta.primaryAction}」（原型演示）`,
+                      })
+                    }
+                  >
+                    {meta.primaryAction} <span className="primary-arrow">↗</span>
+                  </button>
+                )}
+              </section>
 
-          <WorkspaceToolbar
-            filters={state.filters}
-            view={state.view}
-            organizeCount={bm.pendingSuggestionCount}
-            onQuery={bm.setQuery}
-            onSource={bm.setSource}
-            onSort={bm.setSort}
-            onView={bm.setView}
-            onOrganize={bm.organizeAction}
-          />
+              <WorkspaceToolbar
+                filters={state.filters}
+                view={state.view}
+                organizeCount={bm.pendingSuggestionCount}
+                onQuery={bm.setQuery}
+                onSource={bm.setSource}
+                onSort={bm.setSort}
+                onView={bm.setView}
+                onOrganize={bm.organizeAction}
+              />
 
-          {selection.length > 0 && (
-            <SelectionToolbar
-              count={selection.length}
-              onArchive={() => bm.batchSetStatus("已归档", selection)}
-              onLater={() => bm.batchSetStatus("稍后读", selection)}
-              onAddTag={(tag) => bm.batchAddTag(tag, selection)}
-              onClear={bm.clearSelection}
-              onTrash={() => bm.trashBookmarks(selection, settings.trash.retentionDays)}
-            />
-          )}
-
-          <section className="bookmark-area">
-            <div className="bookmark-summary">
-              <span className="result-count">
-                显示 {visibleBookmarks.length}
-                {countLabel}
-              </span>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  className="clear-btn"
-                  onClick={bm.clearFilters}
-                >
-                  清除筛选
-                </button>
+              {selection.length > 0 && (
+                <SelectionToolbar
+                  count={selection.length}
+                  onConfirm={() => bm.batchSetStatus("已确认", selection)}
+                  onShelve={() => bm.batchSetStatus("搁置", selection)}
+                  onBack={() => bm.batchSetStatus("待处理", selection)}
+                  onAddTag={(tag) => bm.batchAddTag(tag, selection)}
+                  onClear={bm.clearSelection}
+                  onTrash={() => bm.trashBookmarks(selection, settings.trash.retentionDays)}
+                />
               )}
-            </div>
 
-            {state.booting ? (
-              <Skeleton />
-            ) : visibleBookmarks.length === 0 ? (
-              <EmptyState onClear={bm.clearFilters} />
-            ) : state.view === "grid" ? (
-              <BookmarkGrid
-                items={visibleBookmarks}
-                selection={selection}
-                selectedId={activeId}
-                onOpen={bm.openDetail}
-                onToggleSelect={bm.toggleSelect}
-              />
-            ) : state.view === "list" ? (
-              <BookmarkList
-                items={visibleBookmarks}
-                selection={selection}
-                selectedId={activeId}
-                onOpen={bm.openDetail}
-                onToggleSelect={bm.toggleSelect}
-                onMove={bm.moveStatus}
-              />
-            ) : state.view === "tags" ? (
-              <BookmarkTabs
-                items={visibleBookmarks}
-                selectedId={activeId}
-                onOpen={bm.openDetail}
-              />
-            ) : (
-              <BookmarkBoard
-                items={visibleBookmarks}
-                selectedId={activeId}
-                onOpen={bm.openDetail}
-                onMove={bm.moveStatus}
-              />
-            )}
-          </section>
+              <section
+                className="bookmark-area"
+                data-density={meta.density ?? "cozy"}
+              >
+                <div className="bookmark-summary">
+                  <span className="result-count">
+                    显示 {visibleBookmarks.length}
+                    {countLabel}
+                  </span>
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      className="clear-btn"
+                      onClick={bm.clearFilters}
+                    >
+                      清除筛选
+                    </button>
+                  )}
+                </div>
+
+                {state.booting ? (
+                  <Skeleton />
+                ) : visibleBookmarks.length === 0 ? (
+                  <EmptyState onClear={bm.clearFilters} />
+                ) : state.view === "grid" ? (
+                  <BookmarkGrid
+                    items={visibleBookmarks}
+                    selection={selection}
+                    selectedId={activeId}
+                    onOpen={bm.openDetail}
+                    onToggleSelect={bm.toggleSelect}
+                  />
+                ) : state.view === "list" ? (
+                  <BookmarkList
+                    items={visibleBookmarks}
+                    selection={selection}
+                    selectedId={activeId}
+                    onOpen={bm.openDetail}
+                    onToggleSelect={bm.toggleSelect}
+                    onMove={bm.moveStatus}
+                  />
+                ) : state.view === "tags" ? (
+                  <BookmarkTabs
+                    items={visibleBookmarks}
+                    selectedId={activeId}
+                    onOpen={bm.openDetail}
+                  />
+                ) : (
+                  <BookmarkBoard
+                    items={visibleBookmarks}
+                    selectedId={activeId}
+                    onOpen={bm.openDetail}
+                    onMove={bm.moveStatus}
+                  />
+                )}
+              </section>
+            </>
+          )}
         </main>
 
-        {state.detailOpen && state.selectedId && (
-          <button
-            type="button"
-            className={`detail-scrim${state.detailOpen ? " show" : ""}`}
-            aria-label="关闭详情"
-            onClick={bm.closeDetail}
-          />
-        )}
+        {/* 右区：可折叠工具面板（默认收起） */}
         <DetailPanel
           bookmark={bm.selectedBookmark}
           open={state.detailOpen}
@@ -216,7 +278,12 @@ export default function AppShell({ bm, theme, onThemeChange }: Props) {
 
       <StatusBar
         sync={state.sync}
-        pendingCount={sectionStats["待整理"]}
+        pendingCount={sectionStats["待处理"]}
+        metrics={SYNC_METRICS}
+        queueLength={settings.raindrop.queue.length}
+        pendingPush={
+          settings.raindrop.queue.filter((i) => i.status === "pending").length
+        }
         onRetry={bm.runSync}
       />
       <ToastRegion

@@ -52,6 +52,11 @@ export default function BookmarkCard({
         <p className="card-excerpt">{b.excerpt}</p>
 
         <div className="card-tags-row">
+          {b.suggestion?.state === "pending" && (
+            <span className="ai-badge" title="有 AI 整理建议待确认（建议先行）">
+              AI 建议
+            </span>
+          )}
           {b.tags.length > 0 ? (
             b.tags.map((t) => (
               <span key={t} className="tag-pill">{t}</span>

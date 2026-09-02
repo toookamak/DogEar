@@ -2,8 +2,9 @@ import { useState } from "react";
 
 interface Props {
   count: number;
-  onArchive: () => void;
-  onLater: () => void;
+  onConfirm: () => void;
+  onShelve: () => void;
+  onBack: () => void;
   onAddTag: (tag: string) => void;
   onClear: () => void;
   onTrash: () => void;
@@ -11,8 +12,9 @@ interface Props {
 
 export default function SelectionToolbar({
   count,
-  onArchive,
-  onLater,
+  onConfirm,
+  onShelve,
+  onBack,
   onAddTag,
   onClear,
   onTrash,
@@ -30,11 +32,14 @@ export default function SelectionToolbar({
       <span className="selection-count">
         已选 <strong>{count}</strong> 条
       </span>
-      <button type="button" className="mini-action accent" onClick={onArchive}>
-        移至归档
+      <button type="button" className="mini-action accent" onClick={onConfirm}>
+        确认收藏
       </button>
-      <button type="button" className="mini-action accent" onClick={onLater}>
-        移至稍后读
+      <button type="button" className="mini-action accent" onClick={onShelve}>
+        搁置
+      </button>
+      <button type="button" className="mini-action" onClick={onBack}>
+        退回待处理
       </button>
       <form className="selection-tag-form" onSubmit={submitTag}>
         <input

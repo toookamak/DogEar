@@ -61,11 +61,11 @@ export const DEFAULT_RAINDROP_QUEUE: RaindropQueueItem[] = [
 
 export function createDefaultSettings(): AppSettings {
   return {
-    sync: { enabled: true, pushSeconds: 30, pullMinutes: 5 },
+    // 客户端攒批窗口默认 1 分钟（PRD v1.0.7 / 技术总纲 M4，与旧版 30s 口径区分）
+    sync: { enabled: true, pushSeconds: 60, pullMinutes: 5 },
     raindrop: {
       token: "",
       connected: false,
-      conflictStrategy: "local",
       queue: DEFAULT_RAINDROP_QUEUE,
       rateLimit: { status: "normal", limit: 60, remaining: 57, resetInSeconds: 42, retries429: 3 },
     },

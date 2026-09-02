@@ -2,20 +2,23 @@ import { useEffect, useState } from "react";
 import {
   ACTIVE_TAGS,
   FOLDER_SECTIONS,
-  PRIMARY_SECTIONS,
+  SCENES,
+  STATUS_NAV,
 } from "@/data/mock";
-import type { SectionKey, Status, SyncState, ThemeMode } from "@/types";
+import type { NavKey, SyncState, ThemeMode } from "@/types";
+import { statusDotClass } from "@/utils/labels";
 
 interface Props {
-  section: SectionKey;
+  nav: NavKey;
   tag: string;
-  sectionStats: Record<Status, number>;
+  statusCounts: Record<"待处理" | "已确认" | "搁置", number>;
+  sceneCounts: Record<string, number>;
   folderCounts: Record<string, number>;
   tagCounts: Record<string, number>;
   sidebarOpen: boolean;
   sync: SyncState;
   theme: ThemeMode;
-  onSection: (section: SectionKey) => void;
+  onNav: (nav: NavKey) => void;
   onTag: (tag: string) => void;
   onClose: () => void;
   onOpenSettings: () => void;
@@ -23,28 +26,12 @@ interface Props {
   onThemeChange: (theme: ThemeMode) => void;
 }
 
-const STATUS_BADGE: Record<string, Status> = {
-  inbox: "待整理",
-  later: "稍后读",
-  archive: "已归档",
-};
-
-const STATUS_DOT: Record<Status, string> = {
-  待整理: "dot-amber",
-  稍后读: "dot-blue",
-  已归档: "dot-mint",
-};
-
-// TODO(pending): 以下四套主题（Claude / Claude Dark / Notion / Notion Dark）标为待定，
-// 后续与设计评审主题时再统一收敛。当前仅作为原型集成占位，菜单项保留以便预览切换。
+// 主题入口收敛为 light / dark（用户已确认）。
+// Claude / Notion 系列仍保留在 tokens.css 中作为占位（TODO(pending)），
+// 待设计评审收敛色板后再决定是否重新开放入口。
 const THEME_OPTIONS = [
   { value: "light", label: "浅色", Icon: SunIcon },
   { value: "dark", label: "深色", Icon: MoonIcon },
-  { value: "system", label: "跟随系统", Icon: MonitorIcon },
-  { value: "claude", label: "Claude", Icon: ClaudeIcon },
-  { value: "claude-dark", label: "Claude 深色", Icon: ClaudeDarkIcon },
-  { value: "notion", label: "Notion", Icon: NotionIcon },
-  { value: "notion-dark", label: "Notion 深色", Icon: NotionDarkIcon },
 ] as const;
 
 function SunIcon() {
@@ -64,50 +51,26 @@ function MoonIcon() {
   );
 }
 
-function MonitorIcon() {
-  return (
-    <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="2" y="3" width="20" height="14" rx="2" />
-      <path d="M8 21h8M12 17v4" />
-    </svg>
-  );
-}
-
-function ClaudeIcon() {
-  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18" /></svg>;
-}
-
-function ClaudeDarkIcon() {
-  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18" /><circle cx="12" cy="12" r="8.5" /></svg>;
-}
-
-function NotionIcon() {
-  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 3h10l4 4v14H5z" /><path d="M15 3v5h4M9 11h6M9 15h6" /></svg>;
-}
-
-function NotionDarkIcon() {
-  return <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 3h10l4 4v14H5z" fill="currentColor" stroke="none" /><path d="M15 3v5h4M9 11h6M9 15h6" stroke="var(--canvas)" /></svg>;
-}
-
 function GearIcon() {
   return (
     <svg className="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
     </svg>
   );
 }
 
 export default function Sidebar({
-  section,
+  nav,
   tag,
-  sectionStats,
+  statusCounts,
+  sceneCounts,
   folderCounts,
   tagCounts,
   sidebarOpen,
   sync,
   theme,
-  onSection,
+  onNav,
   onTag,
   onClose,
   onOpenSettings,
@@ -116,7 +79,7 @@ export default function Sidebar({
 }: Props) {
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const total =
-    sectionStats["待整理"] + sectionStats["稍后读"] + sectionStats["已归档"];
+    statusCounts["待处理"] + statusCounts["已确认"] + statusCounts["搁置"];
   const folderCount = Object.keys(folderCounts).length;
   const tagCount = Object.keys(tagCounts).length;
 
@@ -127,7 +90,8 @@ export default function Sidebar({
     return () => window.removeEventListener("click", close);
   }, [themeMenuOpen]);
 
-  const ActiveThemeIcon = THEME_OPTIONS.find((option) => option.value === theme)?.Icon ?? SunIcon;
+  const ActiveThemeIcon =
+    THEME_OPTIONS.find((option) => option.value === theme)?.Icon ?? SunIcon;
   const themeIcon = <ActiveThemeIcon />;
 
   return (
@@ -153,32 +117,63 @@ export default function Sidebar({
           </div>
         </section>
 
-        <nav className="sidebar-block" aria-label="书签导航">
-          <div className="nav-label">资料库</div>
+        {/* 左区①：Scene（使用情境，PRD §2.0.1） */}
+        <nav className="sidebar-block" aria-label="Scene">
+          <div className="nav-label">Scene · 使用情境</div>
           <div className="library-list">
-            {PRIMARY_SECTIONS.map((s) => {
-              const st = STATUS_BADGE[s.key];
+            {SCENES.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                className={`nav-item library-item${nav === s.key ? " active" : ""}`}
+                title={s.description}
+                onClick={() => {
+                  onNav(s.key);
+                  onClose();
+                }}
+              >
+                <span className="library-item-main">
+                  <span className="scene-glyph" aria-hidden="true">
+                    ◈
+                  </span>
+                  <span>{s.name}</span>
+                </span>
+                <span className="nav-badge">{sceneCounts[s.name] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        {/* 左区②：状态三视图（待处理 / 已确认 / 搁置） */}
+        <nav className="sidebar-block" aria-label="状态">
+          <div className="nav-label">状态</div>
+          <div className="library-list">
+            {STATUS_NAV.map((s) => {
+              const st = s.key as "inbox" | "confirmed" | "shelved";
+              const statusName =
+                st === "inbox" ? "待处理" : st === "confirmed" ? "已确认" : "搁置";
               return (
                 <button
                   key={s.key}
                   type="button"
-                  className={`nav-item library-item${section === s.key ? " active" : ""}`}
+                  className={`nav-item library-item${nav === s.key ? " active" : ""}`}
                   onClick={() => {
-                    onSection(s.key);
+                    onNav(s.key);
                     onClose();
                   }}
                 >
                   <span className="library-item-main">
-                    <span className={`status-dot ${STATUS_DOT[st]}`} aria-hidden="true" />
+                    <span className={`status-dot ${statusDotClass(statusName)}`} aria-hidden="true" />
                     <span>{s.label}</span>
                   </span>
-                  <span className="nav-badge">{sectionStats[st]}</span>
+                  <span className="nav-badge">{statusCounts[statusName]}</span>
                 </button>
               );
             })}
           </div>
         </nav>
 
+        {/* 左区③：文件夹（稳定维度） */}
         <nav className="sidebar-block folder-block" aria-label="文件夹">
           <div className="nav-label">文件夹</div>
           <div className="folder-list">
@@ -186,9 +181,9 @@ export default function Sidebar({
               <button
                 key={s.key}
                 type="button"
-                className={`nav-item${section === s.key ? " active" : ""}`}
+                className={`nav-item${nav === s.key ? " active" : ""}`}
                 onClick={() => {
-                  onSection(s.key);
+                  onNav(s.key);
                   onClose();
                 }}
               >
@@ -199,6 +194,7 @@ export default function Sidebar({
           </div>
         </nav>
 
+        {/* 左区④：标签云 */}
         <div className="sidebar-block tag-block">
           <div className="nav-label">标签</div>
           <div className="tag-list">
@@ -217,6 +213,22 @@ export default function Sidebar({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 近期需求占位：导航页（M6，访问记录落库为核心） */}
+        <div className="sidebar-block">
+          <div className="nav-label">即将推出</div>
+          <button
+            type="button"
+            className={`nav-item nav-item-pending${nav === "navpage" ? " active" : ""}`}
+            onClick={() => {
+              onNav("navpage");
+              onClose();
+            }}
+          >
+            <span>导航页（M6 占位）</span>
+            <span className="nav-badge">规划中</span>
+          </button>
         </div>
       </div>
 

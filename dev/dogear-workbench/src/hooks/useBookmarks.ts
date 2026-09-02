@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer } from "react";
-import { initialBookmarks } from "@/data/mock";
+import { FOLDER_SECTIONS, initialBookmarks, SCENES } from "@/data/mock";
 import { SEED_LOGS } from "@/data/mockSettings";
 import type {
   Bookmark,
@@ -7,7 +7,7 @@ import type {
   LogEntry,
   LogSource,
   LogType,
-  SectionKey,
+  NavKey,
   SortKey,
   Source,
   Status,
@@ -39,7 +39,7 @@ interface State {
 }
 
 type Action =
-  | { type: "SET_SECTION"; section: SectionKey }
+  | { type: "SET_SECTION"; section: NavKey }
   | { type: "SET_TAG"; tag: string }
   | { type: "SET_SOURCE"; source: Source | "全部" }
   | { type: "SET_QUERY"; query: string }
@@ -53,11 +53,12 @@ type Action =
   | { type: "TOGGLE_DETAIL" }
   | { type: "TOGGLE_SIDEBAR" }
   | { type: "SET_SIDEBAR"; open: boolean }
-  | { type: "BATCH_STATUS"; status: Exclude<Status, "待整理">; ids: number[] }
+  | { type: "BATCH_STATUS"; status: Status; ids: number[] }
   | { type: "ADD_TAG"; tag: string; ids: number[] }
   | { type: "APPLY_SUGGESTION"; id: number }
   | { type: "SUGGESTION_STATE"; id: number; state: "ignored" | "later" }
   | { type: "MOVE_STATUS"; id: number; status: Status }
+  | { type: "ADD_BOOKMARK"; bookmark: Bookmark }
   | { type: "BOOT_DONE" }
   | { type: "SYNC_START" }
   | { type: "SYNC_DONE"; ok: boolean }
@@ -71,17 +72,20 @@ type Action =
   | { type: "LOG_ACTION"; entry: LogEntry }
   | { type: "CLEAR_LOGS" };
 
-const FOLDER_LABEL: Record<string, string> = {
-  design: "设计参考",
-  engineering: "工程与工具",
-  notes: "文章与笔记",
+// 状态三视图（PRD §2.1.1）：待处理 / 已确认 / 搁置。
+const STATUS_SECTIONS: Record<
+  "inbox" | "confirmed" | "shelved",
+  Status[]
+> = {
+  inbox: ["待处理"],
+  confirmed: ["已确认"],
+  shelved: ["搁置"],
 };
 
-const STATUS_SECTIONS: { inbox: Status[]; later: Status[]; archive: Status[] } = {
-  inbox: ["待整理"],
-  later: ["稍后读"],
-  archive: ["已归档"],
-};
+const SCENE_NAME_BY_KEY = new Map(SCENES.map((s) => [s.key, s.name]));
+const FOLDER_NAME_BY_KEY = new Map(
+  FOLDER_SECTIONS.map((f) => [f.key, f.label])
+);
 
 const INITIAL_FILTERS: Filters = {
   section: "inbox",
@@ -120,7 +124,7 @@ function seedTrash(): TrashItem[] {
       id: 901,
       bookmark: {
         id: 901, title: "旧版主题截图存档", url: "https://example.com/old-theme", domain: "example.com",
-        excerpt: "早期视觉稿截图，已由新主题替代。", source: "extension", status: "已归档", folder: "文章与笔记",
+        excerpt: "早期视觉稿截图，已由新主题替代。", source: "extension", status: "已确认", scenes: ["长期资料"], folder: "文章与笔记",
         tags: ["存档"], createdAt: "08-20 09:12", ts: Date.now() - 86400000 * 6, progress: 100,
         art: "art-slate", mark: "ARCH",
       },
@@ -130,7 +134,7 @@ function seedTrash(): TrashItem[] {
       id: 902,
       bookmark: {
         id: 902, title: "An old newsletter issue", url: "https://example.com/newsletter-42", domain: "example.com",
-        excerpt: "过期简报，不再需要。", source: "raindrop", status: "稍后读", folder: "文章与笔记",
+        excerpt: "过期简报，不再需要。", source: "raindrop", status: "待处理", scenes: ["稍后再读"], folder: "文章与笔记",
         tags: ["阅读"], createdAt: "08-18 20:40", ts: Date.now() - 86400000 * 12, progress: 20,
         art: "art-rust", mark: "NL",
       },
@@ -245,10 +249,11 @@ function reducer(state: State, action: Action): State {
         ...state,
         bookmarks: patchBookmark(state.bookmarks, action.id, {
           status: action.status,
-          progress: action.status === "已归档" ? 100 : target.progress,
         }),
       };
     }
+    case "ADD_BOOKMARK":
+      return { ...state, bookmarks: [action.bookmark, ...state.bookmarks] };
     case "BOOT_DONE":
       return { ...state, booting: false };
     case "SYNC_START":
@@ -351,11 +356,19 @@ function sortBy(list: Bookmark[], sort: SortKey): Bookmark[] {
   }
 }
 
-function matchesSection(bookmark: Bookmark, section: SectionKey): boolean {
-  if (section === "inbox" || section === "later" || section === "archive") {
+function matchesSection(bookmark: Bookmark, section: NavKey): boolean {
+  if (section === "inbox" || section === "confirmed" || section === "shelved") {
     return STATUS_SECTIONS[section].includes(bookmark.status);
   }
-  return bookmark.folder === FOLDER_LABEL[section];
+  if (section.startsWith("sc-")) {
+    const sceneName = SCENE_NAME_BY_KEY.get(section);
+    return sceneName !== undefined && bookmark.scenes.includes(sceneName);
+  }
+  if (section.startsWith("fd-")) {
+    return bookmark.folder === FOLDER_NAME_BY_KEY.get(section);
+  }
+  // navpage：导航页占位，不走书签过滤
+  return false;
 }
 
 export function useBookmarks() {
@@ -401,12 +414,20 @@ export function useBookmarks() {
 
   const sectionStats = useMemo(() => {
     const counts: Record<Status, number> = {
-      待整理: 0,
-      稍后读: 0,
-      已归档: 0,
+      待处理: 0,
+      已确认: 0,
+      搁置: 0,
     };
     for (const b of state.bookmarks) counts[b.status] += 1;
     return counts;
+  }, [state.bookmarks]);
+
+  const sceneCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const b of state.bookmarks) {
+      for (const s of b.scenes) map[s] = (map[s] ?? 0) + 1;
+    }
+    return map;
   }, [state.bookmarks]);
 
   const folderCounts = useMemo(() => {
@@ -446,7 +467,7 @@ export function useBookmarks() {
   );
 
   const setSection = useCallback(
-    (section: SectionKey) => dispatch({ type: "SET_SECTION", section }),
+    (section: NavKey) => dispatch({ type: "SET_SECTION", section }),
     [dispatch]
   );
   const setTag = useCallback(
@@ -499,17 +520,16 @@ export function useBookmarks() {
   );
 
   const batchSetStatus = useCallback(
-    (status: Exclude<Status, "待整理">, ids: number[]) => {
+    (status: Status, ids: number[]) => {
       const prev = ids
         .map((id) => state.bookmarks.find((b) => b.id === id))
         .filter((b): b is Bookmark => Boolean(b))
         .map((b) => ({ id: b.id, status: b.status }));
       dispatch({ type: "BATCH_STATUS", status, ids });
-      const label = status === "稍后读" ? "稍后读" : "归档";
-      pushLog("整理", "批量移动状态", `移至「${label}」× ${ids.length} 条`, "工作台");
+      pushLog("整理", "批量修改状态", `移至「${status}」× ${ids.length} 条`, "工作台");
       notify({
         kind: "success",
-        message: `已将 ${ids.length} 条书签移至「${label}」`,
+        message: `已将 ${ids.length} 条书签移至「${status}」`,
         actionLabel: "撤销",
         undo: { type: "restoreStatus", entries: prev },
       });
@@ -665,22 +685,61 @@ export function useBookmarks() {
     dispatch({ type: "CLEAR_LOGS" });
   }, [dispatch]);
 
+  // AI 建议落点①「输入时」（PRD §4.2.7）：模拟插件/Agent 保存一条链接，
+  // 后台预备建议并提示，一律建议先行、不自动写入。
+  const mockSaveBookmark = useCallback(() => {
+    const id = Date.now();
+    const bookmark: Bookmark = {
+      id,
+      title: "AI 与书签管理的边界：从自动分流到建议先行",
+      url: "https://example.com/ai-suggest-first",
+      domain: "example.com",
+      excerpt: "探讨 AI 在个人知识库中的安全边界：为什么「建议先行」比自动分流更可靠。",
+      source: "extension",
+      status: "待处理",
+      scenes: [],
+      folder: "",
+      tags: [],
+      createdAt: nowLabel(),
+      ts: Date.now(),
+      progress: 0,
+      art: "art-indigo",
+      mark: "AI",
+      suggestion: {
+        scene: "工作研究",
+        folder: "文章与笔记",
+        tags: ["效率", "AI"],
+        note: "已生成建议（未写入）：Scene「工作研究」，文件夹文章与笔记。请确认后生效。",
+        state: "pending",
+      },
+    };
+    dispatch({ type: "ADD_BOOKMARK", bookmark });
+    pushLog("新增", "保存书签（模拟输入）", bookmark.title, "工作台");
+    notify({
+      kind: "success",
+      message: "已保存，AI 建议已生成（建议先行，未自动写入）",
+    });
+  }, [dispatch, notify, pushLog]);
+
+  // AI 建议落点②「整理时」：跳到 Inbox（待处理）查看可确认的建议。
   const organizeAction = useCallback(() => {
     if (pendingSuggestionCount === 0) {
       notify({ kind: "success", message: "当前没有待处理的整理建议" });
       return;
     }
+    dispatch({ type: "SET_SECTION", section: "inbox" });
     notify({
       kind: "success",
-      message: `已生成 ${pendingSuggestionCount} 条整理建议，可在详情面板查看`,
+      message: `已生成 ${pendingSuggestionCount} 条整理建议，可在 Inbox 与详情面板确认`,
     });
-  }, [notify, pendingSuggestionCount]);
+  }, [dispatch, notify, pendingSuggestionCount]);
 
   return {
     state,
     notify,
     visibleBookmarks,
     sectionStats,
+    sceneCounts,
     folderCounts,
     tagCounts,
     selectedBookmarks,
@@ -708,6 +767,7 @@ export function useBookmarks() {
     dismissToast,
     undo,
     organizeAction,
+    mockSaveBookmark,
     logs: state.logs,
     trash: state.trash,
     trashBookmarks,

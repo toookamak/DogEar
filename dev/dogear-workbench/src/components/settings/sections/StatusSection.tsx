@@ -11,9 +11,9 @@ interface Props {
 }
 
 const STATUS_LABELS = {
-  待整理: "待整理",
-  稍后读: "稍后读",
-  已归档: "已归档",
+  待处理: "待处理",
+  已确认: "已确认",
+  搁置: "搁置",
 } as const;
 
 export default function StatusSection({ settings, bm }: Props) {

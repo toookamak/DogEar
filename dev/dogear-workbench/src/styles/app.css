@@ -1140,6 +1140,16 @@
   background: var(--mint);
 }
 
+.status-dot.dot-slate {
+  background: var(--muted);
+}
+
+.scene-glyph {
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1;
+}
+
 .library-item .nav-badge {
   min-width: 22px;
   padding: 1px 7px;
@@ -2345,15 +2355,15 @@
   background: var(--faint);
 }
 
-.board-col[data-col="待整理"] .board-col-dot {
+.board-col[data-col="待处理"] .board-col-dot {
   background: var(--amber);
 }
 
-.board-col[data-col="稍后读"] .board-col-dot {
+.board-col[data-col="已确认"] .board-col-dot {
   background: var(--blue);
 }
 
-.board-col[data-col="已归档"] .board-col-dot {
+.board-col[data-col="搁置"] .board-col-dot {
   background: var(--mint);
 }
 
@@ -2671,57 +2681,55 @@
   }
 }
 
-/* ---------- 详情面板 ---------- */
+/* ---------- 详情面板（右区：可折叠工具面板，默认收起） ---------- */
 
-.detail-scrim {
-  position: fixed;
-  top: var(--topbar-h);
-  right: 0;
-  bottom: var(--statusbar-h);
-  left: var(--sidebar-w);
-  z-index: var(--z-detail);
-  border: none;
-  padding: 0;
-  background: var(--scrim);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.22s ease, visibility 0.22s ease;
+/* 停靠式右区：作为 .workspace 网格第三列，展开时主区自适应收窄 */
+.workspace {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 0;
 }
 
-.detail-scrim.show {
-  opacity: 1;
-  visibility: visible;
+.workspace.detail-open {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--detail-w);
 }
 
 .detail-panel {
-  position: fixed;
-  top: var(--topbar-h);
-  right: 0;
-  bottom: var(--statusbar-h);
-  z-index: var(--z-detail);
+  grid-column: 3;
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
-  width: var(--detail-w);
-  transform: translateX(102%);
+  width: 0;
   opacity: 0;
-  visibility: hidden;
   pointer-events: none;
   background: var(--panel);
-  border-left: 1px solid var(--line);
-  box-shadow: -18px 0 46px var(--drawer-shadow);
+  border-left: 1px solid transparent;
   transition:
-    transform 0.26s ease,
-    opacity 0.22s ease,
-    visibility 0.26s ease;
+    width 0.26s ease,
+    opacity 0.2s ease;
 }
 
 .detail-panel.open {
-  transform: translateX(0);
+  width: var(--detail-w);
   opacity: 1;
-  visibility: visible;
   pointer-events: auto;
+  border-left-color: var(--line);
+}
+
+/* 收起动画期间保持内容宽度，避免文字回流挤压 */
+.detail-panel .detail-topline,
+.detail-panel .detail-content,
+.detail-panel .empty-detail {
+  width: var(--detail-w);
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+
+.detail-panel .detail-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .detail-topline {
@@ -3041,8 +3049,26 @@
 /* ---------- 响应式：中等宽度 ---------- */
 
 @media (max-width: 1180px) {
-  .workspace {
-    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  .workspace,
+  .workspace.detail-open {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 0;
+  }
+
+  /* 窄屏退回覆盖式滑出 */
+  .detail-panel {
+    grid-column: auto;
+    position: fixed;
+    top: var(--topbar-h);
+    right: 0;
+    bottom: var(--statusbar-h);
+    width: 0;
+    z-index: var(--z-detail);
+    border-left: 1px solid var(--line);
+    box-shadow: -18px 0 46px var(--drawer-shadow);
+  }
+
+  .detail-panel.open {
+    width: min(var(--detail-w), calc(100vw - 48px));
   }
 }
 
@@ -3072,12 +3098,9 @@
     display: block;
   }
 
-  .workspace {
+  .workspace,
+  .workspace.detail-open {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .detail-scrim {
-    left: 0;
   }
 
   .main-content {
@@ -3104,7 +3127,14 @@
   }
 
   .detail-panel {
+    grid-column: auto;
     width: min(380px, 100vw);
+  }
+
+  .detail-panel .detail-topline,
+  .detail-panel .detail-content,
+  .detail-panel .empty-detail {
+    width: min(var(--detail-w), 100vw);
   }
 }
 
@@ -3511,4 +3541,103 @@
 .log-fail {
   color: var(--red);
   font-size: 11px;
+}
+/* ===== 原型更新新增（对齐 PRD v1.0.7 / 技术总纲 v1.0） ===== */
+
+/* 主区描述（Scene 说明 / 状态口径说明） */
+.page-desc {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  max-width: 56ch;
+}
+
+/* 导航页占位（M6 待排期） */
+.navpage-placeholder {
+  max-width: 860px;
+}
+
+.navpage-head .page-title {
+  margin-top: 6px;
+}
+
+.navpage-desc {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.navpage-grid {
+  margin-top: var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--space-3);
+}
+
+.navpage-zone {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  background: var(--panel-raised, transparent);
+}
+
+.navpage-zone h3 {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.navpage-zone p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.navpage-footnote {
+  margin-top: var(--space-4);
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+/* 「即将推出」导航项（导航页 M6 占位） */
+.nav-item-pending {
+  opacity: 0.62;
+  cursor: default;
+}
+
+.nav-item-pending.active {
+  opacity: 1;
+}
+
+.nav-item-pending .nav-badge {
+  font-size: 10px;
+  color: var(--faint);
+}
+
+/* Inbox 内 AI 建议徽标（建议先行，落点③） */
+.ai-badge {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--amber);
+  border: 1px solid var(--amber);
+  opacity: 0.9;
+}
+
+/* AERR 信息密度：Reference 类 Scene 默认紧凑呈现 */
+.bookmark-area[data-density="compact"] .card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.bookmark-area[data-density="compact"] .card-excerpt {
+  display: none;
+}
+
+/* 状态栏 429 计数告警 */
+.metrics-warn {
+  color: var(--red, #c0392b);
 }

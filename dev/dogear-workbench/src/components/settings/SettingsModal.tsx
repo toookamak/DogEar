@@ -18,7 +18,7 @@ interface Props {
 
 const TABS: { key: SettingsTabKey; label: string }[] = [
   { key: "status", label: "状态信息" },
-  { key: "raindrop", label: "Raindrop 同步" },
+  { key: "raindrop", label: "Raindrop · 输入源 / 导出" },
   { key: "backup", label: "备份与恢复" },
   { key: "agent", label: "Agent 接入" },
   { key: "log", label: "日志" },

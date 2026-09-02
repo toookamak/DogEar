@@ -70,22 +70,31 @@ export default function DetailPanel({
             >
               打开链接 <span className="primary-arrow">↗</span>
             </button>
-            {b.status !== "已归档" && (
+            {b.status !== "已确认" && (
               <button
                 type="button"
                 className="secondary-action"
-                onClick={() => onMove(b.id, "已归档")}
+                onClick={() => onMove(b.id, "已确认")}
               >
-                归档书签
+                确认收藏
               </button>
             )}
-            {b.status !== "稍后读" && (
+            {b.status !== "搁置" && (
               <button
                 type="button"
                 className="secondary-action"
-                onClick={() => onMove(b.id, "稍后读")}
+                onClick={() => onMove(b.id, "搁置")}
               >
-                加入稍后读
+                搁置
+              </button>
+            )}
+            {b.status !== "待处理" && (
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={() => onMove(b.id, "待处理")}
+              >
+                退回待处理
               </button>
             )}
             <button
@@ -99,14 +108,16 @@ export default function DetailPanel({
 
           {sg && (
             <section className="detail-section suggestion-card">
-              <h3>AI 整理建议</h3>
+              <h3>AI 整理建议（建议先行）</h3>
               {sg.state === "accepted" && (
                 <p className="suggestion-note">已采纳本次建议并更新了书签。</p>
               )}
               <p className="suggestion-note">{sg.note}</p>
               <div className="suggestion-target">
-                <span>建议归档到</span>
-                <strong>{sg.folder}</strong>
+                <span>建议 Scene</span>
+                {sg.scene ? <strong>{sg.scene}</strong> : <span className="chip chip-empty">—</span>}
+                <span>文件夹</span>
+                <strong>{sg.folder || "—"}</strong>
                 <span>标签</span>
                 {sg.tags.map((t) => (
                   <span key={t} className="chip">
@@ -204,8 +215,14 @@ export default function DetailPanel({
               <strong>{sourceLabel(b.source)}</strong>
             </div>
             <div>
+              <span>Scene</span>
+              <strong>
+                {b.scenes.length > 0 ? b.scenes.join("、") : "未挂载"}
+              </strong>
+            </div>
+            <div>
               <span>文件夹</span>
-              <strong>{b.folder}</strong>
+              <strong>{b.folder || "未设置"}</strong>
             </div>
             <div>
               <span>加入时间</span>

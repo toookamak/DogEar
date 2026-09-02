@@ -10,9 +10,9 @@ interface Props {
 }
 
 const COLUMNS: { key: Status; label: string }[] = [
-  { key: "待整理", label: "待整理" },
-  { key: "稍后读", label: "稍后读" },
-  { key: "已归档", label: "已归档" },
+  { key: "待处理", label: "待处理" },
+  { key: "已确认", label: "已确认" },
+  { key: "搁置", label: "搁置" },
 ];
 
 interface DragState {

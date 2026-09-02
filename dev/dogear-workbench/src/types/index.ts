@@ -1,5 +1,12 @@
 export type Source = "AI" | "extension" | "raindrop";
-export type Status = "待整理" | "稍后读" | "已归档";
+
+// 三态口径（PRD v1.0.7 §2.1.1）：待处理 / 已确认 / 搁置。
+// 禁止在 UI 出现「已归档」；「稍后再读」是 Scene（保存意图），不是状态。
+export type Status = "待处理" | "已确认" | "搁置";
+
+// AERR 行为原型（PRD §2.0.3）：系统层内部类型，不展示给用户。
+export type AERR = "Action" | "Explore" | "Read" | "Reference";
+
 export type ViewMode = "grid" | "list" | "board" | "tags";
 export type SortKey = "recent" | "title" | "domain";
 export type SyncPhase = "idle" | "syncing" | "success" | "error";
@@ -14,17 +21,35 @@ export type ThemeMode =
   | "notion"
   | "notion-dark";
 
-export type SectionKey =
+export type SectionKey = NavKey;
+
+// 左侧导航键：状态三视图 + 导航页占位 + Scene（sc-）+ Folder（fd-）
+export type NavKey =
   | "inbox"
-  | "later"
-  | "archive"
-  | "design"
-  | "engineering"
-  | "notes";
+  | "confirmed"
+  | "shelved"
+  | "navpage"
+  | `sc-${string}`
+  | `fd-${string}`;
+
+// Scene：可配置数据（PRD §2.0.1），禁止硬编码枚举。
+// AERR 只影响默认排序 / 信息密度 / 主按钮，工作台只有一套。
+export interface SceneDef {
+  key: NavKey;
+  name: string;
+  description: string;
+  archetype: AERR;
+  defaultSort: SortKey;
+  density: "cozy" | "compact";
+  primaryAction: string;
+}
 
 export type SuggestionState = "pending" | "accepted" | "ignored" | "later";
 
 export interface AiSuggestion {
+  // 建议先行（PRD §6.1）：优先建议 1 个 Scene，其次少量 Folder/Tag；
+  // 一律不自动写入，须用户确认后才生效。
+  scene?: string;
   folder: string;
   tags: string[];
   note: string;
@@ -39,6 +64,7 @@ export interface Bookmark {
   excerpt: string;
   source: Source;
   status: Status;
+  scenes: string[];
   folder: string;
   tags: string[];
   createdAt: string;
@@ -90,7 +116,6 @@ export type SettingsTabKey = "status" | "raindrop" | "backup" | "agent" | "log" 
 
 export type RaindropQueueOp = "create" | "update" | "delete";
 export type RaindropQueueStatus = "pending" | "synced" | "failed" | "conflict";
-export type RaindropConflictStrategy = "local" | "raindrop" | "ask";
 export type RaindropRateStatus = "normal" | "backoff";
 
 export interface RaindropQueueItem {
@@ -113,7 +138,6 @@ export interface RaindropRateLimit {
 export interface RaindropConfig {
   token: string;
   connected: boolean;
-  conflictStrategy: RaindropConflictStrategy;
   queue: RaindropQueueItem[];
   rateLimit: RaindropRateLimit;
 }

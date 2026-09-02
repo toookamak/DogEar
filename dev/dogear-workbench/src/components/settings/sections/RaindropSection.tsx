@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AppSettings, RaindropConflictStrategy, RaindropQueueItem } from "@/types";
+import type { AppSettings, RaindropQueueItem } from "@/types";
 import type { BookmarkAPI } from "@/types/bookmark-api";
 import Switch from "../atoms/Switch";
 import StatCard from "../atoms/StatCard";
@@ -12,21 +12,15 @@ interface Props {
 }
 
 const PUSH_PRESETS = [
-  { label: "30s", value: 30 },
   { label: "60s", value: 60 },
   { label: "120s", value: 120 },
+  { label: "300s", value: 300 },
 ];
 
 const PULL_PRESETS = [
   { label: "5min", value: 5 },
   { label: "15min", value: 15 },
   { label: "30min", value: 30 },
-];
-
-const STRATEGIES: { key: RaindropConflictStrategy; label: string; desc: string }[] = [
-  { key: "local", label: "本地优先", desc: "冲突时以本地为准" },
-  { key: "raindrop", label: "Raindrop 优先", desc: "冲突时以云端为准" },
-  { key: "ask", label: "每次询问", desc: "冲突保留两端，手动选择" },
 ];
 
 const OP_LABEL: Record<RaindropQueueItem["op"], string> = {
@@ -121,6 +115,16 @@ export default function RaindropSection({ settings, onUpdateSettings, bm }: Prop
   return (
     <div className="section-pane settings-section">
       <section className="settings-group">
+        <h3>角色定位（PRD v1.0.7）</h3>
+        <p className="section-pane">
+          应用为真源：DogEar 本地库是唯一权威数据源。Raindrop 只扮演两种角色（可只开一个）——
+          <strong>输入源</strong>（把已有库引进来，只带来 Folder 与 Tag）和{" "}
+          <strong>导出方向</strong>（把 Link 级记录存档出去，不携带 Scene
+          等使用场景；Scene / Status 只存在于 DogEar）。
+        </p>
+      </section>
+
+      <section className="settings-group">
         <h3>连接与授权</h3>
         <div className="settings-row">
           <div className="settings-row-main">
@@ -153,7 +157,7 @@ export default function RaindropSection({ settings, onUpdateSettings, bm }: Prop
         <div className="settings-row">
           <div className="settings-row-main">
             <span className="settings-row-title">启用定时同步</span>
-            <span className="settings-row-desc">本地写入即时生效，变更进入推送队列，按间隔自动同步（原型模拟）</span>
+            <span className="settings-row-desc">本地写入即时生效，变更进入导出队列，按攒批窗口自动同步（原型模拟）</span>
           </div>
           <Switch
             checked={settings.sync.enabled}
@@ -162,8 +166,8 @@ export default function RaindropSection({ settings, onUpdateSettings, bm }: Prop
         </div>
         <div className="settings-row">
           <div className="settings-row-main">
-            <span className="settings-row-title">推送间隔</span>
-            <span className="settings-row-desc">待推送变更到达 Raindrop 的节奏</span>
+            <span className="settings-row-title">导出攒批窗口</span>
+            <span className="settings-row-desc">客户端攒批窗口默认 1 分钟，与服务端定时统一（技术总纲 M4）</span>
           </div>
           <div className="chips-row">
             {PUSH_PRESETS.map((p) => (
@@ -188,8 +192,8 @@ export default function RaindropSection({ settings, onUpdateSettings, bm }: Prop
         </div>
         <div className="settings-row">
           <div className="settings-row-main">
-            <span className="settings-row-title">拉取间隔</span>
-            <span className="settings-row-desc">按 lastSyncAt 拉取 Raindrop 增量，支持手动立即拉取</span>
+            <span className="settings-row-title">导入间隔</span>
+            <span className="settings-row-desc">按 lastSyncAt 导入 Raindrop 增量，支持手动立即导入</span>
           </div>
           <div className="chips-row">
             {PULL_PRESETS.map((p) => (
@@ -218,34 +222,23 @@ export default function RaindropSection({ settings, onUpdateSettings, bm }: Prop
         <h3>手动同步</h3>
         <div className="settings-row">
           <button type="button" className="secondary-action" onClick={handleSync} disabled={syncing || pendingCount === 0}>
-            立即推送
+            立即导出
           </button>
           <button type="button" className="secondary-action" onClick={handleSync} disabled={syncing}>
-            立即拉取
+            立即导入
           </button>
           <button type="button" className="secondary-action" onClick={handleSync} disabled={syncing}>
-            全量拉取
+            全量导入
           </button>
           <span className={`status-pill ${phaseCls}`}>{phaseLabel}</span>
         </div>
-        <p className="section-pane">"全量拉取"忽略增量标记强制全量同步（等价于 API force=true）。同步模拟约 1.2s，失败时按 429 退避模拟。</p>
+        <p className="section-pane">"全量导入"忽略增量标记强制全量同步（等价于 API force=true）。同步模拟约 1.2s，失败时按 429 退避模拟。</p>
         <div className="settings-row">
           <div className="settings-row-main">
-            <span className="settings-row-title">冲突策略</span>
+            <span className="settings-row-title">冲突处理</span>
+            <span className="settings-row-desc">冲突保留两端副本，不静默覆盖、不丢数据（技术总纲 M4）</span>
           </div>
-          <div className="chips-row">
-            {STRATEGIES.map((st) => (
-              <button
-                key={st.key}
-                type="button"
-                className={`chip-chip${raindrop.conflictStrategy === st.key ? " active" : ""}`}
-                onClick={() => onUpdateSettings((s) => ({ ...s, raindrop: { ...s.raindrop, conflictStrategy: st.key } }))}
-                title={st.desc}
-              >
-                {st.label}
-              </button>
-            ))}
-          </div>
+          <span className="status-pill status-done">保留两端</span>
         </div>
       </section>
 
@@ -265,7 +258,7 @@ export default function RaindropSection({ settings, onUpdateSettings, bm }: Prop
               <div className="settings-row-main">
                 <span className="settings-row-title">{it.title}</span>
                 <span className="settings-row-desc">
-                  {OP_LABEL[it.op]} · {it.direction === "push" ? "推送" : "拉取"}
+                  {OP_LABEL[it.op]} · {it.direction === "push" ? "导出" : "导入"}
                   {it.retries > 0 ? ` · 已重试 ${it.retries} 次` : ""}
                 </span>
               </div>
@@ -275,7 +268,7 @@ export default function RaindropSection({ settings, onUpdateSettings, bm }: Prop
             </div>
           ))
         )}
-        <p className="section-pane">队列按 updatedAt 顺序消费，单条失败指数退避（1s→2s→4s…封顶 5min），不阻塞后续；断网时队列保留，联网后续推。</p>
+        <p className="section-pane">队列按 updatedAt 顺序消费，单条失败指数退避（1s→2s→4s…封顶 5min），不阻塞后续；断网时队列保留，联网后续导。</p>
       </section>
 
       <section className="settings-group">

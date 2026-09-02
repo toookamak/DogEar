@@ -63,28 +63,28 @@ export default function BookmarkList({
           <span className="list-col-date">{b.createdAt}</span>
 
           <span className="list-col-actions">
-            {b.status !== "已归档" && (
+            {b.status !== "已确认" && (
               <button
                 type="button"
                 className="mini-action"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onMove(b.id, "已归档");
+                  onMove(b.id, "已确认");
                 }}
               >
-                归档
+                确认
               </button>
             )}
-            {b.status !== "稍后读" && (
+            {b.status !== "搁置" && (
               <button
                 type="button"
                 className="mini-action"
                 onClick={(event) => {
                   event.stopPropagation();
-                  onMove(b.id, "稍后读");
+                  onMove(b.id, "搁置");
                 }}
               >
-                稍后读
+                搁置
               </button>
             )}
           </span>

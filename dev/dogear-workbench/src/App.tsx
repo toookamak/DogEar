@@ -7,28 +7,27 @@ const THEME_STORAGE_KEY = "dogear-theme";
 
 function initialTheme(): ThemeMode {
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  if (
-    stored === "light" ||
-    stored === "dark" ||
-    stored === "system" ||
-    stored === "claude" ||
-    stored === "claude-dark" ||
-    stored === "notion" ||
-    stored === "notion-dark"
-  ) {
-    return stored;
+  // 主题入口已收敛为 light / dark；历史遗留的占位主题值做向后兼容映射。
+  if (stored === "dark" || stored === "claude-dark" || stored === "notion-dark") {
+    return "dark";
+  }
+  if (stored === "light" || stored === "system" || stored === "claude" || stored === "notion") {
+    return "light";
   }
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
 }
 
-function resolveTheme(theme: ThemeMode): Exclude<ThemeMode, "system"> {
+function resolveTheme(theme: ThemeMode): "light" | "dark" {
   if (theme === "system") {
     return window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
   }
+  // 历史遗留占位主题值映射（入口已收敛为 light/dark）
+  if (theme === "claude" || theme === "notion") return "light";
+  if (theme === "claude-dark" || theme === "notion-dark") return "dark";
   return theme;
 }
 
