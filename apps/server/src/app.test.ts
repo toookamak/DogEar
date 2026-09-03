@@ -2,18 +2,26 @@ import { describe, expect, it } from 'vitest'
 import { createApp } from './app.js'
 
 function repository() {
-  const records: Array<{ id: string; url: string; status: 'unread' }> = []
+  const records: Array<{ id: string; url: string; status: 'unread'; syncStatus: 'pending'; createdAt: number; updatedAt: number }> = []
+  const accessRecords: Array<{ id: string; bookmarkId: string; openedAt: number; source: 'original' }> = []
   return {
     records,
+    accessRecords,
     create: async (record: { id: string; url: string; status: 'unread' }) => {
-      records.push(record)
-      return record
+      const createdAt = Date.now()
+      const result = { ...record, syncStatus: 'pending' as const, createdAt, updatedAt: createdAt }
+      records.push(result)
+      return result
     },
     list: async () => records,
-    listInbox: async () => records,
-    countPending: async () => records.length,
-    createAccessRecord: async () => undefined,
-    listAccessRecords: async () => [],
+    listInbox: async () => records.filter((record) => record.status === 'unread'),
+    countPending: async () => records.filter((record) => record.syncStatus === 'pending').length,
+    createAccessRecord: async (record: { id: string; bookmarkId: string; source?: 'original' }) => {
+      const result = { id: record.id, bookmarkId: record.bookmarkId, openedAt: Date.now(), source: record.source ?? 'original' as const }
+      accessRecords.push(result)
+      return result
+    },
+    listAccessRecords: async (bookmarkId: string) => accessRecords.filter((record) => record.bookmarkId === bookmarkId),
   }
 }
 
@@ -101,8 +109,25 @@ describe('authentication API', () => {
   })
 })
 
-describe('bookmark API', () => {
-  it('creates a bookmark and lists it for an authenticated client', async () => {
+describe('bookmark and access record API', () => {
+  it('rejects unauthenticated writes without touching either repository', async () => {
+    const repo = repository()
+    const app = createApp(repo, { password: 'secret' })
+
+    const bookmark = await app.request('/api/bookmarks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'https://example.com/article' }),
+    })
+    const access = await app.request('/api/bookmarks/bookmark-1/access-records', { method: 'POST' })
+
+    expect(bookmark.status).toBe(401)
+    expect(access.status).toBe(401)
+    expect(repo.records).toHaveLength(0)
+    expect(repo.accessRecords).toHaveLength(0)
+  })
+
+  it('creates and lists formal bookmarks with sync status and numeric timestamps', async () => {
     const repo = repository()
     const app = createApp(repo, { password: 'secret' })
     const { cookie } = await login(app)
@@ -114,8 +139,43 @@ describe('bookmark API', () => {
 
     expect(response.status).toBe(201)
     const created = await response.json()
-    expect(created.url).toBe('https://example.com/article')
+    expect(created).toMatchObject({ url: 'https://example.com/article', status: 'unread', syncStatus: 'pending' })
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
-    expect((await (await app.request('/api/bookmarks', { headers: { cookie } })).json())).toHaveLength(1)
+    expect(created.createdAt).toEqual(expect.any(Number))
+    expect(created.updatedAt).toEqual(expect.any(Number))
+    expect(await (await app.request('/api/bookmarks', { headers: { cookie } })).json()).toEqual([created])
+  })
+
+  it('serves inbox and pending sync count from protected endpoints', async () => {
+    const repo = repository()
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+    await app.request('/api/bookmarks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ url: 'https://example.com/inbox' }),
+    })
+
+    const inbox = await app.request('/api/inbox', { headers: { cookie } })
+    const pending = await app.request('/api/sync/pending-count', { headers: { cookie } })
+
+    expect(inbox.status).toBe(200)
+    expect(await inbox.json()).toEqual({ bookmarks: expect.arrayContaining([expect.objectContaining({ url: 'https://example.com/inbox' })]) })
+    expect(await pending.json()).toEqual({ pendingCount: 1 })
+  })
+
+  it('creates and lists access records with server-generated timestamps', async () => {
+    const repo = repository()
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+    const createResponse = await app.request('/api/bookmarks/bookmark-1/access-records', { method: 'POST', headers: { cookie } })
+    const created = await createResponse.json()
+    const listResponse = await app.request('/api/bookmarks/bookmark-1/access-records', { headers: { cookie } })
+
+    expect(createResponse.status).toBe(201)
+    expect(created).toMatchObject({ bookmarkId: 'bookmark-1', source: 'original' })
+    expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(created.openedAt).toEqual(expect.any(Number))
+    expect(await listResponse.json()).toEqual({ records: [created] })
   })
 })

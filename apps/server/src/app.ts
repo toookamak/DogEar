@@ -17,6 +17,10 @@ function unauthorized(c: { json: (body: unknown, status: 401) => Response }) {
   return c.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, 401)
 }
 
+function invalidRequest(c: { json: (body: unknown, status: 400) => Response }) {
+  return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid request' } }, 400)
+}
+
 function cookieValue(header: string | undefined) {
   return header?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${sessionCookie}=`))?.slice(sessionCookie.length + 1)
 }
@@ -40,6 +44,18 @@ function hasValidSession(value: string | undefined, password: string, now: () =>
 
 function setSessionCookie(value: string, maxAge: number) {
   return `${sessionCookie}=${value}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax`
+}
+
+function timestamp(value: unknown) {
+  return value instanceof Date ? value.getTime() : Number(value)
+}
+
+function serializeBookmark(record: any) {
+  return { ...record, createdAt: timestamp(record.createdAt), updatedAt: timestamp(record.updatedAt) }
+}
+
+function serializeAccessRecord(record: any) {
+  return { ...record, openedAt: timestamp(record.openedAt) }
 }
 
 export function createApp(repository: BookmarkRepository, options: AppOptions = {}) {
@@ -73,21 +89,55 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     return c.json({ ok: true })
   })
 
-  app.use('/api/bookmarks', async (c, next) => {
+  const requireSession = async (c: Parameters<NonNullable<Parameters<typeof app.use>[1]>>[0], next: Parameters<NonNullable<Parameters<typeof app.use>[1]>>[1]) => {
+    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
+    await next()
+  }
+
+  app.use('/api/bookmarks', requireSession)
+  app.use('/api/bookmarks/*', requireSession)
+
+  app.use('/api/inbox', async (c, next) => {
+    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
+    await next()
+  })
+
+  app.use('/api/sync/*', async (c, next) => {
     if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
     await next()
   })
 
   app.get('/api/bookmarks', async (c) => {
     const records = await repository.list()
-    return c.json(records)
+    return c.json(records.map(serializeBookmark))
   })
 
   app.post('/api/bookmarks', async (c) => {
-    const input = createBookmarkInputSchema.safeParse(await c.req.json())
-    if (!input.success) return c.json({ error: 'Invalid bookmark input' }, 400)
+    const input = createBookmarkInputSchema.safeParse(await c.req.json().catch(() => undefined))
+    if (!input.success) return invalidRequest(c)
     const record = await repository.create({ id: randomUUID(), url: input.data.url, status: 'unread' })
-    return c.json(record, 201)
+    return c.json(serializeBookmark(record), 201)
+  })
+
+  app.get('/api/inbox', async (c) => {
+    const records = await repository.listInbox()
+    return c.json({ bookmarks: records.map(serializeBookmark) })
+  })
+
+  app.get('/api/sync/pending-count', async (c) => {
+    return c.json({ pendingCount: await repository.countPending() })
+  })
+
+  app.post('/api/bookmarks/:bookmarkId/access-records', async (c) => {
+    const bookmarkId = c.req.param('bookmarkId')
+    if (!bookmarkId) return invalidRequest(c)
+    const record = await repository.createAccessRecord({ id: randomUUID(), bookmarkId, source: 'original' })
+    return c.json(serializeAccessRecord(record), 201)
+  })
+
+  app.get('/api/bookmarks/:bookmarkId/access-records', async (c) => {
+    const records = await repository.listAccessRecords(c.req.param('bookmarkId'))
+    return c.json({ records: records.map(serializeAccessRecord) })
   })
 
   return app
