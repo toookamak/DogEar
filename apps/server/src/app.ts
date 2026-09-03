@@ -1,14 +1,82 @@
-import { createBookmarkInputSchema } from '@dogear/shared'
+import { createBookmarkInputSchema, loginRequestSchema } from '@dogear/shared'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { BookmarkRepository } from '@dogear/db'
-import { randomUUID } from 'node:crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 
-export function createApp(repository: BookmarkRepository) {
+const sessionCookie = 'dogear_session'
+const user = { id: 'user' }
+
+type AppOptions = {
+  password?: string
+  sessionTtlSeconds?: number
+  now?: () => number
+}
+
+function unauthorized(c: { json: (body: unknown, status: 401) => Response }) {
+  return c.json({ error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, 401)
+}
+
+function cookieValue(header: string | undefined) {
+  return header?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${sessionCookie}=`))?.slice(sessionCookie.length + 1)
+}
+
+function signSession(timestamp: number, password: string) {
+  const payload = `${timestamp}`
+  const signature = createHmac('sha256', password).update(payload).digest('base64url')
+  return `${payload}.${signature}`
+}
+
+function hasValidSession(value: string | undefined, password: string, now: () => number, ttl: number, revoked: Set<string>) {
+  if (!value || revoked.has(value)) return false
+  const [timestampValue, signature] = value.split('.')
+  const timestamp = Number(timestampValue)
+  if (!Number.isSafeInteger(timestamp) || !signature || now() - timestamp < 0 || now() - timestamp > ttl * 1000) return false
+  const expected = createHmac('sha256', password).update(timestampValue).digest('base64url')
+  const actualBytes = Buffer.from(signature)
+  const expectedBytes = Buffer.from(expected)
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
+}
+
+function setSessionCookie(value: string, maxAge: number) {
+  return `${sessionCookie}=${value}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax`
+}
+
+export function createApp(repository: BookmarkRepository, options: AppOptions = {}) {
+  const password = options.password ?? process.env.DOGEAR_PASSWORD ?? ''
+  const sessionTtlSeconds = options.sessionTtlSeconds ?? 60 * 60 * 24 * 7
+  const now = options.now ?? Date.now
+  const revokedSessions = new Set<string>()
   const app = new Hono()
   app.use('/api/*', cors())
 
   app.get('/health', (c) => c.json({ ok: true }))
+
+  app.post('/api/auth/login', async (c) => {
+    const input = loginRequestSchema.safeParse(await c.req.json().catch(() => undefined))
+    if (!password || !input.success || input.data.password !== password) return unauthorized(c)
+    c.header('Set-Cookie', setSessionCookie(signSession(now(), password), sessionTtlSeconds))
+    return c.json({ user })
+  })
+
+  app.get('/api/auth/me', (c) => {
+    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
+    return c.json({ user })
+  })
+
+  app.post('/api/auth/logout', (c) => {
+    const cookie = cookieValue(c.req.header('Cookie'))
+    if (cookie) {
+      revokedSessions.add(cookie)
+      c.header('Set-Cookie', setSessionCookie('', 0))
+    }
+    return c.json({ ok: true })
+  })
+
+  app.use('/api/bookmarks', async (c, next) => {
+    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
+    await next()
+  })
 
   app.get('/api/bookmarks', async (c) => {
     const records = await repository.list()
