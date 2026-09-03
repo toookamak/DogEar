@@ -4,10 +4,10 @@
   - [ ] 为登录请求、会话用户、未授权错误、访问记录和 Bookmark 同步状态定义共享 schema 与类型。
   - [ ] 为 Bookmark 列表、未推送数量和访问记录响应编写失败测试，先确认测试因实现缺失而失败。
 
-- [ ] Task 2: 扩展 SQLite/D1 数据层
-  - [ ] 为 bookmarks 增加同步状态字段，默认标记为未推送，并保留现有 M1 数据可迁移。
-  - [ ] 增加 access_records 表及创建、按 Bookmark 查询访问记录的 repository 方法。
-  - [ ] 增加 Inbox 查询和未推送数量查询，并补充迁移与数据层测试。
+- [x] Task 2: 扩展 SQLite/D1 数据层
+  - [x] 为 bookmarks 增加同步状态字段，默认标记为未推送，并保留现有 M1 数据可迁移。
+  - [x] 增加 access_records 表及创建、按 Bookmark 查询访问记录的 repository 方法。
+  - [x] 增加 Inbox 查询和未推送数量查询，并补充迁移与数据层测试。
 
 - [x] Task 3: 实现单用户会话认证
   - [x] 增加服务端密码配置读取、密码校验、HttpOnly 会话 Cookie、会话验证和退出登录。
