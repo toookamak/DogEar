@@ -9,10 +9,10 @@
   - [ ] 增加 access_records 表及创建、按 Bookmark 查询访问记录的 repository 方法。
   - [ ] 增加 Inbox 查询和未推送数量查询，并补充迁移与数据层测试。
 
-- [ ] Task 3: 实现单用户会话认证
-  - [ ] 增加服务端密码配置读取、密码校验、HttpOnly 会话 Cookie、会话验证和退出登录。
-  - [ ] 增加登录、当前会话和退出 API；健康检查保持公开，Bookmark 与访问记录 API 统一保护。
-  - [ ] 为正确密码、错误密码、无 Cookie、过期/无效 Cookie 和退出后的请求编写 API 测试。
+- [x] Task 3: 实现单用户会话认证
+  - [x] 增加服务端密码配置读取、密码校验、HttpOnly 会话 Cookie、会话验证和退出登录。
+  - [x] 增加登录、当前会话和退出 API；健康检查保持公开，Bookmark 与访问记录 API 统一保护。
+  - [x] 为正确密码、错误密码、无 Cookie、过期/无效 Cookie 和退出后的请求编写 API 测试。
 
 - [ ] Task 4: 接入受保护的 Bookmark 与访问记录 API
   - [ ] 让创建和列表 API 使用认证上下文，并返回正式 Bookmark 与同步状态。
