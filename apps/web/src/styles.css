@@ -1,0 +1,6 @@
+:root { font-family: system-ui, sans-serif; color: #292524; background: #fafaf9; }
+main { max-width: 720px; margin: 4rem auto; padding: 0 1.5rem; }
+form { display: flex; gap: 0.5rem; }
+input { flex: 1; padding: 0.7rem; }
+button { padding: 0.7rem 1rem; }
+li { margin: 0.75rem 0; }
