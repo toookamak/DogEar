@@ -4,7 +4,7 @@
 > **日期**：2026-09-02
 > **作者**：DogEar 项目组（匿名）
 > **状态**：技术总纲（按 PRD v1.0.7 需求驱动重建；实现选型标注「✅已定 / ⏳暂定 / 💡方向性 / ❓待决策」）
-> **对应需求文档**：需求总纲 v1.0.7（wiki/DogEar_折耳书签_需求总纲_v1.0.7.md，唯一需求源）
+> **对应需求文档**：需求总纲 v1.0.7（wiki/DogEar-需求总纲.md，唯一需求源）
 > **写作骨架**：docs/技术总纲文档范例.md（只读范例）
 > **本版说明**：本文档以 v1.0_DeepSeek 命名，与既有 v0.2 稿作区分；撰写时不参考任何历史总纲/技术方案稿，从产品与技术双视角独立推导。PRD 附录 C（属性总表）已迁移承接至 §5.7 字段与 Raindrop 映射总表，字段级口径以本文为准。凡与旧落地文档口径冲突处，一律以 PRD v1.0.7 为准。
 >
@@ -18,7 +18,7 @@
 
 本文档是 DogEar 项目的**技术总纲**：把需求总纲（PRD v1.0.7）中已定稿的产品边界翻译成可执行的工程蓝图，说明"为什么这样设计、怎么落地、边界在哪、先做什么"。
 
-- **需求源**：`wiki/DogEar_折耳书签_需求总纲_v1.0.7.md`（唯一需求源，冲突以它为准）。
+- **需求源**：`wiki/DogEar-需求总纲.md`（唯一需求源，冲突以它为准）。
 - **细部承接**：字段、阈值、编码、布局等未决细部在 `docs/modules/Scene-AI与待设计细部.md`；本文不重复展开。
 - **落地承接**：API、DATA_MODEL、DESIGN 等 Draft 文档多数仍写旧口径，仅作参考；技术口径以本文为准。
 
@@ -280,7 +280,7 @@ DogEar/
 | 校验 | Zod（前后端共享 schema） | — | ✅已定 | 契约单一来源 |
 | 端侧缓存 | IndexedDB（Dexie 封装） | — | ✅已定 | **仅作镜像缓存**（首屏、弱网回显）。与 Drizzle 真源分开，不是同一 adapter |
 | 真源 DB（轨 A） | Cloudflare D1 | — | ✅已定 | Workers 一键、SQLite 兼容 |
-| 真源 DB（轨 B） | SQLite：bun:sqlite 或 better-sqlite3 | — | ⏳暂定 | Bun 零依赖优先，需验证兼容性 |
+| 真源 DB（轨 B） | SQLite：bun:sqlite（默认）＋ better-sqlite3（Node 回退） | — | ✅已定 | Bun 零依赖；小基准已跑（2026-09-03），详见 §11 T-1 |
 | 内容存储 | S3 API 兼容对象存储（R2 默认/MinIO 自托管） | — | ✅已定 | 统一 S3 API，可替换、多目标 |
 | 浏览器插件 | WXT（Vite 驱动，MV3） | — | ✅已定 | Chrome/Firefox/Safari 兼容，HMR |
 | 语言/包管理 | TypeScript；pnpm + Turborepo | — | ✅已定 | monorepo、依赖隔离 |
@@ -310,7 +310,7 @@ DogEar/
 | shadcn/ui + tailwindcss + radix | 组件体系 | apps/web |
 | lucide-react | 图标库 | apps/web |
 | @tanstack/react-table | 表格/列表（含聚合视图） | apps/web |
-| wouter | 工作台轻量路由（选型表 ⏳暂定，与 react-router 按需二选一） | apps/web |
+| wouter | 工作台轻量路由（选型表 ✅已定，react-router 按需） | apps/web |
 | tailwindcss | 原子化样式（含于 shadcn/ui 行，独立列出便于显式锁定版本） | apps/web |
 | wxt | 扩展脚手架 | apps/extension |
 | vitest | 单测 | 根 |
@@ -937,17 +937,17 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 
 | # | 事项 | 状态 | 备注 / 关联章节 |
 | --- | --- | --- | --- |
-| T-1 | Docker 运行时选 Bun 还是 Node | ⏳暂定 | `bun:sqlite` 与 `better-sqlite3` 二选一；倾向 Bun，需做一次基准与生态核对（§4.1） |
-| T-2 | 端侧缓存形态（Dexie/IndexedDB vs SQLite WASM） | ⏳暂定 | 网页端 IndexedDB 更顺；插件侧可复用同一 adapter（§5.5） |
-| T-3 | 导航页展示规则「按规则-或」的算子集合与冲突语义 | 💡方向性 | 「全部/规则-或/自定义搜索集/隐藏」大方向已决（PRD #18）；叠加取并集还是可配置优先级等**算子细部**随模块文档推进（§6.5） |
-| T-4 | 访问记录字段与去噪规则 | ⏳暂定 | 先记、字段后定；打点去噪避免自刷干扰「长期未访问」（§8.3） |
+| T-1 | Docker 运行时选 Bun 还是 Node | ✅已定 | 默认 **Bun + bun:sqlite**（内置零依赖、无 ABI 匹配）；`packages/db` 适配层保留 better-sqlite3 作 Node 回退。小基准已跑（2026-09-03）：CRUD 量级两驱动打平，性能不构成决策依据（§4.1） |
+| T-2 | 端侧缓存形态（Dexie/IndexedDB vs SQLite WASM） | ✅已定 | 选型表 §4.1 已 ✅：**Dexie/IndexedDB 仅作镜像缓存**；SQLite WASM 不引入（网页端 IndexedDB 更顺，插件侧复用同一 adapter）（§5.5） |
+| T-3 | 导航页展示规则「按规则-或」的算子集合与冲突语义 | 💡方向性 | 「全部/规则-或/自定义搜索集/隐藏」大方向已决（PRD #18）；算子细部随模块文档推进，承接于 Scene-AI 细部 §5.2（§6.5） |
+| T-4 | 访问记录字段与去噪规则 | ✅已定 | 「核心先记」方向已定：`last_opened_at`＋`open_count`，来源维度可扩展；去噪与界面细部待设计，承接于 Scene-AI 细部 §4（§8.3） |
 | T-5 | Raindrop 通道的字段映射边界 | ✅已定 | 基础字段名与官方对象对齐（§5.7）；Scene/Status/Archive/本地扩展不同步。观察字段（highlights/reminder/file 等）只读保留 |
-| T-6 | Archive 内容保留策略与容量上限 | 💡方向性 | Snapshot 存储与容量产品已决不阻塞；技术侧保留周期/压缩/去重待评估（§5.3） |
-| T-7 | 多目标对象存储容灾策略 | 💡方向性 | S3 兼容多目标并存；校验与自动容灾细化（PRD §B.4） |
-| T-8 | Reader 相关字段预留在 Schema 中的深度 | 💡方向性 | 只做类型预留字段，不实现（§5.2.3）；避免过度建模 |
-| T-9 | KV 边缘缓存是否启用 | 💡方向性 | 默认不加；压测后再评估（§3.1/§4.1） |
-| T-10 | 匿名公开是否开放及范围 | 💡方向性 | PRD #12 已决：第一版默认登录；是否开放匿名公开及范围（标题/图标/URL、排除 Inbox/私密）待评估（§8.2） |
-| T-11 | Cloudflare 进阶计费能力（Queues/Workflows/DO）是否引入 | 💡方向性 | 仅规模需要队列/编排/多实例一致性时评估；各自带免费额度与计费边界，作为可选层不挡核心路径（§4.2） |
+| T-6 | Archive 内容保留策略与容量上限 | ✅已定 | 定最小默认：**容量/数量软上限＋告警，不主动删 Snapshot**（Archive 定位是长期保全）；具体硬上限值待 M6 按对象存储实测后写入模块文档（§5.3） |
+| T-7 | 多目标对象存储容灾策略 | ✅已定 | **本期单目标默认**（R2 或 MinIO 任选其一）；S3 API 客户端保留多目标配置结构，自动容灾留待后续（PRD §B.4） |
+| T-8 | Reader 相关字段预留在 Schema 中的深度 | ✅已定 | 仅做类型/枚举预留，**不建表、不实现**（§5.2.3）；避免过度建模 |
+| T-9 | KV 边缘缓存是否启用 | ✅已定 | **本期不启用**（不建 binding、不写缓存读路径）；架构图「KV 预留」措辞保留为方向；压测后若收益明显再立项评估（§3.1/§4.1） |
+| T-10 | 匿名公开是否开放及范围 | ✅已定 | **第一版不开匿名**；导航页与工作台同一登录会话，不建匿名单点；开放范围（标题/图标/URL、排除 Inbox/私密）待后续评估（§8.2） |
+| T-11 | Cloudflare 进阶计费能力（Queues/Workflows/DO）是否引入 | ✅已定 | **本期不引入**（可选层不挡核心路径）；服务层接口不绑定队列实现（sync_queue/archive_queue 顺序消费即可）；规模信号出现后再评估（§4.2） |
 | T-12 | Track A 无 DOM 源的整页快照 | ✅已定（产品口径） | 只产 Metadata + `queued_pending_browser`；格式优先单 HTML。不在 Track A 做服务端整页抓取（§5.2.3/§6.4） |
 
 > 定稿原则：与技术方案强相关的项在落地细化文档中收敛，不回流 PRD；PRD 冲突以 PRD v1.0.7 为准。
@@ -960,8 +960,8 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 
 | 文档 | 路径 | 说明 |
 | --- | --- | --- |
-| 需求总纲 v1.0.7 | `wiki/DogEar_折耳书签_需求总纲_v1.0.7.md` | 唯一需求源 |
-| 本文档 | `docs/DogEar_折耳书签_技术总纲_v1.0_DeepSeek.md` | 技术总纲 v1.0_DeepSeek（现行技术口径） |
+| 需求总纲 v1.0.7 | `wiki/DogEar-需求总纲.md` | 唯一需求源 |
+| 本文档 | `wiki/DogEar-技术总纲.md` | 技术总纲 v1.0_DeepSeek（现行技术口径） |
 
 > 参考文档表**只列两份现行文档**（需求总纲 + 技术总纲）；其余落地细化 / 模块细部 / Draft / 归档文档不在此列（D2 口径），需要时按 §0.1 承接关系定位。
 
@@ -1011,6 +1011,7 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 | v1.0_DeepSeek（B/C/D 级整改） | 2026-09-02 | DogEar 项目组（匿名） | 依一致性核对报告作 B/C/D 级整改：§2.2 补内联编辑/工具面板/导出筛选三行映射；§4.3 补 lucide-react、@tanstack/react-table、wouter、tailwindcss；§5.2.2 补 AERR 呈现方向（细节留待单独模块）；§5.3 补 page_tab 轻量持久化口径；§6.4/§7.1 补归档四操作与下载/上传替换端点；§6.7/§7.1 补导出筛选维度与接口参数；§7.1/§7.2 补搜索端点、设置/能力/用量端点与 Skill 三级权限；§9.6 新增性能策略（方向性，不设硬阈值）；§11 T-3/T-10 改 💡方向性；§12.1 参考表收敛为两份现行文档 |
 | v1.0_DeepSeek（保存链路与快照口径） | 2026-09-03 | DogEar 项目组（匿名） | 拆工作台/Skill 保存路径；保存成功=真源落库；Drizzle≠Dexie；Snapshot 优先单 HTML；PDF 非 Track A 默认；访问记录提前到 M2；T-5/T-12 已定；路径改为 docs/modules 与 docs/archive |
 | v1.0_DeepSeek（开源引用） | 2026-09-03 | DogEar 项目组（匿名） | 接受 SingleFile AGPL；Track A 快照用 SingleFile、Track B 用 monolith；Metadata 用 metascraper；搜索用 MiniSearch；文末增 §14 引用表供 README 搬用 |
+| v1.0_DeepSeek（技术待定项收敛） | 2026-09-03 | DogEar 项目组（匿名） | §11 待确认/待决策表收敛：T-1 定 Bun + bun:sqlite（小基准已跑，better-sqlite3 作 Node 回退）、T-2/T-4 同步为 ✅（Dexie/IndexedDB 镜像缓存、「核心先记」方向）、T-6~T-11 定最小默认（不主动删 Snapshot / 单目标默认 / 仅类型预留 / 本期不启用 KV / 第一版不开匿名 / 不引入 CF 进阶能力）、T-3 保持方向性（承接 Scene-AI 细部 §5.2）；§4.1 真源 DB 行与 wouter 行改 ✅；头部/§12.1 参考表路径改为现行 wiki 文件名。依据见 docs/modules/技术待定项收敛清单 |
 
 > **文档维护说明**：本文档随项目开发进度持续更新。重大技术方案、架构或功能变更应同步修订本文档，并记录于文档变更记录中。凡与旧落地文档口径冲突处，一律以 PRD v1.0.7 与技术总纲 v1.0_DeepSeek 为准。
 
