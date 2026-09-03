@@ -20,11 +20,11 @@
 
   - 前端：原型用 React 19 + Vite + TypeScript（正式前端待定，方向见技术总纲）
 
-  - 后端：待定（方向：Workers 为主、Docker 兜底，见技术总纲）
+  - 后端：双轨已定：Workers（轨 A，默认）/ Docker 自托管（轨 B，兜底）。轨 B 运行时默认 **Bun**（bun:sqlite 内置零依赖），Node + better-sqlite3 作回退；KV、CF 进阶能力（Queues/Workflows/DO）本期不启用（细节见技术总纲 §11 T-1/T-9/T-11）
 
-  - 数据：本地 SQLite/Dexie（暂定）+ Raindrop/S3/WebDAV 可选数据通道
+  - 数据：真源 DB 双轨（轨 A：Cloudflare D1 / 轨 B：SQLite）＋ Dexie/IndexedDB 仅作端侧镜像缓存（非第二真源）；Raindrop/S3/WebDAV 可选数据通道（细节见技术总纲 §4.1/§5.5）
 
-  - 部署：待定（方向：默认 Workers、其次 Docker、备份兜底）
+  - 部署：双轨已定：默认 Track A（Cloudflare Workers），Track B（Docker 自托管）兜底（细节见技术总纲 §3/§9）
 
 - 源码位置：`dev/dogear-workbench`（高保真工作台原型，mock 数据）
 
@@ -32,7 +32,7 @@
 
 - 怎么跑：原型 `cd dev/dogear-workbench && npm run dev`；完整说明见 README.md
 
-- 现在做到哪：方向与功能设想已定稿（`wiki/`），技术选型多处待确认，正式工程未起步
+- 现在做到哪：方向与功能设想已定稿（`wiki/`），技术待定项已收敛（技术总纲 §11 T-1\~T-12，2026-09-03 定稿），正式工程未起步
 
 - 性能基线：默认 600 条，超量可调（需确认）
 
