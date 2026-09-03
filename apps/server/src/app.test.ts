@@ -1,9 +1,18 @@
+import { createRequire } from 'node:module'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { initializeSqliteSchema } from '@dogear/db'
 import { describe, expect, it } from 'vitest'
 import { createApp } from './app.js'
 
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
+
 function repository() {
-  const records: Array<{ id: string; url: string; status: 'unread'; syncStatus: 'pending'; createdAt: number; updatedAt: number }> = []
-  const accessRecords: Array<{ id: string; bookmarkId: string; openedAt: number; source: 'original' }> = []
+  type BookmarkRecord = { id: string; url: string; status: 'unread'; syncStatus: 'pending'; createdAt: number; updatedAt: number }
+  type AccessRecord = { id: string; bookmarkId: string; openedAt: number; source: 'original' }
+  const records: BookmarkRecord[] = []
+  const accessRecords: AccessRecord[] = []
   return {
     records,
     accessRecords,
@@ -177,5 +186,91 @@ describe('bookmark and access record API', () => {
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(created.openedAt).toEqual(expect.any(Number))
     expect(await listResponse.json()).toEqual({ records: [created] })
+  })
+
+  it('returns the same bookmark ID to separate authenticated clients', async () => {
+    const repo = repository()
+    const firstClient = createApp(repo, { password: 'secret' })
+    const secondClient = createApp(repo, { password: 'secret' })
+    const firstSession = await login(firstClient)
+    const secondSession = await login(secondClient)
+    const createdResponse = await firstClient.request('/api/bookmarks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: firstSession.cookie },
+      body: JSON.stringify({ url: 'https://example.com/shared' }),
+    })
+    const created = await createdResponse.json()
+    const listedResponse = await secondClient.request('/api/bookmarks', { headers: { cookie: secondSession.cookie } })
+    const listed = await listedResponse.json()
+
+    expect(createdResponse.status).toBe(201)
+    expect(listed).toEqual([created])
+  })
+
+  it('persists access records across SQLite app restart', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dogear-m2-'))
+    const databasePath = join(directory, 'dogear.sqlite')
+    const openDatabase = () => new DatabaseSync(databasePath)
+    const createRepository = (database: InstanceType<typeof DatabaseSync>) => {
+      initializeSqliteSchema({
+        run: (sql) => database.exec(sql),
+        query: (sql) => ({ all: () => database.prepare(sql).all() as Array<{ name: string }> }),
+      })
+      return {
+        async create(input: { id: string; url: string; status: 'unread' }) {
+          const createdAt = Date.now()
+          database.prepare('INSERT INTO bookmarks (id, url, status, sync_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(input.id, input.url, input.status, 'pending', createdAt, createdAt)
+          return { ...input, syncStatus: 'pending' as const, createdAt, updatedAt: createdAt }
+        },
+        async list() {
+          return database.prepare('SELECT id, url, status, sync_status AS syncStatus, created_at AS createdAt, updated_at AS updatedAt FROM bookmarks ORDER BY created_at DESC').all().map((row: any) => ({ ...row, createdAt: Number(row.createdAt), updatedAt: Number(row.updatedAt) }))
+        },
+        async listInbox() {
+          return database.prepare("SELECT id, url, status, sync_status AS syncStatus, created_at AS createdAt, updated_at AS updatedAt FROM bookmarks WHERE status = 'unread' ORDER BY created_at DESC").all().map((row: any) => ({ ...row, createdAt: Number(row.createdAt), updatedAt: Number(row.updatedAt) }))
+        },
+        async countPending() {
+          return Number((database.prepare("SELECT COUNT(*) AS count FROM bookmarks WHERE sync_status = 'pending'").get() as any).count)
+        },
+        async createAccessRecord(input: { id: string; bookmarkId: string; source?: 'original' }) {
+          const openedAt = Date.now()
+          database.prepare('INSERT INTO access_records (id, bookmark_id, opened_at, source) VALUES (?, ?, ?, ?)').run(input.id, input.bookmarkId, openedAt, input.source ?? 'original')
+          return { id: input.id, bookmarkId: input.bookmarkId, openedAt, source: input.source ?? 'original' }
+        },
+        async listAccessRecords(bookmarkId: string) {
+          return database.prepare('SELECT id, bookmark_id AS bookmarkId, opened_at AS openedAt, source FROM access_records WHERE bookmark_id = ? ORDER BY opened_at DESC').all(bookmarkId).map((row: any) => ({ ...row, openedAt: Number(row.openedAt) }))
+        },
+      }
+    }
+
+    try {
+      const firstDatabase = openDatabase()
+      const firstApp = createApp(createRepository(firstDatabase), { password: 'secret' })
+      const firstSession = await login(firstApp)
+      const createdResponse = await firstApp.request('/api/bookmarks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: firstSession.cookie },
+        body: JSON.stringify({ url: 'https://example.com/restart' }),
+      })
+      const bookmark = await createdResponse.json()
+      const accessResponse = await firstApp.request(`/api/bookmarks/${bookmark.id}/access-records`, {
+        method: 'POST',
+        headers: { cookie: firstSession.cookie },
+      })
+      const accessRecord = await accessResponse.json()
+      firstDatabase.close()
+
+      const secondDatabase = openDatabase()
+      const restartedApp = createApp(createRepository(secondDatabase), { password: 'secret' })
+      const restartedSession = await login(restartedApp)
+      const listedResponse = await restartedApp.request(`/api/bookmarks/${bookmark.id}/access-records`, {
+        headers: { cookie: restartedSession.cookie },
+      })
+
+      expect(accessResponse.status).toBe(201)
+      expect(await listedResponse.json()).toEqual({ records: [accessRecord] })
+      secondDatabase.close()
+    } finally {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
   })
 })
