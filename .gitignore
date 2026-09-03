@@ -4,3 +4,4 @@ dist
 .env
 
 .workbuddy
+docs/modules/.bench-t1/
