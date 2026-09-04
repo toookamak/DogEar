@@ -26,9 +26,8 @@
 | 需求总纲 v1.0.7 | `wiki/DogEar_折耳书签_需求总纲_v1.0.7.md` | 唯一需求源。做什么、不做什么、怎样算过关，一律回指这里。 |
 | 技术总纲 v1.0_DeepSeek | `docs/DogEar_折耳书签_技术总纲_v1.0_DeepSeek.md` | 工程蓝图（栈、真源、双轨、Skill、快照口径）。实现选型回指这里。 |
 | Scene / AI 细部 | `docs/modules/Scene-AI与待设计细部.md` | 四维组织与建议先行的未决细部。M4 开工前读，不在本文展开。 |
-| 数据库设计 | `wiki/DogEar-数据库设计.md` | M3/M4 核心账本（表、规则、与 M2 演进）。实现建表回指这里。 |
-| API 设计 | `wiki/DogEar-API设计.md` | 工作台 REST 与 Skill 窗口。实现接线回指这里。 |
-| 定稿目录 | `wiki/README.md` | 现行定稿注册表。 |
+| 数据库设计 | `docs/modules/数据库设计.md` | M3/M4 核心账本（表、规则、与 M2 演进）。实现建表回指这里。生效稿，不进 wiki。 |
+| API 设计 | `docs/modules/API设计.md` | 工作台 REST 与 Skill 窗口。实现接线回指这里。生效稿，不进 wiki。 |
 | 本文 | `docs/` 过程文档（本文件为草案） | **执行顺序、任务拆解、验收清单**。不是第二份 PRD，也不是第二份技术总纲。 |
 
 定稿放 `wiki/`（禁止擅自改删）；过程与专项放 `docs/`、`docs/modules/`；过期稿放 `docs/archive/`（默认不读，除非任务点名）。根目录 `CHANGELOG.md` 每次改动最上追加一行。
@@ -49,6 +48,7 @@
 | v0.2 | — | 2026-09-03 | 对齐开源选用：M4 MiniSearch；M6 SingleFile（AGPL）+ monolith + metascraper；不自研 inliner |
 | v0.2 | v0.2.0 | 2026-09-04 | 0.1 表补数据库设计、API 设计入口（M3/M4 核心契约草案） |
 | v0.2 | v0.2.0 | 2026-09-04 | 账本与窗口升格 wiki 定稿；0.1 表路径改指 wiki |
+| v0.2 | v0.2.0 | 2026-09-04 | 撤回误入 wiki 的注册；0.1 表路径改回 docs/modules |
 
 本文档状态为**草案**。定稿进入 `wiki/` 须用户明确同意。
 

@@ -19,9 +19,8 @@
 本文档是 DogEar 项目的**技术总纲**：把需求总纲（PRD v1.0.7）中已定稿的产品边界翻译成可执行的工程蓝图，说明"为什么这样设计、怎么落地、边界在哪、先做什么"。
 
 - **需求源**：`wiki/DogEar-需求总纲.md`（唯一需求源，冲突以它为准）。
-- **账本与窗口定稿**：`wiki/DogEar-数据库设计.md`、`wiki/DogEar-API设计.md`（M3/M4 实现依据；服从本文与需求总纲）。定稿目录见 `wiki/README.md`。
-- **细部承接**：Scene 交互、建议展示等未决细部在 `docs/modules/Scene-AI与待设计细部.md`；本文不重复展开。
-- **落地承接**：`docs/archive/` 中旧 API / DATA_MODEL / DESIGN 仅追溯；技术口径以本文为准，表与接口实现以账本/窗口定稿为准。
+- **细部承接**：字段、阈值、编码、布局等未决细部在 `docs/modules/Scene-AI与待设计细部.md`；本文不重复展开。
+- **落地承接**：API、DATA_MODEL、DESIGN 等 Draft 文档多数仍写旧口径，仅作参考；技术口径以本文为准。
 
 ### 0.2 状态标记约定
 
@@ -752,7 +751,7 @@ failed：error 分类（fetch/parse/timeout/quota）→ 保留可重试/可取�
 
 **安全**：能力开关（查询/保存/编辑/批量整理/删除按需启用）；读、写、批量分别限速；今日请求量/写入量/拦截次数可观测；写操作全记 operation_log（actor=agent）。`/.well-known/capabilities` 返回能力清单、参数 schema、限速与边界说明，供 AI 自动发现。
 
-**权限分级（Skill API 侧，✅已定层级；绑定已细化）**：AI 能力开关按**三级权限**组织——① **查已有的**（只读：`search_bookmarks`/`list_bookmarks`/`get_stats`、`suggest_scene` 等）；② **写新的**（创建：`save_bookmark`、`trigger_archive` 等新建动作）；③ **改已有的（含删）**（`update_bookmark`、批量整理、删除）。默认开①②、关③。能力与账本的绑定见 [数据库设计](./DogEar-数据库设计.md)、[API 设计](./DogEar-API设计.md) §3.4（PRD §4.2.11）。
+**权限分级（Skill API 侧，方向性）**：AI 能力开关按**三级权限**组织——① **查已有的**（只读：`search_bookmarks`/`list_bookmarks`/`get_stats` 等）；② **写新的**（创建：`save_bookmark`、`trigger_archive` 等新建动作）；③ **改已有的（含删）**（`update_bookmark`、批量整理、删除）。能力粒度与数据库权限的绑定**待具体数据库定稿后再细化**（PRD §4.2.11），此处只定层级方向。
 
 ### 7.3 第三方通道接口约束
 
@@ -964,7 +963,7 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 | 需求总纲 v1.0.7 | `wiki/DogEar-需求总纲.md` | 唯一需求源 |
 | 本文档 | `wiki/DogEar-技术总纲.md` | 技术总纲 v1.0_DeepSeek（现行技术口径） |
 
-> 参考文档表**只列两份总纲**（需求总纲 + 技术总纲）。模块定稿（数据库设计 / API 设计）不扩本表，按 §0.1 与 `wiki/README.md` 定位（D2 口径仍成立）。
+> 参考文档表**只列两份现行文档**（需求总纲 + 技术总纲）；其余落地细化 / 模块细部 / Draft / 归档文档不在此列（D2 口径），需要时按 §0.1 承接关系定位。
 
 > 撰写说明：本文撰写时不参考既有 v0.2 稿及任何历史总纲/技术方案稿；`docs/Draft/` 与 `docs/archive/` 中旧口径文档仅作追溯参考，冲突以本文与 PRD 为准。
 
@@ -1013,7 +1012,6 @@ docker compose logs -f                # 观察同步/归档/备份引擎日志
 | v1.0_DeepSeek（保存链路与快照口径） | 2026-09-03 | DogEar 项目组（匿名） | 拆工作台/Skill 保存路径；保存成功=真源落库；Drizzle≠Dexie；Snapshot 优先单 HTML；PDF 非 Track A 默认；访问记录提前到 M2；T-5/T-12 已定；路径改为 docs/modules 与 docs/archive |
 | v1.0_DeepSeek（开源引用） | 2026-09-03 | DogEar 项目组（匿名） | 接受 SingleFile AGPL；Track A 快照用 SingleFile、Track B 用 monolith；Metadata 用 metascraper；搜索用 MiniSearch；文末增 §14 引用表供 README 搬用 |
 | v1.0_DeepSeek（技术待定项收敛） | 2026-09-03 | DogEar 项目组（匿名） | §11 待确认/待决策表收敛：T-1 定 Bun + bun:sqlite（小基准已跑，better-sqlite3 作 Node 回退）、T-2/T-4 同步为 ✅（Dexie/IndexedDB 镜像缓存、「核心先记」方向）、T-6~T-11 定最小默认（不主动删 Snapshot / 单目标默认 / 仅类型预留 / 本期不启用 KV / 第一版不开匿名 / 不引入 CF 进阶能力）、T-3 保持方向性（承接 Scene-AI 细部 §5.2）；§4.1 真源 DB 行与 wouter 行改 ✅；头部/§12.1 参考表路径改为现行 wiki 文件名。依据见 docs/modules/技术待定项收敛清单 |
-| v1.0_DeepSeek（账本与窗口定稿注册） | 2026-09-04 | DogEar 项目组（匿名） | §0.1 落地承接改为指向 wiki 数据库设计 / API 设计定稿；§7.2 Skill 三级权限绑定不再写「待数据库定稿」 |
 
 > **文档维护说明**：本文档随项目开发进度持续更新。重大技术方案、架构或功能变更应同步修订本文档，并记录于文档变更记录中。凡与旧落地文档口径冲突处，一律以 PRD v1.0.7 与技术总纲 v1.0_DeepSeek 为准。
 
