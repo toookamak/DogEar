@@ -8,20 +8,40 @@ import { createApp } from './app.js'
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
 
-function repository() {
-  type BookmarkRecord = { id: string; url: string; status: 'unread'; syncStatus: 'pending'; createdAt: number; updatedAt: number }
+function repository(): any {
+  type BookmarkRecord = { id: string; url: string; status: 'unread'; source?: string; note?: string | null; syncStatus: 'pending' | 'synced'; createdAt: number; updatedAt: number }
   type AccessRecord = { id: string; bookmarkId: string; openedAt: number; source: 'original' }
   const records: BookmarkRecord[] = []
   const accessRecords: AccessRecord[] = []
   return {
     records,
     accessRecords,
-    create: async (record: { id: string; url: string; status: 'unread' }) => {
+    create: async (record: { id: string; url: string; status: 'unread'; source?: string; note?: string | null; intent?: string | null; syncStatus?: 'pending' | 'synced' }) => {
       const createdAt = Date.now()
-      const result = { ...record, syncStatus: 'pending' as const, createdAt, updatedAt: createdAt }
+      const result = { ...record, source: record.source ?? 'page', note: record.note ?? null, intent: record.intent ?? null, syncStatus: record.syncStatus ?? 'pending', createdAt, updatedAt: createdAt }
       records.push(result)
       return result
     },
+    get: async (id: string) => records.find((record) => record.id === id),
+    search: async () => records,
+    update: async (id: string, input: Record<string, unknown>) => {
+      const record = records.find((item) => item.id === id)
+      if (!record) return undefined
+      Object.assign(record, input)
+      return record
+    },
+    batchUpdate: async () => ({ updated: [], skipped: [] }),
+    softDelete: async () => undefined,
+    restore: async () => undefined,
+    purgeDeleted: async () => 0,
+    scenes: {},
+    folders: {},
+    tags: {},
+    suggestions: { create: async (input: Record<string, unknown>) => input },
+    operationLog: { append: async (input: Record<string, unknown>) => input },
+    settings: {},
+    archiveJobs: { create: async (input: Record<string, unknown>) => input },
+
     list: async () => records,
     listInbox: async () => records.filter((record) => record.status === 'unread'),
     countPending: async () => records.filter((record) => record.syncStatus === 'pending').length,
@@ -148,6 +168,101 @@ describe('authentication API', () => {
   })
 })
 
+describe('workbench REST API', () => {
+  it('rejects an oversized bookmark batch before touching the repository', async () => {
+    const repo = repository()
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+    const response = await app.request('/api/bookmarks/batch', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ ids: Array.from({ length: 101 }, (_, index) => `bookmark-${index}`), status: 'saved' }),
+    })
+
+    expect(response.status).toBe(400)
+    expect((await response.json()).error.code).toBe('BATCH_TOO_LARGE')
+  })
+
+  it('requires a session for the recycle bin and scene resources', async () => {
+    const app = createApp(repository(), { password: 'secret' })
+
+    expect((await app.request('/api/recycle-bin')).status).toBe(401)
+    expect((await app.request('/api/scenes')).status).toBe(401)
+  })
+})
+
+describe('skill API', () => {
+  it('publishes seven capabilities without authentication', async () => {
+    const app = createApp(repository(), { password: 'secret', skillToken: 'skill-secret' })
+    const response = await app.request('/.well-known/capabilities')
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.skills).toHaveLength(7)
+    expect(body.skills.map((skill: { name: string }) => skill.name)).toEqual([
+      'save_bookmark', 'search_bookmarks', 'update_bookmark', 'list_bookmarks', 'get_stats', 'trigger_archive', 'suggest_scene',
+    ])
+  })
+
+  it('rejects missing or invalid Skill tokens and saves with a stable UUID', async () => {
+    const repo = repository()
+    const app = createApp(repo, { password: 'secret', skillToken: 'skill-secret' })
+    const body = { url: 'https://example.com/agent', note: 'from agent' }
+
+    expect((await app.request('/api/skill/save_bookmark', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } })).status).toBe(401)
+    expect((await app.request('/api/skill/save_bookmark', { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json', authorization: 'Bearer wrong' } })).status).toBe(401)
+
+    const response = await app.request('/api/skill/save_bookmark', {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json', authorization: 'Bearer skill-secret' },
+    })
+    const saved = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(saved).toMatchObject({ url: body.url, note: body.note, source: 'agent', status: 'unread', syncStatus: 'synced', snapshotStatus: 'not_requested' })
+    expect(saved.id).toMatch(/^[0-9a-f-]{36}$/)
+    expect(repo.records[0].id).toBe(saved.id)
+    expect(repo.records[0]).toMatchObject({ source: 'agent', syncStatus: 'synced' })
+
+    const session = await login(app)
+    const inboxResponse = await app.request('/api/inbox', { headers: { cookie: session.cookie } })
+    expect(inboxResponse.status).toBe(200)
+    expect(await inboxResponse.json()).toEqual({ bookmarks: expect.arrayContaining([expect.objectContaining({ id: saved.id, url: body.url, source: 'agent', status: 'unread' })]) })
+  })
+
+  it('queues snapshots, returns supported reads, rejects disabled updates, and never writes suggestions to structure', async () => {
+    const repo = repository()
+    const app = createApp(repo, { password: 'secret', skillToken: 'skill-secret' })
+    const headers = { 'content-type': 'application/json', authorization: 'Bearer skill-secret' }
+    const saved = await (await app.request('/api/skill/save_bookmark', { method: 'POST', headers, body: JSON.stringify({ url: 'https://example.com/archive', snapshot: true }) })).json()
+
+    const archive = await app.request('/api/skill/trigger_archive', { method: 'POST', headers, body: JSON.stringify({ bookmarkId: saved.id }) })
+    expect(archive.status).toBe(200)
+    expect(await archive.json()).toMatchObject({ snapshotStatus: 'queued_pending_browser', jobId: expect.stringMatching(/^[0-9a-f-]{36}$/) })
+
+    for (const name of ['search_bookmarks', 'list_bookmarks', 'get_stats', 'suggest_scene']) {
+      const input = name === 'suggest_scene' ? { bookmarkId: saved.id } : {}
+      const response = await app.request(`/api/skill/${name}`, { method: 'POST', headers, body: JSON.stringify(input) })
+      expect(response.status).toBe(200)
+    }
+
+    const update = await app.request('/api/skill/update_bookmark', { method: 'POST', headers, body: JSON.stringify({ id: saved.id, note: 'changed' }) })
+    expect(update.status).toBe(403)
+    expect((await update.json()).error.code).toBe('CAPABILITY_DISABLED')
+    expect(repo.records[0].note).toBeNull()
+  })
+
+  it('enforces independent Skill rate limits', async () => {
+    const app = createApp(repository(), { password: 'secret', skillToken: 'skill-secret', rateLimits: { read: 1, write: 5, batch: 5 } })
+    const headers = { 'content-type': 'application/json', authorization: 'Bearer skill-secret' }
+    expect((await app.request('/api/skill/list_bookmarks', { method: 'POST', headers, body: '{}' })).status).toBe(200)
+    const limited = await app.request('/api/skill/get_stats', { method: 'POST', headers, body: '{}' })
+    expect(limited.status).toBe(429)
+    expect((await limited.json()).error.code).toBe('RATE_LIMITED')
+  })
+})
+
 describe('bookmark and access record API', () => {
   it('rejects unauthenticated writes without touching either repository', async () => {
     const repo = repository()
@@ -247,7 +362,7 @@ describe('bookmark and access record API', () => {
         query: (sql) => ({ all: () => database.prepare(sql).all() as Array<{ name: string }> }),
       })
       return {
-        async create(input: { id: string; url: string; status: 'unread' }) {
+        async create(input: { id: string; url: string; status: 'unread'; source?: string; note?: string | null }) {
           const createdAt = Date.now()
           database.prepare('INSERT INTO bookmarks (id, url, status, sync_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(input.id, input.url, input.status, 'pending', createdAt, createdAt)
           return { ...input, syncStatus: 'pending' as const, createdAt, updatedAt: createdAt }
@@ -274,7 +389,7 @@ describe('bookmark and access record API', () => {
 
     try {
       const firstDatabase = openDatabase()
-      const firstApp = createApp(createRepository(firstDatabase), { password: 'secret' })
+      const firstApp = createApp(createRepository(firstDatabase) as any, { password: 'secret' })
       const firstSession = await login(firstApp)
       const createdResponse = await firstApp.request('/api/bookmarks', {
         method: 'POST',
@@ -290,7 +405,7 @@ describe('bookmark and access record API', () => {
       firstDatabase.close()
 
       const secondDatabase = openDatabase()
-      const restartedApp = createApp(createRepository(secondDatabase), { password: 'secret' })
+      const restartedApp = createApp(createRepository(secondDatabase) as any, { password: 'secret' })
       const restartedSession = await login(restartedApp)
       const listedResponse = await restartedApp.request(`/api/bookmarks/${bookmark.id}/access-records`, {
         headers: { cookie: restartedSession.cookie },

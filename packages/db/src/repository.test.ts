@@ -75,4 +75,28 @@ describe('bookmark repository', () => {
     expect((second as any).openedAt).toBeInstanceOf(Date)
     expect((await repository.listAccessRecords('bookmark-1')).map((record: any) => record.id)).toEqual(['access-2', 'access-1'])
   })
+
+  it('supports bookmark detail, filtering, updates, recycle bin and purge operations', async () => {
+    const repository = setup()
+
+    expect(repository.get).toBeTypeOf('function')
+    expect(repository.search).toBeTypeOf('function')
+    expect(repository.update).toBeTypeOf('function')
+    expect(repository.batchUpdate).toBeTypeOf('function')
+    expect(repository.softDelete).toBeTypeOf('function')
+    expect(repository.restore).toBeTypeOf('function')
+    expect(repository.purgeDeleted).toBeTypeOf('function')
+  })
+
+  it('exposes transactional resource repositories', async () => {
+    const repository = setup()
+
+    expect(repository.scenes.create).toBeTypeOf('function')
+    expect(repository.folders.create).toBeTypeOf('function')
+    expect(repository.tags.create).toBeTypeOf('function')
+    expect(repository.suggestions.accept).toBeTypeOf('function')
+    expect(repository.operationLog.append).toBeTypeOf('function')
+    expect(repository.settings.set).toBeTypeOf('function')
+    expect(repository.archiveJobs.create).toBeTypeOf('function')
+  })
 })

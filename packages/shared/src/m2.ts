@@ -16,11 +16,15 @@ export const unauthorizedErrorSchema = z.object({
   }),
 })
 
+export const accessRecordSourceSchema = z.enum(['original', 'snapshot'])
+export const accessRecordClientSchema = z.enum(['workbench', 'navigation', 'plugin', 'unknown'])
+
 export const accessRecordSchema = z.object({
   id: z.string().uuid(),
   bookmarkId: z.string().uuid(),
   openedAt: z.number().int().nonnegative(),
-  source: z.literal('original'),
+  source: accessRecordSourceSchema.default('original'),
+  client: accessRecordClientSchema.default('workbench'),
 })
 
 export const inboxResponseSchema = z.object({
@@ -39,6 +43,6 @@ export type LoginRequest = z.infer<typeof loginRequestSchema>
 export type SessionUser = z.infer<typeof sessionUserSchema>
 export type UnauthorizedError = z.infer<typeof unauthorizedErrorSchema>
 export type AccessRecord = z.infer<typeof accessRecordSchema>
+export type AccessRecordResponse = z.infer<typeof accessRecordResponseSchema>
 export type InboxResponse = z.infer<typeof inboxResponseSchema>
 export type PendingCountResponse = z.infer<typeof pendingCountResponseSchema>
-export type AccessRecordResponse = z.infer<typeof accessRecordResponseSchema>

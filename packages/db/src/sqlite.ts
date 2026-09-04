@@ -3,31 +3,205 @@ export type SqliteDatabase = {
   query?: (sql: string) => { all: () => Array<{ name: string }> }
 }
 
-const bookmarksTable = `CREATE TABLE IF NOT EXISTS bookmarks (
-  id TEXT PRIMARY KEY NOT NULL,
-  url TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'unread',
-  sync_status TEXT NOT NULL DEFAULT 'pending',
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-)`
+const tableDefinitions: Record<string, string> = {
+  folders: `CREATE TABLE IF NOT EXISTS folders (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    parent_id TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    raindrop_id TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE SET NULL
+  )`,
+  bookmarks: `CREATE TABLE IF NOT EXISTS bookmarks (
+    id TEXT PRIMARY KEY NOT NULL,
+    url TEXT NOT NULL,
+    title TEXT,
+    excerpt TEXT,
+    cover TEXT,
+    type TEXT NOT NULL DEFAULT 'link',
+    author TEXT,
+    favicon TEXT,
+    published_at INTEGER,
+    note TEXT,
+    intent TEXT,
+    important INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'unread',
+    source TEXT NOT NULL DEFAULT 'page',
+    private INTEGER NOT NULL DEFAULT 0,
+    folder_id TEXT,
+    domain TEXT,
+    broken INTEGER NOT NULL DEFAULT 0,
+    raindrop_id TEXT,
+    raindrop_extras TEXT,
+    sync_status TEXT NOT NULL DEFAULT 'pending',
+    version INTEGER NOT NULL DEFAULT 1,
+    deleted_at INTEGER,
+    last_opened_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
+  )`,
+  scenes: `CREATE TABLE IF NOT EXISTS scenes (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    icon TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    aerr TEXT NOT NULL DEFAULT 'reference',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  bookmark_scenes: `CREATE TABLE IF NOT EXISTS bookmark_scenes (
+    bookmark_id TEXT NOT NULL,
+    scene_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (bookmark_id, scene_id),
+    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE,
+    FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
+  )`,
+  tags: `CREATE TABLE IF NOT EXISTS tags (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    name_key TEXT NOT NULL UNIQUE,
+    created_at INTEGER NOT NULL
+  )`,
+  bookmark_tags: `CREATE TABLE IF NOT EXISTS bookmark_tags (
+    bookmark_id TEXT NOT NULL,
+    tag_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (bookmark_id, tag_id),
+    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+  )`,
+  suggestions: `CREATE TABLE IF NOT EXISTS suggestions (
+    id TEXT PRIMARY KEY NOT NULL,
+    bookmark_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    target_id TEXT,
+    target_label TEXT,
+    confidence REAL,
+    rationale TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at INTEGER NOT NULL,
+    resolved_at INTEGER,
+    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+  )`,
+  access_records: `CREATE TABLE IF NOT EXISTS access_records (
+    id TEXT PRIMARY KEY NOT NULL,
+    bookmark_id TEXT NOT NULL,
+    opened_at INTEGER NOT NULL,
+    source TEXT NOT NULL DEFAULT 'original',
+    client TEXT NOT NULL DEFAULT 'workbench',
+    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+  )`,
+  operation_log: `CREATE TABLE IF NOT EXISTS operation_log (
+    id TEXT PRIMARY KEY NOT NULL,
+    actor TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    detail TEXT,
+    revert_token TEXT,
+    created_at INTEGER NOT NULL
+  )`,
+  settings: `CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  archive_jobs: `CREATE TABLE IF NOT EXISTS archive_jobs (
+    id TEXT PRIMARY KEY NOT NULL,
+    bookmark_id TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'snapshot',
+    source TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    started_at INTEGER,
+    completed_at INTEGER,
+    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+  )`,
+}
 
-const accessRecordsTable = `CREATE TABLE IF NOT EXISTS access_records (
-  id TEXT PRIMARY KEY NOT NULL,
-  bookmark_id TEXT NOT NULL,
-  opened_at INTEGER NOT NULL,
-  source TEXT NOT NULL DEFAULT 'original'
-)`
+const bookmarkColumns: Record<string, string> = {
+  title: 'ALTER TABLE bookmarks ADD COLUMN title TEXT',
+  excerpt: 'ALTER TABLE bookmarks ADD COLUMN excerpt TEXT',
+  cover: 'ALTER TABLE bookmarks ADD COLUMN cover TEXT',
+  type: "ALTER TABLE bookmarks ADD COLUMN type TEXT NOT NULL DEFAULT 'link'",
+  author: 'ALTER TABLE bookmarks ADD COLUMN author TEXT',
+  favicon: 'ALTER TABLE bookmarks ADD COLUMN favicon TEXT',
+  published_at: 'ALTER TABLE bookmarks ADD COLUMN published_at INTEGER',
+  note: 'ALTER TABLE bookmarks ADD COLUMN note TEXT',
+  intent: 'ALTER TABLE bookmarks ADD COLUMN intent TEXT',
+  important: 'ALTER TABLE bookmarks ADD COLUMN important INTEGER NOT NULL DEFAULT 0',
+  source: "ALTER TABLE bookmarks ADD COLUMN source TEXT NOT NULL DEFAULT 'page'",
+  private: 'ALTER TABLE bookmarks ADD COLUMN private INTEGER NOT NULL DEFAULT 0',
+  folder_id: 'ALTER TABLE bookmarks ADD COLUMN folder_id TEXT',
+  domain: 'ALTER TABLE bookmarks ADD COLUMN domain TEXT',
+  broken: 'ALTER TABLE bookmarks ADD COLUMN broken INTEGER NOT NULL DEFAULT 0',
+  raindrop_id: 'ALTER TABLE bookmarks ADD COLUMN raindrop_id TEXT',
+  raindrop_extras: 'ALTER TABLE bookmarks ADD COLUMN raindrop_extras TEXT',
+  sync_status: "ALTER TABLE bookmarks ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'",
+  version: 'ALTER TABLE bookmarks ADD COLUMN version INTEGER NOT NULL DEFAULT 1',
+  deleted_at: 'ALTER TABLE bookmarks ADD COLUMN deleted_at INTEGER',
+  last_opened_at: 'ALTER TABLE bookmarks ADD COLUMN last_opened_at INTEGER',
+}
+
+function columnsFor(database: SqliteDatabase, table: string) {
+  return new Set((database.query?.(`PRAGMA table_info(${table})`).all() ?? []).map((column) => column.name))
+}
+
+function createIndexes(database: SqliteDatabase) {
+  database.run('CREATE INDEX IF NOT EXISTS bookmarks_status_created_at_idx ON bookmarks(status, created_at)')
+  database.run('CREATE INDEX IF NOT EXISTS bookmarks_deleted_at_created_at_idx ON bookmarks(deleted_at, created_at)')
+  database.run('CREATE INDEX IF NOT EXISTS bookmarks_folder_id_idx ON bookmarks(folder_id)')
+  database.run('CREATE INDEX IF NOT EXISTS bookmarks_sync_status_idx ON bookmarks(sync_status)')
+  database.run('CREATE INDEX IF NOT EXISTS bookmark_scenes_scene_id_idx ON bookmark_scenes(scene_id)')
+  database.run('CREATE INDEX IF NOT EXISTS bookmark_tags_tag_id_idx ON bookmark_tags(tag_id)')
+  database.run('CREATE INDEX IF NOT EXISTS access_records_bookmark_id_opened_at_idx ON access_records(bookmark_id, opened_at)')
+  database.run('CREATE INDEX IF NOT EXISTS suggestions_bookmark_id_status_idx ON suggestions(bookmark_id, status)')
+  database.run('CREATE INDEX IF NOT EXISTS operation_log_created_at_idx ON operation_log(created_at)')
+}
+
+function seedDefaults(database: SqliteDatabase) {
+  const now = Date.now()
+  database.run(`INSERT OR IGNORE INTO scenes (id, name, aerr, sort_order, enabled, created_at, updated_at) VALUES
+    ('00000000-0000-4000-8000-000000000001', '工作研究', 'action', 1, 1, ${now}, ${now}),
+    ('00000000-0000-4000-8000-000000000002', '灵感收集', 'explore', 2, 1, ${now}, ${now}),
+    ('00000000-0000-4000-8000-000000000003', '稍后再读', 'read', 3, 1, ${now}, ${now}),
+    ('00000000-0000-4000-8000-000000000004', '长期资料', 'reference', 4, 1, ${now}, ${now})`)
+  database.run(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES
+    ('skill.token_hash', '""', ${now}),
+    ('skill.capabilities', '{"read":true,"write_new":true,"update_existing":false}', ${now}),
+    ('recycle.retention_days', '7', ${now}),
+    ('operation_log.retention_days', '30', ${now}),
+    ('operation_log.max_rows', '5000', ${now})`)
+}
 
 export function initializeSqliteSchema(database: SqliteDatabase) {
   database.run('BEGIN')
   try {
-    database.run(bookmarksTable)
-    const columns = database.query?.('PRAGMA table_info(bookmarks)').all() ?? []
-    if (!columns.some((column) => column.name === 'sync_status')) {
-      database.run("ALTER TABLE bookmarks ADD COLUMN sync_status TEXT NOT NULL DEFAULT 'pending'")
+    database.run('PRAGMA foreign_keys = ON')
+    database.run(tableDefinitions.folders)
+    database.run(tableDefinitions.bookmarks)
+    const columns = columnsFor(database, 'bookmarks')
+    for (const [column, statement] of Object.entries(bookmarkColumns)) {
+      if (!columns.has(column)) database.run(statement)
     }
-    database.run(accessRecordsTable)
+    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs']) {
+      database.run(tableDefinitions[table])
+    }
+    if (!columnsFor(database, 'access_records').has('client')) {
+      database.run("ALTER TABLE access_records ADD COLUMN client TEXT NOT NULL DEFAULT 'workbench'")
+    }
+    createIndexes(database)
+    seedDefaults(database)
     database.run('COMMIT')
   } catch (error) {
     database.run('ROLLBACK')
