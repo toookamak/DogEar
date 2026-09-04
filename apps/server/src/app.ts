@@ -64,7 +64,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   const now = options.now ?? Date.now
   const revokedSessions = new Set<string>()
   const app = new Hono()
-  app.use('/api/*', cors())
+  app.use('/api/*', cors({ origin: 'http://localhost:5173', credentials: true }))
 
   app.get('/health', (c) => c.json({ ok: true }))
 

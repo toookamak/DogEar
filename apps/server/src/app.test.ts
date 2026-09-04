@@ -46,6 +46,36 @@ async function login(app: ReturnType<typeof createApp>, password = 'secret') {
 }
 
 describe('authentication API', () => {
+  it('allows credentialed requests from the web app origin', async () => {
+    const app = createApp(repository(), { password: 'secret' })
+    const response = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'http://localhost:5173',
+      },
+      body: JSON.stringify({ password: 'secret' }),
+    })
+
+    expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+    expect(response.headers.get('access-control-allow-credentials')).toBe('true')
+  })
+
+  it('does not allow credentialed requests from an arbitrary origin', async () => {
+    const app = createApp(repository(), { password: 'secret' })
+    const response = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://attacker.example',
+      },
+      body: JSON.stringify({ password: 'secret' }),
+    })
+
+    expect(response.headers.get('access-control-allow-origin')).toBeNull()
+    expect(response.headers.get('access-control-allow-credentials')).toBe('true')
+  })
+
   it('logs in with the configured password and sets a session cookie', async () => {
     const app = createApp(repository(), { password: 'secret' })
     const { response, cookie } = await login(app)

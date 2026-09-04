@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-09-04 / v0.2.0 — 修复 M2 浏览器登录 CORS credentials 配置，仅允许 <http://localhost:5173> 携带 Cookie 的请求。
+
+- 2026-09-03 / v0.2.0 — 完成 M2 Task 6 收口复核：通过 shared/db/server/web 自动化验证与真实 SQLite 进程重启验证，更新 M2 tasks/checklist；浏览器级页面联调因 Chromium 不可用仍未勾选。
+
 - 2026-09-03 / v0.2.0 — 完成 M2 验证阻塞修复：补充跨客户端同 ID 与 SQLite 重启后访问记录持久化 API 测试，并更新验证清单。
 
 - 2026-09-03 / v0.2.0 — 完成 M1 工程骨架：建立四包 workspace，打通 React → Hono → SQLite 的 Bookmark 创建、列表与重启持久化链路。
