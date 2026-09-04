@@ -24,11 +24,14 @@ export function CommandPalette({ bookmarks, onSelect, onClose, open }: CommandPa
     inputRef.current?.focus()
 
     const miniSearch = new MiniSearch({
-      fields: ['title', 'url', 'note'],
+      fields: ['title', 'url', 'note', 'tagText'],
       storeFields: ['id', 'title', 'url', 'note', 'domain', 'favicon'],
       searchOptions: { boost: { title: 2 }, fuzzy: 0.2 },
     })
-    miniSearch.addAll(bookmarks)
+    miniSearch.addAll(bookmarks.map((bookmark) => ({
+      ...bookmark,
+      tagText: (bookmark.tags || []).map((tag) => tag.name).join(' '),
+    })))
     miniSearchRef.current = miniSearch
   }, [open, bookmarks])
 

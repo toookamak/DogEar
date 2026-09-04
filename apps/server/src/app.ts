@@ -168,7 +168,16 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     const query = paginationQuerySchema.safeParse(c.req.query())
     if (!query.success) return invalidRequest(c)
     const { limit, cursor } = query.data
-    const result = await repository.list(undefined, limit, cursor)
+    const importantQuery = c.req.query('important')
+    const result = await repository.list({
+      q: c.req.query('q'),
+      status: c.req.query('status'),
+      sceneId: c.req.query('sceneId'),
+      folderId: c.req.query('folderId') === 'none' ? 'none' : c.req.query('folderId'),
+      tagId: c.req.query('tagId'),
+      important: importantQuery === 'true' ? true : importantQuery === 'false' ? false : undefined,
+      source: c.req.query('source'),
+    }, limit, cursor)
     return c.json({ items: result.items.map(serializeBookmark), nextCursor: result.nextCursor })
   })
 

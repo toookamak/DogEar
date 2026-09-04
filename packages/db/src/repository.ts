@@ -230,12 +230,17 @@ async function replaceRelations(tx: Db, bookmarkId: string, input: BookmarkUpdat
 }
 
 async function readRelations(db: Db, bookmarkId: string) {
-  const [sceneRows, tagRows, suggestionRows] = await Promise.all([
+  const [sceneRows, tagRows, suggestionRows, bookmarkRow] = await Promise.all([
     db.select({ id: scenes.id, name: scenes.name }).from(bookmarkScenes).innerJoin(scenes, eq(bookmarkScenes.sceneId, scenes.id)).where(eq(bookmarkScenes.bookmarkId, bookmarkId)).all(),
     db.select({ id: tags.id, name: tags.name }).from(bookmarkTags).innerJoin(tags, eq(bookmarkTags.tagId, tags.id)).where(eq(bookmarkTags.bookmarkId, bookmarkId)).all(),
     db.select({ count: count() }).from(suggestions).where(and(eq(suggestions.bookmarkId, bookmarkId), eq(suggestions.status, 'pending'))).all(),
+    db.select({ folderId: bookmarks.folderId }).from(bookmarks).where(eq(bookmarks.id, bookmarkId)).all(),
   ])
-  return { scenes: sceneRows, tags: tagRows, pendingSuggestionCount: Number(suggestionRows[0]?.count ?? 0) }
+  const folderId = bookmarkRow[0]?.folderId
+  const folder = folderId
+    ? (await db.select({ id: folders.id, name: folders.name }).from(folders).where(eq(folders.id, folderId)).all())[0] ?? null
+    : null
+  return { scenes: sceneRows, tags: tagRows, folder, pendingSuggestionCount: Number(suggestionRows[0]?.count ?? 0) }
 }
 
 function filterCondition(filters: BookmarkFilters = {}) {
@@ -279,7 +284,12 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     const query = filters.sceneId || filters.tagId || filters.q ? db.select().from(bookmarks).leftJoin(bookmarkScenes, eq(bookmarks.id, bookmarkScenes.bookmarkId)).leftJoin(bookmarkTags, eq(bookmarks.id, bookmarkTags.bookmarkId)).leftJoin(tags, eq(bookmarkTags.tagId, tags.id)) : db.select().from(bookmarks)
     const orderBy = opts?.orderBy === 'lastOpenedAt' ? desc(bookmarks.lastOpenedAt) : desc(bookmarks.createdAt)
     const rows = await query.where(whereClause).orderBy(orderBy, desc(bookmarks.id)).limit(limit + 1).all()
-    return paginatedQuery(rows, limit, (row: any) => ({ createdAt: row.createdAt ?? row.bookmarks?.createdAt, id: row.id ?? row.bookmarks?.id }))
+    const page = paginatedQuery(rows, limit, (row: any) => ({ createdAt: row.createdAt ?? row.bookmarks?.createdAt, id: row.id ?? row.bookmarks?.id }))
+    const items = await Promise.all(page.items.map(async (row: any) => {
+      const base = row.bookmarks ?? row
+      return { ...base, ...(await readRelations(db, base.id)) }
+    }))
+    return { items, nextCursor: page.nextCursor }
   }
   repository.listInbox = async (limit = 50, cursor?: string) => {
     const result = await repository.list({ status: 'unread' }, limit, cursor)

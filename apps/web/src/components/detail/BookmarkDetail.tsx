@@ -3,6 +3,9 @@ import type { BookmarkResponse, SceneResponse, FolderResponse, TagResponse } fro
 import { bookmarksApi } from '../../api/bookmarks.js'
 import { exportApi } from '../../api/export.js'
 import { SnapshotButton } from '../bookmarks/SnapshotButton.js'
+import { SceneSelector } from '../organization/SceneSelector.js'
+import { FolderSelector } from '../organization/FolderSelector.js'
+import { TagSelector } from '../organization/TagSelector.js'
 
 interface BookmarkDetailProps {
   bookmark: BookmarkResponse
@@ -11,25 +14,58 @@ interface BookmarkDetailProps {
   tags: TagResponse[]
   onUpdate: (bookmark: BookmarkResponse) => void
   onClose: () => void
+  onDeleted?: (id: string) => void
 }
 
-export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onClose }: BookmarkDetailProps) {
+export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onClose, onDeleted }: BookmarkDetailProps) {
   const [note, setNote] = useState(bookmark.note || '')
   const [status, setStatus] = useState(bookmark.status)
   const [important, setImportant] = useState(bookmark.important)
   const [private_, setPrivate_] = useState(bookmark.private)
+  const [sceneIds, setSceneIds] = useState<string[]>((bookmark.scenes || []).map((scene) => scene.id))
+  const [tagIds, setTagIds] = useState<string[]>((bookmark.tags || []).map((tag) => tag.id))
+  const [folderId, setFolderId] = useState<string | null>(bookmark.folder?.id ?? null)
   const [saving, setSaving] = useState(false)
   const [viewing, setViewing] = useState(false)
+
+  useEffect(() => {
+    setNote(bookmark.note || '')
+    setStatus(bookmark.status)
+    setImportant(bookmark.important)
+    setPrivate_(bookmark.private)
+    setSceneIds((bookmark.scenes || []).map((scene) => scene.id))
+    setTagIds((bookmark.tags || []).map((tag) => tag.id))
+    setFolderId(bookmark.folder?.id ?? null)
+  }, [bookmark])
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      const updated = await bookmarksApi.update(bookmark.id, { note, status, important, private: private_ })
+      const updated = await bookmarksApi.update(bookmark.id, {
+        note,
+        status,
+        important,
+        private: private_,
+        folderId,
+        sceneIds,
+        tagIds,
+      })
       onUpdate(updated)
     } catch (e) {
       console.error('Failed to update bookmark', e)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!window.confirm('移入回收站？')) return
+    try {
+      await bookmarksApi.delete(bookmark.id)
+      onDeleted?.(bookmark.id)
+      onClose()
+    } catch (e) {
+      console.error('Failed to delete bookmark', e)
     }
   }
 
@@ -102,10 +138,29 @@ export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onCl
         <div>
           <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>状态</label>
           <select value={status} onChange={(e) => setStatus(e.target.value as any)} className="input" style={{ width: '100%' }}>
-            <option value="unread">未读</option>
-            <option value="saved">已保存</option>
-            <option value="archived">已归档</option>
+            <option value="unread">待处理</option>
+            <option value="saved">已确认</option>
+            <option value="archived">搁置</option>
           </select>
+        </div>
+
+        <div>
+          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>场景</label>
+          <SceneSelector
+            scenes={scenes.filter((scene) => scene.enabled !== false || sceneIds.includes(scene.id))}
+            selectedIds={sceneIds}
+            onChange={setSceneIds}
+          />
+        </div>
+
+        <div>
+          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>文件夹</label>
+          <FolderSelector folders={folders} selectedId={folderId} onChange={setFolderId} />
+        </div>
+
+        <div>
+          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>标签</label>
+          <TagSelector tags={tags} selectedIds={tagIds} onChange={setTagIds} />
         </div>
 
         <div style={{ display: 'flex', gap: 'var(--spacing-16)' }}>
@@ -121,6 +176,9 @@ export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onCl
 
         <button onClick={handleSave} disabled={saving} className="btn-primary" style={{ width: '100%' }}>
           {saving ? '保存中...' : '保存'}
+        </button>
+        <button onClick={handleDelete} className="btn-secondary" style={{ width: '100%', color: 'var(--color-error)' }}>
+          移入回收站
         </button>
       </div>
     </div>

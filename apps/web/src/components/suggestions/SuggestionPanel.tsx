@@ -20,10 +20,26 @@ export function SuggestionPanel({ bookmarkId, onUpdate }: SuggestionPanelProps) 
       .finally(() => setLoading(false))
   }, [bookmarkId])
 
-  // Intentionally empty when no suggestions
+  if (loading) {
+    return <p style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-muted)' }}>加载建议...</p>
+  }
+
   if (suggestions.length === 0) {
-    if (loading) return null
-    return null
+    return (
+      <div style={{
+        background: 'var(--color-bg-surface-400)',
+        border: '1px solid var(--border-primary)',
+        borderRadius: 'var(--radius-comfortable)',
+        padding: 'var(--spacing-12)',
+      }}>
+        <h4 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 500, margin: '0 0 var(--spacing-8)' }}>
+          AI 建议
+        </h4>
+        <p style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-muted)', margin: 0 }}>
+          暂无建议。确认后才会写入场景或标签。
+        </p>
+      </div>
+    )
   }
 
   return (

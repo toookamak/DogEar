@@ -4,6 +4,36 @@ import { jobsApi } from '../../api/jobs.js'
 import { backupApi } from '../../api/backup.js'
 import type { SettingResponse, SkillUsageResponse, JobResponse, BackupResponse } from '../../types/api.js'
 
+function OperationLogList() {
+  const [items, setItems] = useState<Array<{ id: string; actor: string; action: string; targetType: string; targetId: string; createdAt: number | string | Date }>>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    settingsApi.operationLog()
+      .then((res) => setItems(res.items ?? []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <p style={{ fontFamily: 'var(--font-ui)', fontSize: '14px', color: 'var(--color-text-secondary)' }}>加载中...</p>
+  if (items.length === 0) return <p style={{ fontFamily: 'var(--font-ui)', fontSize: '14px', color: 'var(--color-text-secondary)' }}>暂无操作日志</p>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-8)' }}>
+      {items.map((item) => (
+        <div key={item.id} className="card" style={{ padding: 'var(--spacing-12)' }}>
+          <div style={{ fontFamily: 'var(--font-ui)', fontSize: '14px' }}>
+            {item.actor} · {item.action} · {item.targetType}
+          </div>
+          <div style={{ fontFamily: 'var(--font-ui)', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+            {item.targetId} · {typeof item.createdAt === 'number' ? new Date(item.createdAt).toLocaleString() : String(item.createdAt)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function SettingsSection() {
   const [settings, setSettings] = useState<SettingResponse[]>([])
   const [usage, setUsage] = useState<SkillUsageResponse | null>(null)
@@ -115,11 +145,7 @@ export function SettingsSection() {
         </div>
       )}
 
-      {tab === 'logs' && (
-        <div style={{ fontFamily: 'var(--font-ui)', fontSize: '14px', color: 'var(--color-text-secondary)' }}>
-          <p>操作日志加载中...</p>
-        </div>
-      )}
+      {tab === 'logs' && <OperationLogList />}
 
       {tab === 'jobs' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-8)' }}>

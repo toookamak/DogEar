@@ -11,37 +11,58 @@ import { Loading } from '../components/feedback/Loading.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import { bookmarksApi } from '../api/bookmarks.js'
 import { organizationApi } from '../api/organization.js'
+import type { BookmarkListParams } from '../api/bookmarks.js'
 import type { BookmarkResponse, SceneResponse, FolderResponse, TagResponse } from '../types/api.js'
 
 export function WorkbenchPage() {
-  const [location, setLocation] = useLocation()
+  const [location] = useLocation()
   const isInbox = location === '/'
   const title = isInbox ? 'Inbox' : location === '/bookmarks' ? '书签' : '工作台'
 
   const [bookmarks, setBookmarks] = useState<BookmarkResponse[]>([])
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedBookmark, setSelectedBookmark] = useState<BookmarkResponse | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showSaveForm, setShowSaveForm] = useState(false)
   const [showCommand, setShowCommand] = useState(false)
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
   const [scenes, setScenes] = useState<SceneResponse[]>([])
   const [folders, setFolders] = useState<FolderResponse[]>([])
   const [tags, setTags] = useState<TagResponse[]>([])
+  const [filters, setFilters] = useState({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
 
-  const loadBookmarks = useCallback(async () => {
-    setLoading(true)
+  const queryParams = useCallback((): BookmarkListParams => {
+    const params: BookmarkListParams = {}
+    if (!isInbox && filters.status) params.status = filters.status
+    if (filters.sceneId) params.sceneId = filters.sceneId
+    if (filters.folderId) params.folderId = filters.folderId
+    if (filters.tagId) params.tagId = filters.tagId
+    if (filters.source) params.source = filters.source
+    if (filters.q.trim()) params.q = filters.q.trim()
+    return params
+  }, [filters, isInbox])
+
+  const loadBookmarks = useCallback(async (cursor?: string) => {
+    if (!cursor) setLoading(true)
     setError(null)
     try {
+      const params = { ...queryParams(), cursor }
       const result = isInbox
-        ? await bookmarksApi.inbox()
-        : await bookmarksApi.list()
-      setBookmarks(isInbox ? (result as any).bookmarks ?? [] : (result as any).items ?? [])
+        ? await bookmarksApi.inbox({ cursor })
+        : filters.q.trim()
+          ? await bookmarksApi.search(params)
+          : await bookmarksApi.list(params)
+      const items = isInbox ? (result as { bookmarks?: BookmarkResponse[] }).bookmarks ?? [] : (result as { items?: BookmarkResponse[] }).items ?? []
+      const next = result.nextCursor ?? null
+      setBookmarks((prev) => cursor ? [...prev, ...items] : items)
+      setNextCursor(next)
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载失败')
     }
     setLoading(false)
-  }, [isInbox])
+  }, [isInbox, queryParams, filters.q])
 
   const loadOrganization = useCallback(async () => {
     try {
@@ -58,7 +79,6 @@ export function WorkbenchPage() {
 
   useEffect(() => { loadBookmarks(); loadOrganization() }, [loadBookmarks, loadOrganization])
 
-  // ⌘K handler
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -83,6 +103,25 @@ export function WorkbenchPage() {
   const handleUpdate = (updated: BookmarkResponse) => {
     setBookmarks((prev) => prev.map((b) => b.id === updated.id ? updated : b))
     setSelectedBookmark(updated)
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const runBatch = async (data: Parameters<typeof bookmarksApi.batchUpdate>[0]) => {
+    try {
+      await bookmarksApi.batchUpdate(data)
+      setSelectedIds(new Set())
+      await loadBookmarks()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '批量操作失败')
+    }
   }
 
   return (
@@ -112,6 +151,66 @@ export function WorkbenchPage() {
             </div>
           )}
 
+          {!isInbox && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-8)', marginBottom: 'var(--spacing-12)' }}>
+              <input
+                className="input"
+                placeholder="搜索标题 / URL / 备注"
+                value={filters.q}
+                onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
+                style={{ minWidth: '180px' }}
+              />
+              <select className="input" value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+                <option value="">全部状态</option>
+                <option value="unread">待处理</option>
+                <option value="saved">已确认</option>
+                <option value="archived">搁置</option>
+              </select>
+              <select className="input" value={filters.sceneId} onChange={(e) => setFilters((f) => ({ ...f, sceneId: e.target.value }))}>
+                <option value="">全部场景</option>
+                {scenes.map((scene) => <option key={scene.id} value={scene.id}>{scene.name}</option>)}
+              </select>
+              <select className="input" value={filters.folderId} onChange={(e) => setFilters((f) => ({ ...f, folderId: e.target.value }))}>
+                <option value="">全部文件夹</option>
+                <option value="none">无文件夹</option>
+                {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+              </select>
+              <select className="input" value={filters.tagId} onChange={(e) => setFilters((f) => ({ ...f, tagId: e.target.value }))}>
+                <option value="">全部标签</option>
+                {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+              </select>
+              <select className="input" value={filters.source} onChange={(e) => setFilters((f) => ({ ...f, source: e.target.value }))}>
+                <option value="">全部来源</option>
+                <option value="page">工作台</option>
+                <option value="agent">Agent</option>
+                <option value="extension">插件</option>
+              </select>
+            </div>
+          )}
+
+          {selectedIds.size > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-8)', marginBottom: 'var(--spacing-12)', alignItems: 'center' }}>
+              <span style={{ fontFamily: 'var(--font-ui)', fontSize: '13px' }}>已选 {selectedIds.size}</span>
+              <button className="btn-secondary-pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'saved' })}>标为已确认</button>
+              <button className="btn-secondary-pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'archived' })}>标为搁置</button>
+              <select
+                className="input"
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) runBatch({ ids: [...selectedIds], addSceneIds: [e.target.value] })
+                  e.target.value = ''
+                }}
+              >
+                <option value="">添加场景...</option>
+                {scenes.filter((scene) => scene.enabled !== false).map((scene) => (
+                  <option key={scene.id} value={scene.id}>{scene.name}</option>
+                ))}
+              </select>
+              <button className="btn-secondary-pill" style={{ color: 'var(--color-error)' }} onClick={() => runBatch({ ids: [...selectedIds], deleted: true })}>移入回收站</button>
+              <button className="btn-secondary-pill" onClick={() => setSelectedIds(new Set())}>取消选择</button>
+            </div>
+          )}
+
           {loading && <Loading />}
           {error && <ErrorMessage message={error} />}
           {!loading && !error && bookmarks.length === 0 && <EmptyState message={isInbox ? 'Inbox 为空' : '暂无书签'} />}
@@ -121,7 +220,15 @@ export function WorkbenchPage() {
               bookmarks={bookmarks}
               onSelect={(b) => setSelectedBookmark(b)}
               viewMode={viewMode}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
             />
+          )}
+
+          {nextCursor && (
+            <div style={{ textAlign: 'center', padding: 'var(--spacing-16)' }}>
+              <button onClick={() => loadBookmarks(nextCursor)} className="btn-secondary-pill">加载更多</button>
+            </div>
           )}
         </div>
 
@@ -140,6 +247,14 @@ export function WorkbenchPage() {
               tags={tags}
               onUpdate={handleUpdate}
               onClose={() => setSelectedBookmark(null)}
+              onDeleted={(id) => {
+                setBookmarks((prev) => prev.filter((item) => item.id !== id))
+                setSelectedIds((prev) => {
+                  const next = new Set(prev)
+                  next.delete(id)
+                  return next
+                })
+              }}
             />
             <div style={{ marginTop: 'var(--spacing-12)' }}>
               <SuggestionPanel

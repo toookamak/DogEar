@@ -40,7 +40,7 @@ export function RecycleBinList() {
 
   const handleEmpty = async () => {
     try {
-      await recycleBinApi.empty()
+      await recycleBinApi.empty({ onlyExpired: false })
       setItems([])
     } catch { /* ignore */ }
     setConfirmId(null)

@@ -4,9 +4,11 @@ interface BookmarkCardProps {
   bookmark: BookmarkResponse
   onClick: () => void
   selected?: boolean
+  selectable?: boolean
+  onToggleSelect?: (id: string) => void
 }
 
-export function BookmarkCard({ bookmark, onClick, selected }: BookmarkCardProps) {
+export function BookmarkCard({ bookmark, onClick, selected, selectable, onToggleSelect }: BookmarkCardProps) {
   return (
     <div
       onClick={onClick}
@@ -31,6 +33,15 @@ export function BookmarkCard({ bookmark, onClick, selected }: BookmarkCardProps)
             marginRight: 'var(--spacing-8)',
             borderRadius: 'var(--radius-small)',
           }}
+        />
+      )}
+      {selectable && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onClick={(event) => event.stopPropagation()}
+          onChange={() => onToggleSelect?.(bookmark.id)}
+          style={{ marginRight: 'var(--spacing-8)', verticalAlign: 'middle' }}
         />
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
