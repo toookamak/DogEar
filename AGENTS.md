@@ -32,7 +32,7 @@
 
 - 怎么跑：原型 `cd dev/dogear-workbench && npm run dev`；完整说明见 README.md
 
-- 现在做到哪：方向与功能设想已定稿（`wiki/`）；技术待定项已收敛（技术总纲 §11 T-1\~T-12，2026-09-03）；账本/窗口设计说明在 `docs/modules/`，写代码范围以 `docs/数据库结构表.md`、`docs/API结构表.md` 为准；**未经授权不写入 wiki**；正式工程 M2 已过关，M3/M4 后端基础能力已完成（Skill API + M4 工作台 REST，2026-09-04 经确认作为 M4 正式前端开发起点），M4 正式前端建设中
+- 现在做到哪：方向与功能设想已定稿（`wiki/`）；技术待定项已收敛（技术总纲 §11 T-1\~T-12，2026-09-03）；账本/窗口设计说明在 `docs/modules/`，写代码范围以 `docs/数据库结构表.md`、`docs/API结构表.md` 为准；**未经授权不写入 wiki**；正式工程 M5-M7 已全部完成（Capture/Organize/Rediscover/Archive/Backup/Sync/Docker 部署），Track B Docker 自托管部署已就绪
 
 - 性能基线：默认 600 条，超量可调（需确认）
 

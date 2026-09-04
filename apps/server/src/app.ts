@@ -22,10 +22,11 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { BookmarkRepository } from '@dogear/db'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
-import { createChannelRoutes } from './channels-routes.js'
 import { createArchiveRoutes } from './archive/archive-routes.js'
 import { createBackupRoutes } from './backup/backup-routes.js'
+import { createChannelRoutes } from './channels-routes.js'
 import { createMetadataRoutes } from './archive/metadata-routes.js'
+import { createNavRoutes } from './nav/nav-routes.js'
 import { extractMetadata } from './archive/metadata.js'
 
 const sessionCookie = 'dogear_session'
@@ -265,6 +266,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     '/api/suggestions/*', '/api/operation-log', '/api/settings', '/api/settings/*',
     '/api/jobs', '/api/jobs/*', '/api/channels', '/api/channels/*',
     '/api/archive', '/api/archive/*', '/api/backup', '/api/backup/*',
+    '/api/nav', '/api/nav/*',
   ]
   for (const path of workbenchPaths) app.use(path, requireSession)
 
@@ -397,6 +399,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.route('/api/archive', createArchiveRoutes(repository))
   app.route('/api/backup', createBackupRoutes(repository))
   app.route('/api/metadata', createMetadataRoutes())
+  app.route('/api/nav', createNavRoutes(repository))
 
   app.put('/api/settings', async (c) => {
     const body = await c.req.json().catch(() => undefined) as Record<string, unknown> | undefined

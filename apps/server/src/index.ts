@@ -11,7 +11,6 @@ const sqlite = new Database(dbPath)
 initializeSqliteSchema(sqlite)
 
 const pw = process.env.DOGEAR_PASSWORD || 'admin123'
-console.log('DOGEAR_PASSWORD set:', pw.length > 0)
 const repository = createBookmarkRepository(drizzle(sqlite))
 const app = createApp(repository, {
   password: pw,

@@ -10,6 +10,7 @@ import {
   bookmarks,
   folders,
   idempotencyKeys,
+  navRules,
   operationLog,
   scenes,
   settings,
@@ -90,7 +91,7 @@ export type SyncQueueItem = {
 
 export type BookmarkRepository = {
   create: (input: BookmarkInput) => Promise<unknown>
-  list: (filters?: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
+  list: (filters?: BookmarkFilters, limit?: number, cursor?: string, opts?: { orderBy?: string }) => Promise<PageResult<unknown>>
   listInbox: (limit?: number, cursor?: string) => Promise<InboxPageResult<unknown>>
   listRecycleBin: (limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   countPending: () => Promise<number>
@@ -121,7 +122,14 @@ export type BookmarkRepository = {
   archiveJobs: ResourceRepositories['archiveJobs']
   syncQueue: ResourceRepositories['syncQueue']
 	  backups: ResourceRepositories['backups']
-	}
+  navRules: {
+    list: () => Promise<unknown[]>
+    get: (id: string) => Promise<unknown | undefined>
+    create: (data: { id: string; name: string; mode: string; rule?: string; searchQuery?: string; sortOrder?: number; enabled?: boolean; createdAt?: number; updatedAt?: number }) => Promise<unknown>
+    update: (id: string, data: Record<string, unknown>) => Promise<unknown | undefined>
+    remove: (id: string) => Promise<void>
+  }
+}
 
 type ResourceRepositories = {
   scenes: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
@@ -245,7 +253,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     await db.insert(bookmarks).values(record).run()
     return record
   }
-  repository.list = async (filters = {}, limit = 50, cursor?: string) => {
+  repository.list = async (filters = {}, limit = 50, cursor?: string, opts?: { orderBy?: string }) => {
     const conditions = [filterCondition(filters)]
     if (cursor) {
       const decoded = decodeCursor(cursor)
@@ -253,7 +261,8 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     }
     const whereClause = conditions.length > 1 ? and(...conditions.filter(Boolean)) : conditions[0]
     const query = filters.sceneId || filters.tagId || filters.q ? db.select().from(bookmarks).leftJoin(bookmarkScenes, eq(bookmarks.id, bookmarkScenes.bookmarkId)).leftJoin(bookmarkTags, eq(bookmarks.id, bookmarkTags.bookmarkId)).leftJoin(tags, eq(bookmarkTags.tagId, tags.id)) : db.select().from(bookmarks)
-    const rows = await query.where(whereClause).orderBy(desc(bookmarks.createdAt), desc(bookmarks.id)).limit(limit + 1).all()
+    const orderBy = opts?.orderBy === 'lastOpenedAt' ? desc(bookmarks.lastOpenedAt) : desc(bookmarks.createdAt)
+    const rows = await query.where(whereClause).orderBy(orderBy, desc(bookmarks.id)).limit(limit + 1).all()
     return paginatedQuery(rows, limit, (row: any) => ({ createdAt: row.createdAt ?? row.bookmarks?.createdAt, id: row.id ?? row.bookmarks?.id }))
   }
   repository.listInbox = async (limit = 50, cursor?: string) => {
@@ -535,6 +544,26 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
       await db.update(backups).set(setData).where(eq(backups.id, id)).run()
       const rows = await db.select().from(backups).where(eq(backups.id, id)).all()
       return rows[0]
+    },
+  }
+
+  repository.navRules = {
+    list: async () => db.select().from(navRules).orderBy(navRules.sortOrder, navRules.createdAt).all(),
+    get: async (id) => {
+      const rows = await db.select().from(navRules).where(eq(navRules.id, id)).all()
+      return rows[0]
+    },
+    create: async (data) => {
+      const record = { ...data, rule: data.rule ?? null, searchQuery: data.searchQuery ?? null, enabled: data.enabled ?? true, createdAt: data.createdAt ?? now(), updatedAt: data.updatedAt ?? now() }
+      await db.insert(navRules).values(record).run()
+      return record
+    },
+    update: async (id, data) => {
+      await db.update(navRules).set(data).where(eq(navRules.id, id)).run()
+      return (await db.select().from(navRules).where(eq(navRules.id, id)).all())[0]
+    },
+    remove: async (id) => {
+      await db.delete(navRules).where(eq(navRules.id, id)).run()
     },
   }
 
