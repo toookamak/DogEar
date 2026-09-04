@@ -27,11 +27,11 @@
 - [x] Task 5: 实现 M2 工作台页面
   - [x] 增加登录页与登录态初始化、退出操作。
   - [x] 增加保存表单、Inbox 列表、空状态、加载状态、错误状态和未推送数量状态栏。
-  - [x] 打开 Bookmark 时先写访问记录，再导航到目标 URL；记录失败时保留导航并显示非阻塞反馈。
+  - [ ] 打开 Bookmark 时先写访问记录，再导航到目标 URL；记录失败时保留导航并显示非阻塞反馈。agent-browser 真实验证：阻断 `/api/bookmarks/*/access-records` 后点击 Inbox 链接，页面仍导航到 `https://example.com/browser-m2`，证明访问记录失败不阻断导航；没有可靠证据证明导航前非阻塞提示可见，因此不勾选完整验收项。
   - [x] 保证页面所有数据来自真实 API，不引入 mock、fixture 或 Dexie。
 
 - [ ] Task 6: 完成 M2 验收与收口
-  - [ ] 增加端到端或 API+页面联调验证：登录、保存、刷新、第二客户端读取、退出、失败提示和访问记录。agent-browser 已直接验证 localhost:5173 登录成功、工作台渲染、服务端 Inbox 数据读取、保存 `https://example.com/browser-m2` 后显示“已保存到 Inbox”并出现在列表、独立 m2b 会话读取同一列表、刷新后仍保持工作台、退出后回到登录页；点击顺序、失败提示和访问记录尚未验证。
+  - [ ] 增加端到端或 API+页面联调验证：登录、保存、刷新、第二客户端读取、退出、失败提示和访问记录。agent-browser 已直接验证 localhost:5173 登录成功、工作台渲染、服务端 Inbox 数据读取、保存 `https://example.com/browser-m2` 后显示“已保存到 Inbox”并出现在列表、独立 m2b 会话读取同一列表、刷新后仍保持工作台、退出后回到登录页；另验证阻断 `/api/bookmarks/*/access-records` 后点击 Inbox 链接仍导航到 `https://example.com/browser-m2`，证明访问记录失败不阻断导航；没有可靠证据证明非阻塞提示在导航前可见，点击顺序与访问记录写入结果仍未完成验证。
   - [x] 运行 shared/server/db/web 的 test、typecheck、lint 和 web build。shared、db、server 测试与 typecheck/lint 均通过；web 测试无测试文件但以 passWithNoTests 通过，typecheck/lint 通过，web build 通过。
   - [x] 检查未引入 Raindrop、S3、WebDAV、Dexie、Skill API 或多用户账号。
   - [ ] 更新 M2 checklist 和开发记录，按仓库规则分别提交代码与文档。已根据真实结果更新 checklist 和 CHANGELOG；按用户要求不提交 git，工作区不干净且保留未跟踪 SQLite。
