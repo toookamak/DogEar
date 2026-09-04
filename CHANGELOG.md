@@ -1,6 +1,6 @@
 # Changelog
 
-- 2026-09-04 / v0.2.0 — 正式注册核心账本与窗口定稿：`wiki/DogEar-数据库设计.md`、`wiki/DogEar-API设计.md`（v1.0 生效）；新增 `wiki/README.md` 定稿目录；草案原文归档。
+- 2026-09-04 / v0.2.0 / 453fa27 — 正式注册核心账本与窗口定稿：`wiki/DogEar-数据库设计.md`、`wiki/DogEar-API设计.md`（v1.0 生效）；新增 `wiki/README.md` 定稿目录；草案原文归档。
 
 - 2026-09-04 / v0.2.0 — 新增 M3/M4 核心账本与窗口草案：`docs/modules/数据库设计.md`、`docs/modules/API设计.md`（含业务逻辑说明；不改 wiki、不写代码）。
 
