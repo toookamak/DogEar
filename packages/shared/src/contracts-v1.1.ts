@@ -177,7 +177,7 @@ export const channelConfigSchema = z.object({
 export const channelConfigInputSchema = z.object({
   channel: channelNameSchema,
   label: z.string().min(1).max(100),
-  config: z.string().min(1),
+  config: z.union([z.string().min(1), z.record(z.unknown())]),
   enabled: z.boolean().optional(),
 })
 

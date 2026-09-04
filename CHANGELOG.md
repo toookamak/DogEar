@@ -1,6 +1,8 @@
 # Changelog
 
-- 2026-09-04 / v0.6.0 / 9c1cf10 — 数据库/API 结构表升至 v1.2：收编已有 M5–M7 表名与路径；本版只覆盖通道测试连通与一次上下传、三档备份可下载、导航规则存储；冲突/双向同步/快照产文件/规则求值仍禁止。
+- 2026-09-04 / v0.6.0 — M5/M6 连通：通道配置改走 channel_config，GET 掩码且禁止把 *** 写回；三通道 test；Raindrop 按 raindrop_id 去重导入；S3/WebDAV 导出冒烟；轻档备份可下载；快照入队并入 archive_jobs。
+
+- 2026-09-04 / v0.6.0 / 42a6f84 — 数据库/API 结构表升至 v1.2：收编已有 M5–M7 表名与路径；本版只覆盖通道测试连通与一次上下传、三档备份可下载、导航规则存储；冲突/双向同步/快照产文件/规则求值仍禁止。
 
 - 2026-09-04 / v0.6.0 — F-1: Docker 部署：创建 `apps/server/Dockerfile`（Bun + pnpm monorepo 多阶段构建）、`apps/web/Dockerfile`（Vite 构建 + Nginx 静态托管）、`apps/web/nginx.conf`（API 反向代理 + SPA fallback）、`docker-compose.yml`（server + web 双服务编排、持久卷、健康检查）、`.dockerignore`；更新 README 进度表与 AGENTS.md 状态为 M5-M7 完工
 - 2026-09-04 / v0.5.0 — M7-3: 前端导航页：创建 nav API 客户端 `apps/web/src/api/nav.ts`，创建 `NavPage` 组件 `apps/web/src/pages/NavPage.tsx`（展示最近访问 + 全部书签分页加载），添加 `/nav` 路由，在侧边栏添加导航链接；typecheck 通过。

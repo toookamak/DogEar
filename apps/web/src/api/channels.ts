@@ -37,7 +37,10 @@ export interface SaveChannelRequest {
 
 export const channelsApi = {
   list: () => api.get<ListChannelsResponse>('/api/channels'),
-  save: (config: SaveChannelRequest) => api.post<{ ok: boolean; id: string }>('/api/channels', config),
+  save: (config: SaveChannelRequest, id?: string) =>
+    id
+      ? api.patch<ChannelConfigItem>(`/api/channels/${id}`, config)
+      : api.post<{ ok: boolean; id: string }>('/api/channels', config),
   remove: (id: string) => api.delete<{ ok: boolean }>(`/api/channels/${id}`),
   import: (id: string) => api.post<ImportResponse>(`/api/channels/${id}/import`),
   export: (id: string) => api.post<ExportResponse>(`/api/channels/${id}/export`),

@@ -4,6 +4,7 @@ import { channelsApi } from '../../api/channels.js'
 
 interface ChannelConfigProps {
   channel: ChannelConfigItem | null
+  defaultChannel?: 'raindrop' | 's3' | 'webdav'
   onSaved: () => void
   onCancel: () => void
 }
@@ -14,10 +15,10 @@ const channelNames: Record<string, string> = {
   webdav: 'WebDAV',
 }
 
-export function ChannelConfig({ channel, onSaved, onCancel }: ChannelConfigProps) {
+export function ChannelConfig({ channel, defaultChannel = 'raindrop', onSaved, onCancel }: ChannelConfigProps) {
   const isNew = !channel
   const [channelType, setChannelType] = useState<'raindrop' | 's3' | 'webdav'>(
-    channel?.channel as any || 'raindrop'
+    (channel?.channel as 'raindrop' | 's3' | 'webdav' | undefined) || defaultChannel
   )
   const [label, setLabel] = useState(channel?.label || '')
   // Raindrop fields
@@ -72,8 +73,7 @@ export function ChannelConfig({ channel, onSaved, onCancel }: ChannelConfigProps
         setTestResult({ ok: false, message: '请输入 Raindrop API Token' })
         return
       }
-      const actualToken = isNew ? token : '' // For existing, keep the original on backend
-      configJson = JSON.stringify({ token: actualToken || token })
+      configJson = JSON.stringify(token.trim() ? { token: token.trim() } : {})
     } else if (channelType === 'webdav') {
       if (!webdavUrl.trim() && isNew) {
         setTestResult({ ok: false, message: '请输入 WebDAV 地址' })
@@ -90,7 +90,7 @@ export function ChannelConfig({ channel, onSaved, onCancel }: ChannelConfigProps
       configJson = JSON.stringify({
         url: webdavUrl || channel?.config.url || '',
         username: webdavUsername || channel?.config.username || '',
-        password: webdavPassword || '',
+        ...(webdavPassword.trim() ? { password: webdavPassword.trim() } : {}),
       })
     } else {
       configJson = JSON.stringify({})
@@ -103,7 +103,7 @@ export function ChannelConfig({ channel, onSaved, onCancel }: ChannelConfigProps
         label: label.trim(),
         config: configJson,
         enabled: true,
-      })
+      }, channel?.id)
       setSaving(false)
       onSaved()
     } catch (e) {
@@ -172,9 +172,9 @@ export function ChannelConfig({ channel, onSaved, onCancel }: ChannelConfigProps
             </label>
             <input
               type="password"
-              value={isNew ? token : displayToken(channel?.config.token)}
+              value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="输入你的 Raindrop API Token"
+              placeholder={isNew ? '输入你的 Raindrop API Token' : `已保存 ${displayToken(channel?.config.token)}，留空则保留`}
               className="input"
               style={{ width: '400px' }}
             />
@@ -224,9 +224,9 @@ export function ChannelConfig({ channel, onSaved, onCancel }: ChannelConfigProps
               </label>
               <input
                 type="password"
-                value={isNew ? webdavPassword : (webdavPassword || displayMasked(channel?.config.password))}
+                value={webdavPassword}
                 onChange={(e) => setWebdavPassword(e.target.value)}
-                placeholder="WebDAV 密码"
+                placeholder={isNew ? 'WebDAV 密码' : `已保存 ${displayMasked(channel?.config.password)}，留空则保留`}
                 className="input"
                 style={{ width: '300px' }}
               />

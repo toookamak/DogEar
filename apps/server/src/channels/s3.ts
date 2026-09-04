@@ -30,14 +30,9 @@ export class S3ClientExtended {
     this.bucket = config.bucket
   }
 
-  async testConnection(): Promise<boolean> {
-    try {
-      const command = new HeadBucketCommand({ Bucket: this.bucket })
-      await this.client.send(command)
-      return true
-    } catch {
-      return false
-    }
+  async testConnection(): Promise<void> {
+    const command = new HeadBucketCommand({ Bucket: this.bucket })
+    await this.client.send(command)
   }
 
   async listFiles(prefix: string): Promise<string[]> {

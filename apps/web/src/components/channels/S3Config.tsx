@@ -94,9 +94,6 @@ export function S3Config({ channel, onSaved, onCancel }: S3ConfigProps) {
     }
     if (secretAccessKey.trim()) {
       configPayload.secretAccessKey = secretAccessKey.trim()
-    } else if (channel?.config.secretAccessKey) {
-      // Re-send the original masked value (backend will use it as-is if it's masked)
-      configPayload.secretAccessKey = String(channel.config.secretAccessKey)
     }
 
     setSaving(true)
@@ -106,7 +103,7 @@ export function S3Config({ channel, onSaved, onCancel }: S3ConfigProps) {
         label: label.trim(),
         config: JSON.stringify(configPayload),
         enabled: true,
-      })
+      }, channel?.id)
       setSaving(false)
       onSaved()
     } catch (e) {

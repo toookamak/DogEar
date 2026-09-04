@@ -6,4 +6,5 @@ export const backupApi = {
     api.post<BackupResponse>('/api/backup', { tier, target }),
   list: () => api.get<{ items: BackupResponse[] }>('/api/backup'),
   get: (id: string) => api.get<BackupResponse>(`/api/backup/${id}`),
+  downloadUrl: (id: string) => `/api/backup/${id}/download`,
 }

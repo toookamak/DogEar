@@ -51,6 +51,7 @@ export class WebDAVClient {
       throw new Error('WebDAV insufficient storage')
     }
 
+    if (response.status === 207) return response
     if (!response.ok) {
       throw new Error(`WebDAV error: ${response.status} ${response.statusText}`)
     }
@@ -61,15 +62,10 @@ export class WebDAVClient {
   /**
    * Test connectivity by sending PROPFIND to the root.
    */
-  async testConnection(): Promise<boolean> {
-    try {
-      const response = await this.request('PROPFIND', '', {
-        headers: { Depth: '0' },
-      })
-      return response.ok
-    } catch {
-      return false
-    }
+  async testConnection(): Promise<void> {
+    await this.request('PROPFIND', '', {
+      headers: { Depth: '0' },
+    })
   }
 
   /**

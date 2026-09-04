@@ -240,6 +240,7 @@ function createIndexes(database: SqliteDatabase) {
   database.run('CREATE INDEX IF NOT EXISTS bookmarks_deleted_at_created_at_idx ON bookmarks(deleted_at, created_at)')
   database.run('CREATE INDEX IF NOT EXISTS bookmarks_folder_id_idx ON bookmarks(folder_id)')
   database.run('CREATE INDEX IF NOT EXISTS bookmarks_sync_status_idx ON bookmarks(sync_status)')
+  database.run('CREATE INDEX IF NOT EXISTS bookmarks_raindrop_id_idx ON bookmarks(raindrop_id)')
   database.run('CREATE INDEX IF NOT EXISTS bookmark_scenes_scene_id_idx ON bookmark_scenes(scene_id)')
   database.run('CREATE INDEX IF NOT EXISTS bookmark_tags_tag_id_idx ON bookmark_tags(tag_id)')
   database.run('CREATE INDEX IF NOT EXISTS access_records_bookmark_id_opened_at_idx ON access_records(bookmark_id, opened_at)')

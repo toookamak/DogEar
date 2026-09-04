@@ -401,6 +401,11 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.route('/api/metadata', createMetadataRoutes())
   app.route('/api/nav', createNavRoutes(repository))
 
+  app.get('/api/settings', async (c) => {
+    const rows = await repository.settings.list() as { key: string; value: unknown; updatedAt?: unknown }[]
+    const items = rows.filter((row) => !row.key.includes('token') && !row.key.includes('password') && row.key !== 'skill.token_hash')
+    return c.json({ items })
+  })
   app.put('/api/settings', async (c) => {
     const body = await c.req.json().catch(() => undefined) as Record<string, unknown> | undefined
     if (!body) return invalidRequest(c)

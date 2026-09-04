@@ -175,6 +175,11 @@ export function SettingsSection() {
                     {backup.error && ` · ${backup.error}`}
                   </div>
                 </div>
+                {backup.status === 'completed' && (
+                  <a href={backupApi.downloadUrl(backup.id)} className="btn-secondary-pill" style={{ fontSize: '12px' }}>
+                    下载
+                  </a>
+                )}
               </div>
             ))}
           </div>

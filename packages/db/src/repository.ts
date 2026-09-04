@@ -8,6 +8,7 @@ import {
   bookmarkScenes,
   bookmarkTags,
   bookmarks,
+  channelConfig,
   folders,
   idempotencyKeys,
   navRules,
@@ -98,6 +99,7 @@ export type BookmarkRepository = {
   createAccessRecord: (input: AccessRecordInput) => Promise<unknown>
   listAccessRecords: (bookmarkId: string) => Promise<unknown[]>
   get: (id: string, includeDeleted?: boolean) => Promise<unknown | undefined>
+  findByRaindropId: (raindropId: string) => Promise<unknown | undefined>
   search: (filters: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   update: (id: string, input: BookmarkUpdate) => Promise<unknown | undefined>
   batchUpdate: (input: BatchUpdate) => Promise<{ updated: unknown[]; skipped: BatchUpdateSkippedItem[] }>
@@ -129,6 +131,7 @@ export type BookmarkRepository = {
     update: (id: string, data: Record<string, unknown>) => Promise<unknown | undefined>
     remove: (id: string) => Promise<void>
   }
+  channelConfig: ResourceRepositories['channelConfig']
 }
 
 type ResourceRepositories = {
@@ -148,9 +151,17 @@ type ResourceRepositories = {
   }
   archiveJobs: {
     list: (bookmarkId?: string) => Promise<unknown[]>
+    get: (id: string) => Promise<unknown | undefined>
     create: (input: Record<string, unknown>) => Promise<unknown>
     update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>
     getStatus: (id: string) => Promise<string | undefined>
+  }
+  channelConfig: {
+    list: () => Promise<unknown[]>
+    get: (id: string) => Promise<unknown | undefined>
+    create: (data: { id: string; channel: string; label: string; config: string; enabled?: boolean }) => Promise<unknown>
+    update: (id: string, data: { label?: string; config?: string; enabled?: boolean }) => Promise<unknown | undefined>
+    remove: (id: string) => Promise<boolean>
   }
   syncQueue: {
     enqueue: (action: string, targetType: string, targetId: string, channel: string, payload?: string | null) => Promise<SyncQueueItem>
@@ -295,12 +306,17 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     if (!row) return undefined
     return { ...row, ...(await readRelations(db, id)) }
   }
+  repository.findByRaindropId = async (raindropId) => {
+    const rows = await db.select().from(bookmarks).where(and(eq(bookmarks.raindropId, raindropId), isNull(bookmarks.deletedAt))).all()
+    return rows[0]
+  }
   repository.search = async (filters, limit = 50, cursor?: string) => repository.list(filters, limit, cursor)
   repository.update = async (id, input) => transaction(db, async (tx) => {
     const existing = await tx.select().from(bookmarks).where(and(eq(bookmarks.id, id), isNull(bookmarks.deletedAt))).all()
     if (!existing[0]) return undefined
     const timestamp = now()
-    const changes = Object.fromEntries(Object.entries(input).filter(([key]) => !['tagIds', 'sceneIds', 'confirmStructure'].includes(key)))
+    const allowed = new Set(['title', 'excerpt', 'cover', 'note', 'intent', 'important', 'private', 'status', 'folderId', 'raindropId', 'raindropExtras', 'syncStatus', 'author', 'favicon', 'domain', 'publishedAt', 'broken'])
+    const changes = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.has(key)))
     await tx.update(bookmarks).set({ ...changes, version: existing[0].version + 1, updatedAt: timestamp }).where(eq(bookmarks.id, id)).run()
     await replaceRelations(tx, id, input, timestamp)
     return repository.get(id)
@@ -447,6 +463,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
   }
   repository.archiveJobs = {
     list: async (bookmarkId) => db.select().from(archiveJobs).where(bookmarkId ? eq(archiveJobs.bookmarkId, bookmarkId) : undefined).orderBy(desc(archiveJobs.createdAt)).all(),
+    get: async (id) => (await db.select().from(archiveJobs).where(eq(archiveJobs.id, id)).all())[0],
     create: async (input) => {
       const timestamp = now()
       const record = {
@@ -544,6 +561,40 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
       await db.update(backups).set(setData).where(eq(backups.id, id)).run()
       const rows = await db.select().from(backups).where(eq(backups.id, id)).all()
       return rows[0]
+    },
+  }
+
+  repository.channelConfig = {
+    list: async () => db.select().from(channelConfig).orderBy(desc(channelConfig.createdAt)).all(),
+    get: async (id) => (await db.select().from(channelConfig).where(eq(channelConfig.id, id)).all())[0],
+    create: async (data) => {
+      const timestamp = now()
+      const record = {
+        id: data.id,
+        channel: data.channel,
+        label: data.label,
+        config: data.config,
+        enabled: data.enabled ?? true,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      }
+      await db.insert(channelConfig).values(record).run()
+      return record
+    },
+    update: async (id, data) => {
+      const existing = (await db.select().from(channelConfig).where(eq(channelConfig.id, id)).all())[0]
+      if (!existing) return undefined
+      const timestamp = now()
+      const setData: Record<string, unknown> = { updatedAt: timestamp }
+      if (data.label !== undefined) setData.label = data.label
+      if (data.config !== undefined) setData.config = data.config
+      if (data.enabled !== undefined) setData.enabled = data.enabled
+      await db.update(channelConfig).set(setData).where(eq(channelConfig.id, id)).run()
+      return (await db.select().from(channelConfig).where(eq(channelConfig.id, id)).all())[0]
+    },
+    remove: async (id) => {
+      await db.delete(channelConfig).where(eq(channelConfig.id, id)).run()
+      return true
     },
   }
 

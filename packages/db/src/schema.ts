@@ -74,6 +74,7 @@ export const bookmarks = sqliteTable('bookmarks', {
   deletedCreatedAtIdx: index('bookmarks_deleted_at_created_at_idx').on(table.deletedAt, table.createdAt),
   folderIdx: index('bookmarks_folder_id_idx').on(table.folderId),
   syncStatusIdx: index('bookmarks_sync_status_idx').on(table.syncStatus),
+  raindropIdIdx: index('bookmarks_raindrop_id_idx').on(table.raindropId),
 }))
 
 export const scenes = sqliteTable('scenes', {

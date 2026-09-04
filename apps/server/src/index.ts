@@ -27,22 +27,7 @@ async function processSyncQueue() {
     if (items.length === 0) return
 
     const item = items[0]
-    console.log(`[sync-worker] Processing ${item.id} (${item.action} ${item.targetType}:${item.targetId} via ${item.channel})`)
-
-    // Mark as processing
-    await repository.syncQueue.updateStatus(item.id, 'processing')
-
-    try {
-      // Channel-specific processing will be added here
-      // For now, all items are marked as succeeded (no-op processing)
-      // TODO: Implement actual channel handlers (Raindrop, S3, WebDAV)
-      await repository.syncQueue.updateStatus(item.id, 'succeeded')
-      console.log(`[sync-worker] Completed ${item.id}`)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err)
-      console.error(`[sync-worker] Failed ${item.id}: ${errorMessage}`)
-      await repository.syncQueue.updateStatus(item.id, 'failed', errorMessage)
-    }
+    console.log(`[sync-worker] Skipping ${item.id}; queue consumption postponed`)
   } catch (err) {
     console.error('[sync-worker] Error fetching queue items:', err instanceof Error ? err.message : String(err))
   }

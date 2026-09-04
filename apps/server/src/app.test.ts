@@ -23,6 +23,7 @@ function repository(): any {
       return result
     },
     get: async (id: string) => records.find((record) => record.id === id),
+    findByRaindropId: async (raindropId: string) => records.find((record) => (record as any).raindropId === raindropId),
     search: async (filters?: any, limit?: number, cursor?: string) => {
       const items = records
       return { items, nextCursor: null }
@@ -42,8 +43,24 @@ function repository(): any {
     tags: {},
     suggestions: { create: async (input: Record<string, unknown>) => input },
     operationLog: { append: async (input: Record<string, unknown>) => input },
-    settings: {},
-    archiveJobs: { create: async (input: Record<string, unknown>) => input, getStatus: async () => undefined },
+    archiveJobs: {
+      list: async () => [],
+      get: async () => undefined,
+      create: async (input: Record<string, unknown>) => input,
+      update: async () => undefined,
+      getStatus: async () => undefined,
+    },
+    channelConfig: {
+      list: async () => [],
+      get: async () => undefined,
+      create: async (input: Record<string, unknown>) => input,
+      update: async () => undefined,
+      remove: async () => true,
+    },
+    settings: { list: async () => [], get: async () => undefined, set: async (key: string, value: unknown) => ({ key, value }) },
+    syncQueue: { enqueue: async () => ({}), getPending: async () => [], updateStatus: async () => undefined, remove: async () => true, countPending: async () => 0 },
+    backups: { create: async (input: Record<string, unknown>) => input, get: async () => undefined, list: async () => [], updateStatus: async () => undefined },
+    navRules: { list: async () => [], get: async () => undefined, create: async (input: Record<string, unknown>) => input, update: async () => undefined, remove: async () => undefined },
 
     list: async (filters?: any, limit?: number, cursor?: string) => {
       return { items: [...records], nextCursor: null }

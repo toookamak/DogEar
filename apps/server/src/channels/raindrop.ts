@@ -95,7 +95,7 @@ export class RaindropClient {
   }
 
   async fetchBookmarks(page = 0, perPage = 50): Promise<{ items: RaindropBookmark[]; total: number }> {
-    const response = await this.request<RaindropResponse<RaindropBookmark[]>>(`/raindrops?page=${page}&perpage=${perPage}`)
+    const response = await this.request<RaindropResponse<RaindropBookmark[]>>(`/raindrops/0?page=${page}&perpage=${perPage}`)
     return {
       items: response.items || [],
       total: response.count || 0,
@@ -143,12 +143,7 @@ export class RaindropClient {
     return response.items || []
   }
 
-  async testConnection(): Promise<boolean> {
-    try {
-      await this.getCollections()
-      return true
-    } catch {
-      return false
-    }
+  async testConnection(): Promise<void> {
+    await this.request('/user')
   }
 }

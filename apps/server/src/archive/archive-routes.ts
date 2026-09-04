@@ -12,21 +12,21 @@ export function createArchiveRoutes(repository: BookmarkRepository) {
     const bookmarkId = body.bookmarkId
     const type = body.type ?? 'snapshot'
     if (!bookmarkId) return c.json({ error: { code: 'VALIDATION_ERROR', message: 'bookmarkId required' } }, 400)
+    if (type === 'reader') return c.json({ error: { code: 'NOT_SUPPORTED', message: 'Reader archive is not supported' } }, 400)
+    if (!await repository.get(bookmarkId)) return c.json({ error: { code: 'NOT_FOUND', message: 'Bookmark not found' } }, 404)
     const job = await archiveService.createJob(bookmarkId, type)
     return c.json({ jobId: job.id, snapshotStatus: 'queued_pending_browser' }, 201)
   })
 
-  // GET /api/archive/:id - get job status
+  app.get('/bookmark/:bookmarkId', async (c) => {
+    const jobs = await archiveService.getJobsByBookmark(c.req.param('bookmarkId'))
+    return c.json({ items: jobs })
+  })
+
   app.get('/:id', async (c) => {
     const job = await archiveService.getJob(c.req.param('id'))
     if (!job) return c.json({ error: { code: 'NOT_FOUND', message: 'Job not found' } }, 404)
     return c.json(job)
-  })
-
-  // GET /api/archive/bookmark/:bookmarkId - list jobs for a bookmark
-  app.get('/bookmark/:bookmarkId', async (c) => {
-    const jobs = await archiveService.getJobsByBookmark(c.req.param('bookmarkId'))
-    return c.json({ items: jobs })
   })
 
   // POST /api/archive/:id/retry - retry a failed job

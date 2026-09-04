@@ -48,7 +48,7 @@ export class BackupService {
       case 'light':
         return ['bookmarks:csv']
       case 'medium':
-        return ['bookmarks:csv', 'snapshots']
+        return ['bookmarks:csv', 'settings']
       case 'full':
         return ['database:full']
     }
@@ -92,18 +92,26 @@ export class BackupService {
   }
 
   private async createMediumBackup(backupDir: string, backupId: string): Promise<{ filePath: string; fileSize: number }> {
-    // Medium backup: CSV plus any snapshot files
-    // For now, just do the CSV backup since snapshot handling needs more infrastructure
-    // In future, this would include copying snapshot files to backup
-    return this.createLightBackup(backupDir, backupId)
+    const light = await this.createLightBackup(backupDir, backupId)
+    const settingsRows = await this.repository.settings.list() as { key: string; value: unknown }[]
+    const settings = Object.fromEntries(
+      settingsRows
+        .filter((row) => !row.key.includes('token') && !row.key.includes('password'))
+        .map((row) => [row.key, row.value]),
+    )
+    const filePath = join(backupDir, `${backupId}-medium.json`)
+    const { writeFile, stat } = await import('node:fs/promises')
+    const { readFile } = await import('node:fs/promises')
+    const csv = await readFile(light.filePath, 'utf8')
+    await writeFile(filePath, JSON.stringify({ includes: ['bookmarks:csv', 'settings'], csv, settings }, null, 2))
+    const info = await stat(filePath)
+    return { filePath, fileSize: info.size }
   }
 
   private async createFullBackup(backupDir: string, backupId: string): Promise<{ filePath: string; fileSize: number }> {
-    // Full backup: copy the entire database file
-    // This works for SQLite (track B), for D1 (track A) this would need to dump all tables
-    const dbPath = process.env.DOGEAR_DATABASE_PATH
+    const dbPath = process.env.DOGEAR_DB_PATH ?? process.env.DOGEAR_DATABASE_PATH
     if (!dbPath) {
-      throw new Error('DOGEAR_DATABASE_PATH environment variable is required for full backup')
+      throw new Error('DOGEAR_DB_PATH or DOGEAR_DATABASE_PATH is required for full backup')
     }
 
     const { copyFile, stat } = await import('node:fs/promises')

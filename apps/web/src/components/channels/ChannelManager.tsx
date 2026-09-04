@@ -76,7 +76,6 @@ export function ChannelManager() {
   }
 
   const handleStartAdd = () => {
-    setChannelTab('raindrop')
     setAdding(true)
   }
 
@@ -140,6 +139,7 @@ export function ChannelManager() {
         {channelTab === 'raindrop' && (
           <ChannelConfig
             channel={editing}
+            defaultChannel="raindrop"
             onSaved={handleSaved}
             onCancel={handleCancel}
           />
@@ -154,17 +154,12 @@ export function ChannelManager() {
         )}
 
         {channelTab === 'webdav' && (
-          <div className="card" style={{ padding: 'var(--spacing-16)' }}>
-            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 500, margin: '0 0 var(--spacing-12)' }}>
-              {adding ? '添加 WebDAV 通道' : '编辑 WebDAV 通道'}
-            </h3>
-            <p style={{ fontFamily: 'var(--font-ui)', fontSize: '14px', color: 'var(--color-text-secondary)' }}>
-              WebDAV 通道即将推出，敬请期待。
-            </p>
-            <button onClick={handleCancel} className="btn-secondary" style={{ marginTop: 'var(--spacing-12)' }}>
-              返回
-            </button>
-          </div>
+          <ChannelConfig
+            channel={editing}
+            defaultChannel="webdav"
+            onSaved={handleSaved}
+            onCancel={handleCancel}
+          />
         )}
       </div>
     )
