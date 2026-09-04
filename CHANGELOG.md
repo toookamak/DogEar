@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-09-04 / v0.5.0 — M7-3: 前端导航页：创建 nav API 客户端 `apps/web/src/api/nav.ts`，创建 `NavPage` 组件 `apps/web/src/pages/NavPage.tsx`（展示最近访问 + 全部书签分页加载），添加 `/nav` 路由，在侧边栏添加导航链接；typecheck 通过。
 - 2026-09-04 / v0.5.0 — M6-2: Archive Job 引擎：添加 `archives` 仓库方法到 `packages/db/src/repository.ts`（create/get/listByBookmark/updateStatus/listPending/countPending），创建 `apps/server/src/archive/archive-service.ts`（ArchiveJobService 状态机：createJob/getJob/getJobsByBookmark/processPending/retryJob/cancelJob），创建 `apps/server/src/archive/archive-routes.ts`（REST API：POST/GET /api/archive、GET /api/archive/bookmark/:id、POST retry/cancel），挂载到 `apps/server/src/app.ts`（requireSession 保护 `/api/archive`）；typecheck 通过。
 - 2026-09-04 / v0.5.0 — M6-4: Metadata 增强：创建元数据提取服务 `apps/server/src/archive/metadata.ts`，暴露 `/api/metadata/extract` API 端点，在保存新书签时异步提取网页元数据（title/excerpt/cover/author/domain/favicon/publishedAt）并更新书签；typecheck 通过。
 - 2026-09-04 / v0.5.0 — M6-3: SingleFile 快照：创建 archive API 客户端（apps/web/src/api/archive.ts）、SnapshotButton 组件（apps/web/src/components/bookmarks/SnapshotButton.tsx），集成到 BookmarkDetail 详情面板（备注字段后、保存按钮前）；typecheck 通过。

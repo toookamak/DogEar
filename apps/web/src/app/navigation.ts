@@ -5,6 +5,7 @@ export interface NavItem {
 }
 
 export const navItems: NavItem[] = [
+  { path: '/nav', label: '导航页' },
   { path: '/', label: 'Inbox' },
   { path: '/bookmarks', label: '书签' },
   { path: '/organization', label: '组织管理' },

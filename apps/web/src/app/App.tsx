@@ -6,6 +6,7 @@ import { RecycleBinPage } from '../pages/RecycleBinPage.js'
 import { OrganizationPage } from '../pages/OrganizationPage.js'
 import { SettingsPage } from '../pages/SettingsPage.js'
 import { ImportResultPage } from '../pages/ImportResultPage.js'
+import { NavPage } from '../pages/NavPage.js'
 
 export function App() {
   const [location] = useLocation()
@@ -24,6 +25,7 @@ export function App() {
         <Route path="/recycle-bin" component={RecycleBinPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route path="/import-result" component={ImportResultPage} />
+        <Route path="/nav" component={NavPage} />
         <Route>404</Route>
       </Switch>
     </AppShell>

@@ -226,3 +226,17 @@ export const channelConfig = sqliteTable('channel_config', {
 }, (table) => ({
   channelEnabledIdx: index('channel_config_channel_enabled_idx').on(table.channel, table.enabled),
 }))
+
+export const navRules = sqliteTable('nav_rules', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  mode: text('mode').notNull().default('all'), // 'all' | 'rule' | 'search' | 'hide'
+  rule: text('rule'), // JSON: { sceneIds?: string[]; folderIds?: string[]; tagIds?: string[]; status?: string }
+  searchQuery: text('search_query'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => ({
+  enabledOrderIdx: index('nav_rules_enabled_sort_order_idx').on(table.enabled, table.sortOrder),
+}))

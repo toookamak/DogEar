@@ -183,18 +183,29 @@ const tableDefinitions: Record<string, string> = {
 	    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
 	  )`,
 	  backups: `CREATE TABLE IF NOT EXISTS backups (
-	    id TEXT PRIMARY KEY NOT NULL,
-	    tier TEXT NOT NULL,
-	    target TEXT NOT NULL,
-	    status TEXT NOT NULL DEFAULT 'pending',
-	    file_path TEXT,
-	    file_size INTEGER,
-	    includes TEXT NOT NULL,
-	    error TEXT,
-	    created_at INTEGER NOT NULL,
-	    completed_at INTEGER
-	  )`,
-	}
+		    id TEXT PRIMARY KEY NOT NULL,
+		    tier TEXT NOT NULL,
+		    target TEXT NOT NULL,
+		    status TEXT NOT NULL DEFAULT 'pending',
+		    file_path TEXT,
+		    file_size INTEGER,
+		    includes TEXT NOT NULL,
+		    error TEXT,
+		    created_at INTEGER NOT NULL,
+		    completed_at INTEGER
+		  )`,
+		  nav_rules: `CREATE TABLE IF NOT EXISTS nav_rules (
+		    id TEXT PRIMARY KEY NOT NULL,
+		    name TEXT NOT NULL,
+		    mode TEXT NOT NULL DEFAULT 'all',
+		    rule TEXT,
+		    search_query TEXT,
+		    sort_order INTEGER NOT NULL DEFAULT 0,
+		    enabled INTEGER NOT NULL DEFAULT 1,
+		    created_at INTEGER NOT NULL,
+		    updated_at INTEGER NOT NULL
+		  )`,
+		}
 
 const bookmarkColumns: Record<string, string> = {
   title: 'ALTER TABLE bookmarks ADD COLUMN title TEXT',
@@ -273,7 +284,7 @@ export function initializeSqliteSchema(database: SqliteDatabase) {
     for (const [column, statement] of Object.entries(bookmarkColumns)) {
       if (!columns.has(column)) database.run(statement)
     }
-    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs', 'idempotency_keys', 'skill_usage', 'sync_queue', 'channel_config', 'archives', 'backups']) {
+    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs', 'idempotency_keys', 'skill_usage', 'sync_queue', 'channel_config', 'archives', 'backups', 'nav_rules']) {
       database.run(tableDefinitions[table])
     }
     if (!columnsFor(database, 'access_records').has('client')) {

@@ -119,6 +119,9 @@ export {
   workbenchCreateBookmarkInputSchema,
   workbenchPatchBookmarkInputSchema,
   workbenchPatchBookmarkResponseSchema,
+  navRuleModeSchema,
+  navRuleSchema,
+  navRuleInputSchema,
 } from './contracts-v1.1.js'
 export type {
   Archive,
@@ -142,4 +145,6 @@ export type {
   WorkbenchCreateBookmarkInput,
   WorkbenchPatchBookmarkInput,
   WorkbenchPatchBookmarkResponse,
+  NavRule,
+  NavRuleInput,
 } from './contracts-v1.1.js'

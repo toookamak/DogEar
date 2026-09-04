@@ -228,3 +228,29 @@ export const backupConfigSchema = z.object({
 export type Archive = z.infer<typeof archiveSchema>
 export type Backup = z.infer<typeof backupSchema>
 export type BackupConfig = z.infer<typeof backupConfigSchema>
+
+export const navRuleModeSchema = z.enum(['all', 'rule', 'search', 'hide'])
+
+export const navRuleSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  mode: navRuleModeSchema,
+  rule: z.string().nullable(),
+  searchQuery: z.string().nullable(),
+  sortOrder: z.number().int().nonnegative(),
+  enabled: z.boolean(),
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+})
+
+export const navRuleInputSchema = z.object({
+  name: z.string().min(1).max(100),
+  mode: navRuleModeSchema,
+  rule: z.string().optional(),
+  searchQuery: z.string().optional(),
+  sortOrder: z.number().int().nonnegative().optional(),
+  enabled: z.boolean().optional(),
+})
+
+export type NavRule = z.infer<typeof navRuleSchema>
+export type NavRuleInput = z.infer<typeof navRuleInputSchema>
