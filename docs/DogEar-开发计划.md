@@ -25,9 +25,9 @@
 | --- | --- | --- |
 | 需求总纲 v1.0.7 | `wiki/DogEar_折耳书签_需求总纲_v1.0.7.md` | 唯一需求源。做什么、不做什么、怎样算过关，一律回指这里。 |
 | 技术总纲 v1.0_DeepSeek | `docs/DogEar_折耳书签_技术总纲_v1.0_DeepSeek.md` | 工程蓝图（栈、真源、双轨、Skill、快照口径）。实现选型回指这里。 |
-| Scene / AI 细部 | `docs/modules/Scene-AI与待设计细部.md` | 四维组织与建议先行的未决细部。M4 开工前读，不在本文展开。 |
-| 数据库设计 | `docs/modules/数据库设计.md` | 给人看的账本设计说明。不进 wiki。 |
-| API 设计 | `docs/modules/API设计.md` | 给人看的窗口设计说明。不进 wiki。 |
+| Scene / AI 细部 | `docs/modules/20260904_Scene-AI与待设计细部.md` | 四维组织与建议先行的未决细部。M4 开工前读，不在本文展开。 |
+| 数据库设计 | `docs/modules/20260904_数据库设计.md` | 给人看的账本设计说明。不进 wiki。 |
+| API 设计 | `docs/modules/20260904_API设计.md` | 给人看的窗口设计说明。不进 wiki。 |
 | 数据库结构表 | `docs/数据库结构表.md` | 开发约束：建表/迁移只按此。 |
 | API 结构表 | `docs/API结构表.md` | 开发约束：路由/Zod 只按此。 |
 | 本文 | `docs/` 过程文档（本文件为草案） | **执行顺序、任务拆解、验收清单**。不是第二份 PRD，也不是第二份技术总纲。 |
@@ -399,7 +399,7 @@ M2 过关（真源 + 工作台能读刚写入的书签）。Skill Token 与工�
 
 #### 依赖
 
-M2 必须。M3 不必须；可与 M3 末期并行。Scene 细部读 docs/modules/Scene-AI与待设计细部.md，有冲突停下来问，不改 wiki。
+M2 必须。M3 不必须；可与 M3 末期并行。Scene 细部读 docs/modules/20260904_Scene-AI与待设计细部.md，有冲突停下来问，不改 wiki。
 
 #### 本程做
 

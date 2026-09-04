@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-04 / v0.4.0 — 模块文档统一加创建日期前缀：`API设计/数据库设计/Scene-AI与待设计细部` 等 5 个改名并同步全仓引用；新增 `docs/modules/20260904_备份功能设计.md`（备份目标、频率、内容、保留、恢复/删除、本地导入导出）与 `docs/modules/20260904_同步功能设计.md`（Raindrop Token/自动手动同步）。
+
 - 2026-09-04 / v0.4.0 / e69620b — M3+M4 后端：数据库结构补全、共享契约扩展、仓库层增强、M3 Skill API（7 个 Skill + Bearer 鉴权 + 能力开关 + 限速）、M4 工作台 REST（书签组织/回收站/Scene/Folder/Tag CRUD/建议/日志/设置/Job 占位）
 
 - 2026-09-04 / v0.2.0 — 数据库/API 结构表将「当前覆盖与升级条件」改作正文第 1 章，不再放在文头注释里。
@@ -8,11 +10,11 @@
 
 - 2026-09-04 / v0.2.0 — 新增开发约束：`docs/数据库结构表.md`、`docs/API结构表.md`；设计说明仍留 `docs/modules/`，不进 wiki。
 
-- 2026-09-04 / v0.2.0 — 撤回误写入 wiki 的账本/API 定稿与注册表；现行生效稿改回 `docs/modules/数据库设计.md`、`docs/modules/API设计.md`；技术总纲恢复原承接表述。
+- 2026-09-04 / v0.2.0 — 撤回误写入 wiki 的账本/API 定稿与注册表；现行生效稿改回 `docs/modules/20260904_数据库设计.md`、`docs/modules/20260904_API设计.md`；技术总纲恢复原承接表述。
 
-- 2026-09-04 / v0.2.0 / 453fa27 — 正式注册核心账本与窗口定稿：`wiki/DogEar-数据库设计.md`、`wiki/DogEar-API设计.md`（v1.0 生效）；新增 `wiki/README.md` 定稿目录；草案原文归档。
+- 2026-09-04 / v0.2.0 / 453fa27 — 正式注册核心账本与窗口定稿：`wiki/DogEar-20260904_数据库设计.md`、`wiki/DogEar-20260904_API设计.md`（v1.0 生效）；新增 `wiki/README.md` 定稿目录；草案原文归档。
 
-- 2026-09-04 / v0.2.0 — 新增 M3/M4 核心账本与窗口草案：`docs/modules/数据库设计.md`、`docs/modules/API设计.md`（含业务逻辑说明；不改 wiki、不写代码）。
+- 2026-09-04 / v0.2.0 — 新增 M3/M4 核心账本与窗口草案：`docs/modules/20260904_数据库设计.md`、`docs/modules/20260904_API设计.md`（含业务逻辑说明；不改 wiki、不写代码）。
 
 - 2026-09-04 / v0.2.0 — 修复 M2 浏览器登录 CORS credentials 配置，仅允许 <http://localhost:5173> 携带 Cookie 的请求。
 
@@ -32,7 +34,7 @@
 
 - **2026-09-03 · AGENTS 项目简介同步技术收敛结果** `5a8dbf6`：AGENTS.md 项目简介回填技术待定项收敛结果——后端/部署标注双轨已定（轨 A Workers 默认、轨 B Docker 兜底，轨 B 默认 Bun + bun:sqlite，Node + better-sqlite3 回退）；数据行改真源 DB 双轨（轨 A D1 / 轨 B SQLite）＋ Dexie/IndexedDB 仅端侧镜像缓存；「现在做到哪」改为技术待定项已收敛（技术总纲 §11 T-1\~T-12，2026-09-03 定稿）
 
-- **2026-09-03 · 技术待定项收敛（T-1\~T-12）** `8ad8145`：按 `docs/modules/技术待定项收敛清单.md` 建议口径收敛 wiki 技术总纲待定项——T-1 定 **Bun + bun:sqlite**（小基准已跑 2026-09-03，CRUD 量级与 better-sqlite3 打平，better-sqlite3 保留作 Node 回退）；T-2 同步 ✅（Dexie/IndexedDB 镜像缓存，SQLite WASM 不引入）；T-4 定「核心先记」方向；T-6\~T-11 定最小默认（软上限不主动删 / 单目标 / 仅类型预留 / KV 不启用 / 匿名不开 / CF 进阶能力不引入）；T-3 保持方向性（承接 Scene-AI 细部 §5.2）；§4.1 真源 DB 行与 wouter 行改 ✅；头部与 §12.1 参考表路径改为现行 wiki 文件名；§13 追加变更记录。同步修正 Scene-AI 细部旧路径引用
+- **2026-09-03 · 技术待定项收敛（T-1\~T-12）** `8ad8145`：按 `docs/modules/20260903_技术待定项收敛清单.md` 建议口径收敛 wiki 技术总纲待定项——T-1 定 **Bun + bun:sqlite**（小基准已跑 2026-09-03，CRUD 量级与 better-sqlite3 打平，better-sqlite3 保留作 Node 回退）；T-2 同步 ✅（Dexie/IndexedDB 镜像缓存，SQLite WASM 不引入）；T-4 定「核心先记」方向；T-6\~T-11 定最小默认（软上限不主动删 / 单目标 / 仅类型预留 / KV 不启用 / 匿名不开 / CF 进阶能力不引入）；T-3 保持方向性（承接 Scene-AI 细部 §5.2）；§4.1 真源 DB 行与 wouter 行改 ✅；头部与 §12.1 参考表路径改为现行 wiki 文件名；§13 追加变更记录。同步修正 Scene-AI 细部旧路径引用
 
 - **2026-09-03 · AGENTS 模板换新并迁移旧规范** `5fa38a0`：AGENTS.md 从旧版全仓规范换为通用模板；旧 `AGENTS-old.md` 内容经取舍迁移——项目简介填入实际信息（名称/一句话/版本/技术栈方向/原型位置/性能基线等），「额外补充」保留沿用约定（环节闭环/性能优先 600 条基线/源级噪音先验证再处理/不可逆操作先确认/技术待定标注）；与现章节重复及过时内容（旧目录结构、组件注册、备份三档、旧文档路径、GitHub 隐私设置操作、提交前缀格式）删除。旧文件移入 `docs/archive/AGENTS-old.md` 归档（仅追溯）
 
@@ -96,7 +98,7 @@
 
 - **2026-09-02 · 技术总纲 v0.1 / 技术方案 v0.1 归档** `225188f`：结构不满意，移入 `docs/归档/`，不再作为现行技术方案
 
-- **2026-09-02 · 其它文档** `225188f` `c496e35`：`docs/module/Scene-AI与待设计细部.md`（Scene / AI / 导航圈选等细部，不取代 PRD）；`docs/归档/…v1.0.5_draft.md` 整份归档；`docs/Draft/README.md` 索引改指现行 PRD；`docs/技术总纲文档范例.md`（写作骨架）；wiki 补 Raindrop 官方 API 参考链接
+- **2026-09-02 · 其它文档** `225188f` `c496e35`：`docs/module/20260904_Scene-AI与待设计细部.md`（Scene / AI / 导航圈选等细部，不取代 PRD）；`docs/归档/…v1.0.5_draft.md` 整份归档；`docs/Draft/README.md` 索引改指现行 PRD；`docs/技术总纲文档范例.md`（写作骨架）；wiki 补 Raindrop 官方 API 参考链接
 
 - **2026-09-02 · 维护记录** `27e2889` `2083c2a`：修订记录补记（§5.7 增补行补迁移提交号 `6cfc41d`、§1.4 修订 `e26deb7`）；源级噪音事件（表格补宽/转义/插空行，回退 HEAD `e26deb7` 净化）；预防措施新增根目录 `.editorconfig`＋AGENTS.md §2「源级噪音先验证再处理」
 
