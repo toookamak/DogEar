@@ -6,3 +6,4 @@ dist
 
 .workbuddy
 docs/modules/.bench-t1/
+apps/server/data/
