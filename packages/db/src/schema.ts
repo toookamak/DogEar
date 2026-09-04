@@ -138,6 +138,30 @@ export const archiveJobs = sqliteTable('archive_jobs', {
   error: text('error'),
   retryCount: integer('retry_count').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   startedAt: integer('started_at', { mode: 'timestamp_ms' }),
   completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
 })
+
+export const idempotencyKeys = sqliteTable('idempotency_keys', {
+  key: text('key').notNull(),
+  actor: text('actor').notNull(),
+  requestPath: text('request_path').notNull(),
+  requestBodyHash: text('request_body_hash').notNull(),
+  statusCode: integer('status_code').notNull(),
+  responseBody: text('response_body').notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.key, table.actor] }),
+  expiresIdx: index('idempotency_keys_expires_at_idx').on(table.expiresAt),
+}))
+
+export const skillUsage = sqliteTable('skill_usage', {
+  date: text('date').notNull(),
+  bucket: text('bucket').notNull(),
+  count: integer('count').notNull().default(0),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.date, table.bucket] }),
+}))

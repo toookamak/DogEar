@@ -7,9 +7,11 @@ import {
   bookmarkTags,
   bookmarks,
   folders,
+  idempotencyKeys,
   operationLog,
   scenes,
   settings,
+  skillUsage,
   suggestions,
   tags,
 } from './schema.js'
@@ -40,22 +42,58 @@ type BookmarkFilters = {
 }
 type BookmarkUpdate = Record<string, unknown> & { folderId?: string | null; tagIds?: string[]; sceneIds?: string[] }
 type BatchUpdate = BookmarkUpdate & { ids: string[]; addSceneIds?: string[]; removeSceneIds?: string[]; addTagIds?: string[]; removeTagIds?: string[]; deleted?: boolean }
+type BatchUpdateSkippedItem = { id: string; reason: 'not_found' | 'deleted' }
 type Timestamped = { createdAt?: Date; updatedAt?: Date }
+
+export type PageResult<T> = {
+  items: T[]
+  nextCursor: string | null
+}
+
+export type InboxPageResult<T> = {
+  bookmarks: T[]
+  nextCursor: string | null
+}
+
+export type IdempotencyRecord = {
+  key: string
+  actor: string
+  requestPath: string
+  requestBodyHash: string
+  statusCode: number
+  responseBody: string
+  expiresAt: Date
+  createdAt: Date
+}
+
+export type SkillUsageKey = {
+  date: string
+  bucket: 'read' | 'write' | 'blocked'
+}
 
 export type BookmarkRepository = {
   create: (input: BookmarkInput) => Promise<unknown>
-  list: (filters?: BookmarkFilters) => Promise<unknown[]>
-  listInbox: () => Promise<unknown[]>
+  list: (filters?: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
+  listInbox: (limit?: number, cursor?: string) => Promise<InboxPageResult<unknown>>
+  listRecycleBin: (limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   countPending: () => Promise<number>
   createAccessRecord: (input: AccessRecordInput) => Promise<unknown>
   listAccessRecords: (bookmarkId: string) => Promise<unknown[]>
   get: (id: string, includeDeleted?: boolean) => Promise<unknown | undefined>
-  search: (filters: BookmarkFilters) => Promise<unknown[]>
+  search: (filters: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   update: (id: string, input: BookmarkUpdate) => Promise<unknown | undefined>
-  batchUpdate: (input: BatchUpdate) => Promise<{ updated: unknown[]; skipped: string[] }>
+  batchUpdate: (input: BatchUpdate) => Promise<{ updated: unknown[]; skipped: BatchUpdateSkippedItem[] }>
   softDelete: (id: string) => Promise<unknown | undefined>
   restore: (id: string) => Promise<unknown | undefined>
   purgeDeleted: (ids?: string[], before?: Date) => Promise<number>
+  idempotency: {
+    findReplay: (key: string, actor: string) => Promise<IdempotencyRecord | undefined>
+    store: (record: IdempotencyRecord) => Promise<void>
+  }
+  skillUsage: {
+    increment: (bucket: 'read' | 'write' | 'blocked') => Promise<void>
+    getDaily: (date: string) => Promise<{ read: number; write: number; blocked: number }>
+  }
   scenes: ResourceRepositories['scenes']
   folders: ResourceRepositories['folders']
   tags: ResourceRepositories['tags']
@@ -69,14 +107,48 @@ type ResourceRepositories = {
   scenes: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
   folders: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
   tags: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; remove: (id: string) => Promise<boolean> }
-  suggestions: { list: (bookmarkId: string, status?: string) => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; resolve: (id: string, status: string) => Promise<unknown | undefined>; accept: (id: string, actor?: string) => Promise<unknown | undefined> }
+  suggestions: { list: (bookmarkId: string, status?: string) => Promise<PageResult<unknown>>; create: (input: Record<string, unknown>) => Promise<unknown>; resolve: (id: string, status: string) => Promise<unknown | undefined>; accept: (id: string, actor?: string) => Promise<unknown | undefined> }
   operationLog: { list: (filters?: Record<string, unknown>) => Promise<unknown[]>; append: (input: Record<string, unknown>) => Promise<unknown> }
   settings: { list: () => Promise<unknown[]>; get: (key: string) => Promise<unknown | undefined>; set: (key: string, value: unknown) => Promise<unknown> }
-  archiveJobs: { list: (bookmarkId?: string) => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined> }
+  archiveJobs: {
+    list: (bookmarkId?: string) => Promise<unknown[]>
+    create: (input: Record<string, unknown>) => Promise<unknown>
+    update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>
+    getStatus: (id: string) => Promise<string | undefined>
+  }
 }
 
 function now() {
   return new Date()
+}
+
+function encodeCursor(createdAt: Date, id: string): string {
+  const ts = createdAt.getTime().toString(36)
+  return `${ts}_${id}`
+}
+
+function decodeCursor(cursor: string): { createdAt: Date; id: string } | null {
+  const idx = cursor.indexOf('_')
+  if (idx < 0) return null
+  const ts = Number.parseInt(cursor.slice(0, idx), 36)
+  if (Number.isNaN(ts)) return null
+  return { createdAt: new Date(ts), id: cursor.slice(idx + 1) }
+}
+
+function keysetCondition(createdAt: Date, id: string) {
+  return or(
+    lt(bookmarks.createdAt, createdAt),
+    and(eq(bookmarks.createdAt, createdAt), lt(bookmarks.id, id)),
+  )
+}
+
+function paginatedQuery<T>(rows: T[], limit: number, getCursor: (row: T) => { createdAt: Date; id: string }): { items: T[]; nextCursor: string | null } {
+  const items = rows.slice(0, limit)
+  const hasMore = rows.length > limit
+  const nextCursor = hasMore && items.length > 0
+    ? encodeCursor(getCursor(items[items.length - 1]).createdAt, getCursor(items[items.length - 1]).id)
+    : null
+  return { items, nextCursor }
 }
 
 function transaction(db: Db, action: (tx: Db) => Promise<any>) {
@@ -132,11 +204,27 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     await db.insert(bookmarks).values(record).run()
     return record
   }
-  repository.list = async (filters = {}) => {
+  repository.list = async (filters = {}, limit = 50, cursor?: string) => {
+    const conditions = [filterCondition(filters)]
+    if (cursor) {
+      const decoded = decodeCursor(cursor)
+      if (decoded) conditions.push(keysetCondition(decoded.createdAt, decoded.id))
+    }
+    const whereClause = conditions.length > 1 ? and(...conditions.filter(Boolean)) : conditions[0]
     const query = filters.sceneId || filters.tagId || filters.q ? db.select().from(bookmarks).leftJoin(bookmarkScenes, eq(bookmarks.id, bookmarkScenes.bookmarkId)).leftJoin(bookmarkTags, eq(bookmarks.id, bookmarkTags.bookmarkId)).leftJoin(tags, eq(bookmarkTags.tagId, tags.id)) : db.select().from(bookmarks)
-    return query.where(filterCondition(filters)).orderBy(desc(bookmarks.createdAt)).all()
+    const rows = await query.where(whereClause).orderBy(desc(bookmarks.createdAt), desc(bookmarks.id)).limit(limit + 1).all()
+    return paginatedQuery(rows, limit, (row: any) => ({ createdAt: row.createdAt ?? row.bookmarks?.createdAt, id: row.id ?? row.bookmarks?.id }))
   }
-  repository.listInbox = async () => repository.list({ status: 'unread' })
+  repository.listInbox = async (limit = 50, cursor?: string) => {
+    const result = await repository.list({ status: 'unread' }, limit, cursor)
+    return { bookmarks: result.items, nextCursor: result.nextCursor }
+  }
+  repository.listRecycleBin = async (limit = 50, cursor?: string) => {
+    const result = await repository.list({ includeDeleted: true }, limit, cursor)
+    const filtered = result.items.filter((item: any) => item.deletedAt)
+    const paginated = paginatedQuery(filtered, limit, (row: any) => ({ createdAt: row.createdAt ?? row.bookmarks?.createdAt, id: row.id ?? row.bookmarks?.id }))
+    return paginated
+  }
   repository.countPending = async () => {
     const result = await db.select({ count: count() }).from(bookmarks).where(eq(bookmarks.syncStatus, 'pending')).all()
     return Number(result[0]?.count ?? 0)
@@ -157,7 +245,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     if (!row) return undefined
     return { ...row, ...(await readRelations(db, id)) }
   }
-  repository.search = async (filters) => repository.list(filters)
+  repository.search = async (filters, limit = 50, cursor?: string) => repository.list(filters, limit, cursor)
   repository.update = async (id, input) => transaction(db, async (tx) => {
     const existing = await tx.select().from(bookmarks).where(and(eq(bookmarks.id, id), isNull(bookmarks.deletedAt))).all()
     if (!existing[0]) return undefined
@@ -169,11 +257,12 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
   })
   repository.batchUpdate = async (input) => transaction(db, async (tx) => {
     const updated: unknown[] = []
-    const skipped: string[] = []
+    const skipped: BatchUpdateSkippedItem[] = []
     for (const id of input.ids) {
       const existing = await tx.select().from(bookmarks).where(and(eq(bookmarks.id, id), isNull(bookmarks.deletedAt))).all()
       if (!existing[0]) {
-        skipped.push(id)
+        const deleted = await tx.select().from(bookmarks).where(eq(bookmarks.id, id)).all()
+        skipped.push({ id, reason: deleted[0]?.deletedAt ? 'deleted' : 'not_found' })
         continue
       }
       const timestamp = now()
@@ -201,7 +290,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
   repository.purgeDeleted = async (ids, before) => transaction(db, async (tx) => {
     const conditions: any[] = [isNotNull(bookmarks.deletedAt)]
     if (ids?.length) conditions.push(inArray(bookmarks.id, ids))
-    if (before) conditions.push(like(bookmarks.deletedAt, before as any))
+    if (before) conditions.push(lt(bookmarks.deletedAt, before))
     const rows = await tx.select({ id: bookmarks.id }).from(bookmarks).where(and(...conditions)).all()
     for (const row of rows) {
       await tx.delete(bookmarkScenes).where(eq(bookmarkScenes.bookmarkId, row.id)).run()
@@ -232,7 +321,10 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     remove: async (id) => { await db.delete(bookmarkTags).where(eq(bookmarkTags.tagId, id)).run(); await db.delete(tags).where(eq(tags.id, id)).run(); return true },
   }
   repository.suggestions = {
-    list: async (bookmarkId, status) => db.select().from(suggestions).where(and(eq(suggestions.bookmarkId, bookmarkId), status ? eq(suggestions.status, status) : undefined)).orderBy(desc(suggestions.createdAt)).all(),
+    list: async (bookmarkId, status) => {
+      const items = await db.select().from(suggestions).where(and(eq(suggestions.bookmarkId, bookmarkId), status ? eq(suggestions.status, status) : undefined)).orderBy(desc(suggestions.createdAt)).all()
+      return { items, nextCursor: null }
+    },
     create: async (input) => { const record = { ...input, status: input.status ?? 'pending', createdAt: input.createdAt ?? now(), resolvedAt: null }; await db.insert(suggestions).values(record).run(); return record },
     resolve: async (id, status) => { const record = { status, resolvedAt: now() }; await db.update(suggestions).set(record).where(eq(suggestions.id, id)).run(); return (await db.select().from(suggestions).where(eq(suggestions.id, id)).all())[0] },
     accept: async (id, actor = 'user') => transaction(db, async (tx) => {
@@ -258,8 +350,68 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
   }
   repository.archiveJobs = {
     list: async (bookmarkId) => db.select().from(archiveJobs).where(bookmarkId ? eq(archiveJobs.bookmarkId, bookmarkId) : undefined).orderBy(desc(archiveJobs.createdAt)).all(),
-    create: async (input) => { const record = { ...input, type: input.type ?? 'snapshot', status: input.status ?? 'pending', retryCount: input.retryCount ?? 0, createdAt: input.createdAt ?? now() }; await db.insert(archiveJobs).values(record).run(); return record },
-    update: async (id, input) => { await db.update(archiveJobs).set(input).where(eq(archiveJobs.id, id)).run(); return (await db.select().from(archiveJobs).where(eq(archiveJobs.id, id)).all())[0] },
+    create: async (input) => {
+      const timestamp = now()
+      const record = {
+        ...input,
+        type: input.type ?? 'snapshot',
+        status: input.status ?? 'pending',
+        retryCount: input.retryCount ?? 0,
+        createdAt: input.createdAt ?? timestamp,
+        updatedAt: timestamp,
+      }
+      await db.insert(archiveJobs).values(record).run()
+      return record
+    },
+    update: async (id, input) => {
+      const timestamp = now()
+      if (input.status === 'pending' && 'retryCount' in input === false) {
+        // Increment retry count when retrying
+        const current = await db.select({ retryCount: archiveJobs.retryCount }).from(archiveJobs).where(eq(archiveJobs.id, id)).all()
+        const count = current[0]?.retryCount ?? 0
+        await db.update(archiveJobs).set({ ...input, retryCount: count + 1, updatedAt: timestamp }).where(eq(archiveJobs.id, id)).run()
+      } else {
+        await db.update(archiveJobs).set({ ...input, updatedAt: timestamp }).where(eq(archiveJobs.id, id)).run()
+      }
+      return (await db.select().from(archiveJobs).where(eq(archiveJobs.id, id)).all())[0]
+    },
+    getStatus: async (id) => {
+      const row = (await db.select({ status: archiveJobs.status }).from(archiveJobs).where(eq(archiveJobs.id, id)).all())[0]
+      return row?.status
+    },
   }
+
+  repository.idempotency = {
+    findReplay: async (key, actor) => {
+      const rows = await db.select().from(idempotencyKeys).where(and(eq(idempotencyKeys.key, key), eq(idempotencyKeys.actor, actor))).all()
+      if (!rows[0]) return undefined
+      if (rows[0].expiresAt < new Date()) {
+        await db.delete(idempotencyKeys).where(and(eq(idempotencyKeys.key, key), eq(idempotencyKeys.actor, actor))).run()
+        return undefined
+      }
+      return rows[0] as IdempotencyRecord
+    },
+    store: async (record) => {
+      await db.insert(idempotencyKeys).values(record).run()
+    },
+  }
+
+  repository.skillUsage = {
+    increment: async (bucket) => {
+      const today = new Date().toISOString().split('T')[0]
+      await db.insert(skillUsage).values({ date: today, bucket, count: 1, updatedAt: now() })
+        .onConflictDoUpdate({ target: [skillUsage.date, skillUsage.bucket], set: { count: sql`${skillUsage.count} + 1`, updatedAt: now() } })
+        .run()
+    },
+    getDaily: async (date) => {
+      const result = { read: 0, write: 0, blocked: 0 }
+      const rows = await db.select().from(skillUsage).where(eq(skillUsage.date, date)).all()
+      for (const row of rows) {
+        if (row.bucket in result) (result as any)[row.bucket] += row.count
+      }
+      return result
+    },
+  }
+
   return repository
 }

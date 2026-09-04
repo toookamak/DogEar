@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-04 / v0.4.0 — M4 API 后端补齐（B 步）：repository 分页改造、幂等键/用量存储、batch skipped 返回 {id,reason}、purgeDeleted like→lt 修复、archiveJobs updatedAt 初始化；路由层 keyset 分页接线、Idempotency-Key 支持、version 冲突检测、settings 白名单、skill capabilities/usage 查询、job 状态守卫、suggestions/recycleBin 统一 envelope。
+
 - 2026-09-04 / v0.4.0 — 确认 M4 前端开工口径：修订 AGENTS/README 进度表述（M3/M4 后端已完成作起点）、计划书待确认项收口并增补范围（wouter 路由、⌘K+MiniSearch、建议四落点占位、保存表单可选字段、DB schema 本轮允许、测试只做纯函数层）、修正计划 §3.3 目录大小写为 `docs/TODO/`，web package.json 将 @vitejs/plugin-react 移至 devDependencies。
 
 - 2026-09-04 / v0.4.0 — 将正式前端与 M4 API 实施计划移至 `docs/todo/`，删除根目录 `todo/`，并同步修正计划内路径。

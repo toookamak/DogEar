@@ -18,6 +18,15 @@ function setup() {
         },
       }
     },
+    delete(table: any) {
+      return {
+        where(condition: any) {
+          return {
+            run() {},
+          }
+        },
+      }
+    },
     select() {
       return {
         from(table: any) {
@@ -26,23 +35,33 @@ function setup() {
             where(condition: any) {
               return {
                 all: () => [{ count: bookmarkRows.filter((record) => record.syncStatus === 'pending').length }],
-                orderBy(column: any) {
+                orderBy(...columns: any[]) {
+                  const sortKey = (row: any) => row.createdAt?.getTime?.() ?? row.openedAt?.getTime?.() ?? 0
                   return {
+                    limit(n: number) {
+                      return {
+                        all: () => [...target]
+                          .filter((record) => record.status === 'unread' || record.bookmarkId === 'bookmark-1')
+                          .sort((a, b) => sortKey(b) - sortKey(a))
+                          .slice(0, n),
+                      }
+                    },
                     all: () => [...target]
                       .filter((record) => record.status === 'unread' || record.bookmarkId === 'bookmark-1')
-                      .reverse(),
+                      .sort((a, b) => sortKey(b) - sortKey(a)),
                   }
                 },
               }
             },
-            orderBy(column: any) {
+            orderBy(...columns: any[]) {
+              const sortKey = (row: any) => row.createdAt?.getTime?.() ?? row.openedAt?.getTime?.() ?? 0
               return {
-                all: () => [...target].sort((left, right) => {
-                  const leftValue = column === bookmarks.createdAt ? left.createdAt : left.openedAt
-                  const rightValue = column === bookmarks.createdAt ? right.createdAt : right.openedAt
-                  if (!leftValue || !rightValue) return 0
-                  return rightValue.getTime() - leftValue.getTime()
-                }),
+                limit(n: number) {
+                  return {
+                    all: () => [...target].sort((a, b) => sortKey(b) - sortKey(a)).slice(0, n),
+                  }
+                },
+                all: () => [...target].sort((a, b) => sortKey(b) - sortKey(a)),
               }
             },
             all: () => [{ count: bookmarkRows.filter((record) => record.syncStatus === 'pending').length }],
@@ -61,7 +80,7 @@ describe('bookmark repository', () => {
     await new Promise((resolve) => setTimeout(resolve, 2))
     await repository.create({ id: '2', url: 'https://example.com/2', status: 'unread' })
 
-    expect((await repository.listInbox()).map((bookmark: any) => bookmark.id)).toEqual(['2', '1'])
+    expect((await repository.listInbox()).bookmarks.map((bookmark: any) => bookmark.id)).toEqual(['2', '1'])
     expect(await repository.countPending()).toBe(2)
   })
 

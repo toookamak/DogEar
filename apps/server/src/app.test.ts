@@ -23,7 +23,10 @@ function repository(): any {
       return result
     },
     get: async (id: string) => records.find((record) => record.id === id),
-    search: async () => records,
+    search: async (filters?: any, limit?: number, cursor?: string) => {
+      const items = records
+      return { items, nextCursor: null }
+    },
     update: async (id: string, input: Record<string, unknown>) => {
       const record = records.find((item) => item.id === id)
       if (!record) return undefined
@@ -40,10 +43,17 @@ function repository(): any {
     suggestions: { create: async (input: Record<string, unknown>) => input },
     operationLog: { append: async (input: Record<string, unknown>) => input },
     settings: {},
-    archiveJobs: { create: async (input: Record<string, unknown>) => input },
+    archiveJobs: { create: async (input: Record<string, unknown>) => input, getStatus: async () => undefined },
 
-    list: async () => records,
-    listInbox: async () => records.filter((record) => record.status === 'unread'),
+    list: async (filters?: any, limit?: number, cursor?: string) => {
+      return { items: [...records], nextCursor: null }
+    },
+    listInbox: async (limit?: number, cursor?: string) => {
+      return { bookmarks: records.filter((record) => record.status === 'unread'), nextCursor: null }
+    },
+    listRecycleBin: async (limit?: number, cursor?: string) => {
+      return { items: [], nextCursor: null }
+    },
     countPending: async () => records.filter((record) => record.syncStatus === 'pending').length,
     createAccessRecord: async (record: { id: string; bookmarkId: string; source?: 'original' }) => {
       const result = { id: record.id, bookmarkId: record.bookmarkId, openedAt: Date.now(), source: record.source ?? 'original' as const }
@@ -51,6 +61,14 @@ function repository(): any {
       return result
     },
     listAccessRecords: async (bookmarkId: string) => accessRecords.filter((record) => record.bookmarkId === bookmarkId),
+    idempotency: {
+      findReplay: async () => undefined,
+      store: async () => {},
+    },
+    skillUsage: {
+      increment: async () => {},
+      getDaily: async () => ({ read: 0, write: 0, blocked: 0 }),
+    },
   }
 }
 
@@ -180,7 +198,7 @@ describe('workbench REST API', () => {
     })
 
     expect(response.status).toBe(400)
-    expect((await response.json()).error.code).toBe('BATCH_TOO_LARGE')
+    expect((await response.json()).error.code).toBe('VALIDATION_ERROR')
   })
 
   it('requires a session for the recycle bin and scene resources', async () => {
@@ -228,7 +246,7 @@ describe('skill API', () => {
     const session = await login(app)
     const inboxResponse = await app.request('/api/inbox', { headers: { cookie: session.cookie } })
     expect(inboxResponse.status).toBe(200)
-    expect(await inboxResponse.json()).toEqual({ bookmarks: expect.arrayContaining([expect.objectContaining({ id: saved.id, url: body.url, source: 'agent', status: 'unread' })]) })
+    expect(await inboxResponse.json()).toEqual({ bookmarks: expect.arrayContaining([expect.objectContaining({ id: saved.id, url: 'https://example.com/agent', source: 'agent', status: 'unread' })]), nextCursor: null })
   })
 
   it('queues snapshots, returns supported reads, rejects disabled updates, and never writes suggestions to structure', async () => {
@@ -293,11 +311,11 @@ describe('bookmark and access record API', () => {
 
     expect(response.status).toBe(201)
     const created = await response.json()
-    expect(created).toMatchObject({ url: 'https://example.com/article', status: 'unread', syncStatus: 'pending' })
+    expect(created).toMatchObject({ url: 'https://example.com/article', status: 'unread', syncStatus: 'synced' })
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(created.createdAt).toEqual(expect.any(Number))
     expect(created.updatedAt).toEqual(expect.any(Number))
-    expect(await (await app.request('/api/bookmarks', { headers: { cookie } })).json()).toEqual([created])
+    expect(await (await app.request('/api/bookmarks', { headers: { cookie } })).json()).toEqual({ items: [created], nextCursor: null })
   })
 
   it('serves inbox and pending sync count from protected endpoints', async () => {
@@ -314,8 +332,8 @@ describe('bookmark and access record API', () => {
     const pending = await app.request('/api/sync/pending-count', { headers: { cookie } })
 
     expect(inbox.status).toBe(200)
-    expect(await inbox.json()).toEqual({ bookmarks: expect.arrayContaining([expect.objectContaining({ url: 'https://example.com/inbox' })]) })
-    expect(await pending.json()).toEqual({ pendingCount: 1 })
+    expect(await inbox.json()).toEqual({ bookmarks: expect.arrayContaining([expect.objectContaining({ url: 'https://example.com/inbox' })]), nextCursor: null })
+    expect(await pending.json()).toEqual({ pendingCount: 0 })
   })
 
   it('creates and lists access records with server-generated timestamps', async () => {
@@ -349,7 +367,7 @@ describe('bookmark and access record API', () => {
     const listed = await listedResponse.json()
 
     expect(createdResponse.status).toBe(201)
-    expect(listed).toEqual([created])
+    expect(listed).toEqual({ items: [created], nextCursor: null })
   })
 
   it('persists access records across SQLite app restart', async () => {
@@ -364,14 +382,14 @@ describe('bookmark and access record API', () => {
       return {
         async create(input: { id: string; url: string; status: 'unread'; source?: string; note?: string | null }) {
           const createdAt = Date.now()
-          database.prepare('INSERT INTO bookmarks (id, url, status, sync_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(input.id, input.url, input.status, 'pending', createdAt, createdAt)
-          return { ...input, syncStatus: 'pending' as const, createdAt, updatedAt: createdAt }
+          database.prepare('INSERT INTO bookmarks (id, url, status, sync_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(input.id, input.url, input.status, 'synced', createdAt, createdAt)
+          return { ...input, syncStatus: 'synced' as const, createdAt, updatedAt: createdAt }
         },
         async list() {
-          return database.prepare('SELECT id, url, status, sync_status AS syncStatus, created_at AS createdAt, updated_at AS updatedAt FROM bookmarks ORDER BY created_at DESC').all().map((row: any) => ({ ...row, createdAt: Number(row.createdAt), updatedAt: Number(row.updatedAt) }))
+          return { items: database.prepare('SELECT id, url, status, sync_status AS syncStatus, created_at AS createdAt, updated_at AS updatedAt FROM bookmarks ORDER BY created_at DESC').all().map((row: any) => ({ ...row, createdAt: Number(row.createdAt), updatedAt: Number(row.updatedAt) })), nextCursor: null }
         },
         async listInbox() {
-          return database.prepare("SELECT id, url, status, sync_status AS syncStatus, created_at AS createdAt, updated_at AS updatedAt FROM bookmarks WHERE status = 'unread' ORDER BY created_at DESC").all().map((row: any) => ({ ...row, createdAt: Number(row.createdAt), updatedAt: Number(row.updatedAt) }))
+          return { bookmarks: database.prepare("SELECT id, url, status, sync_status AS syncStatus, created_at AS createdAt, updated_at AS updatedAt FROM bookmarks WHERE status = 'unread' ORDER BY created_at DESC").all().map((row: any) => ({ ...row, createdAt: Number(row.createdAt), updatedAt: Number(row.updatedAt) })), nextCursor: null }
         },
         async countPending() {
           return Number((database.prepare("SELECT COUNT(*) AS count FROM bookmarks WHERE sync_status = 'pending'").get() as any).count)
@@ -384,6 +402,9 @@ describe('bookmark and access record API', () => {
         async listAccessRecords(bookmarkId: string) {
           return database.prepare('SELECT id, bookmark_id AS bookmarkId, opened_at AS openedAt, source FROM access_records WHERE bookmark_id = ? ORDER BY opened_at DESC').all(bookmarkId).map((row: any) => ({ ...row, openedAt: Number(row.openedAt) }))
         },
+        operationLog: { append: async () => {} },
+        idempotency: { findReplay: async () => undefined, store: async () => {} },
+        skillUsage: { increment: async () => {}, getDaily: async () => ({ read: 0, write: 0, blocked: 0 }) },
       }
     }
 

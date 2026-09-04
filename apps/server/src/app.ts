@@ -1,10 +1,18 @@
 import {
+  archiveJobStatusSchema,
+  batchUpdateRequestSchema,
+  bookmarkVersionConflictErrorSchema,
   createBookmarkInputSchema,
   getStatsSkillInputSchema,
   listBookmarksSkillInputSchema,
   loginRequestSchema,
+  paginationQuerySchema,
+  recycleBinEmptyRequestSchema,
   saveBookmarkSkillInputSchema,
   searchBookmarksSkillInputSchema,
+  settingsWhitelistSchema,
+  skillCapabilitiesBodySchema,
+  skillUsageResponseSchema,
   suggestSceneSkillInputSchema,
   triggerArchiveSkillInputSchema,
   updateBookmarkSkillInputSchema,
@@ -141,20 +149,51 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.get('/api/bookmarks', async (c) => {
-    const records = await repository.list()
-    return c.json(records.map(serializeBookmark))
+    const query = paginationQuerySchema.safeParse(c.req.query())
+    if (!query.success) return invalidRequest(c)
+    const { limit, cursor } = query.data
+    const result = await repository.list(undefined, limit, cursor)
+    return c.json({ items: result.items.map(serializeBookmark), nextCursor: result.nextCursor })
   })
 
   app.post('/api/bookmarks', async (c) => {
     const input = createBookmarkInputSchema.safeParse(await c.req.json().catch(() => undefined))
     if (!input.success) return invalidRequest(c)
-    const record = await repository.create({ id: randomUUID(), url: input.data.url, status: 'unread' })
+    const idempotencyKey = c.req.header('Idempotency-Key')
+    const actor = 'user'
+    if (idempotencyKey) {
+      const replay = await repository.idempotency.findReplay(idempotencyKey, actor)
+      if (replay) {
+        const keyEntry = (await repository.get(JSON.parse(replay.responseBody).id))
+        return c.json({ bookmark: serializeBookmark(keyEntry ?? {}), idempotent: true, replay: true }, 201)
+      }
+    }
+    const id = randomUUID()
+    const record = await repository.create({
+      id, url: input.data.url, status: 'unread',
+      note: input.data.note ?? null, intent: input.data.intent ?? null,
+      important: input.data.important ?? false, private: input.data.private ?? false,
+      syncStatus: 'synced',
+    })
+    if (idempotencyKey) {
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+      await repository.idempotency.store({
+        key: idempotencyKey, actor,
+        requestPath: c.req.path, requestBodyHash: '',
+        statusCode: 201, responseBody: JSON.stringify(record),
+        expiresAt, createdAt: new Date(),
+      })
+    }
+    await repository.operationLog.append({ actor, action: 'create', targetType: 'bookmark', targetId: id })
     return c.json(serializeBookmark(record), 201)
   })
 
   app.get('/api/inbox', async (c) => {
-    const records = await repository.listInbox()
-    return c.json({ bookmarks: records.map(serializeBookmark) })
+    const query = paginationQuerySchema.safeParse(c.req.query())
+    if (!query.success) return invalidRequest(c)
+    const { limit, cursor } = query.data
+    const result = await repository.listInbox(limit, cursor)
+    return c.json({ bookmarks: result.bookmarks.map(serializeBookmark), nextCursor: result.nextCursor })
   })
 
   app.get('/api/sync/pending-count', async (c) => {
@@ -169,24 +208,23 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   ]
   for (const path of workbenchPaths) app.use(path, requireSession)
 
-  const parseLimit = (value: string | undefined) => Math.min(Math.max(Number(value ?? 50) || 50, 1), 100)
-  const serializeList = (items: unknown[]) => ({ items: items.map(serializeBookmark), nextCursor: null })
-
   app.get('/api/bookmarks/search', async (c) => {
+    const query = paginationQuerySchema.safeParse(c.req.query())
+    if (!query.success) return invalidRequest(c)
+    const { limit, cursor } = query.data
     const items = await repository.search({
       q: c.req.query('q'), status: c.req.query('status'), sceneId: c.req.query('sceneId'),
       folderId: c.req.query('folderId') === 'none' ? 'none' : c.req.query('folderId'),
       tagId: c.req.query('tagId'), important: c.req.query('important') === undefined ? undefined : c.req.query('important') === 'true',
       source: c.req.query('source'), includeDeleted: false,
-    })
-    return c.json({ ...serializeList(items.slice(0, parseLimit(c.req.query('limit')))) })
+    }, limit, cursor)
+    return c.json({ items: items.items.map(serializeBookmark), nextCursor: items.nextCursor })
   })
 
   app.patch('/api/bookmarks/batch', async (c) => {
-    const body = await c.req.json().catch(() => undefined) as Record<string, unknown> | undefined
-    if (!body || !Array.isArray(body.ids)) return invalidRequest(c)
-    if (body.ids.length > 100) return skillError(c, 'BATCH_TOO_LARGE', 400, 'Batch size must not exceed 100')
-    const result = await repository.batchUpdate(body as any)
+    const body = batchUpdateRequestSchema.safeParse(await c.req.json().catch(() => undefined))
+    if (!body.success) return invalidRequest(c)
+    const result = await repository.batchUpdate(body.data as any)
     for (const item of result.updated) await repository.operationLog.append({ actor: 'user', action: 'update', targetType: 'bookmark', targetId: String((item as any).id) })
     return c.json({ updated: result.updated.map(serializeBookmark), skipped: result.skipped })
   })
@@ -202,7 +240,12 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     const existing = await repository.get(c.req.param('bookmarkId'), true)
     if (!existing) return skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
     if ((existing as any).deletedAt) return skillError(c, 'BOOKMARK_DELETED', 409, 'Bookmark is deleted')
-    const { confirmStructure: _confirmStructure, ...changes } = input.data
+    if (input.data.version !== undefined && (existing as any).version !== input.data.version) {
+      return c.json({
+        error: { code: 'CONFLICT' as const, message: 'Version conflict', details: { currentVersion: (existing as any).version } },
+      }, 409)
+    }
+    const { confirmStructure: _confirmStructure, version: _version, ...changes } = input.data
     const updated = await repository.update(c.req.param('bookmarkId'), changes)
     if (!updated) return skillError(c, 'BOOKMARK_DELETED', 409, 'Bookmark is deleted')
     await repository.operationLog.append({ actor: 'user', action: 'update', targetType: 'bookmark', targetId: c.req.param('bookmarkId') })
@@ -217,15 +260,18 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.get('/api/recycle-bin', async (c) => {
-    const items = await repository.list({ includeDeleted: true })
-    return c.json(serializeList(items.filter((item: any) => item.deletedAt).slice(0, parseLimit(c.req.query('limit')))))
+    const query = paginationQuerySchema.safeParse(c.req.query())
+    if (!query.success) return invalidRequest(c)
+    const { limit, cursor } = query.data
+    const result = await repository.listRecycleBin(limit, cursor)
+    return c.json({ items: result.items.map(serializeBookmark), nextCursor: result.nextCursor })
   })
 
   app.post('/api/recycle-bin/:bookmarkId/restore', async (c) => {
     const restored = await repository.restore(c.req.param('bookmarkId'))
     if (!restored) return skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
     await repository.operationLog.append({ actor: 'user', action: 'restore', targetType: 'bookmark', targetId: c.req.param('bookmarkId') })
-    return c.json(serializeBookmark(restored))
+    return c.json({ ok: true, bookmark: serializeBookmark(restored) })
   })
 
   app.delete('/api/recycle-bin/:bookmarkId', async (c) => {
@@ -236,9 +282,10 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.post('/api/recycle-bin/empty', async (c) => {
-    const body = await c.req.json().catch(() => ({})) as { onlyExpired?: boolean }
+    const body = recycleBinEmptyRequestSchema.safeParse(await c.req.json().catch(() => ({})))
+    const onlyExpired = body.success ? body.data.onlyExpired : true
     let before: Date | undefined
-    if (body.onlyExpired !== false) {
+    if (onlyExpired !== false) {
       const setting = await repository.settings.get('recycle.retention_days') as any
       const days = Number(setting?.value ?? 7)
       before = new Date(Date.now() - days * 86400000)
@@ -273,12 +320,15 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     })
   }
 
-  app.get('/api/bookmarks/:bookmarkId/suggestions', async (c) => c.json({ items: await repository.suggestions.list(c.req.param('bookmarkId'), c.req.query('status')) }))
+  app.get('/api/bookmarks/:bookmarkId/suggestions', async (c) => {
+    const result = await repository.suggestions.list(c.req.param('bookmarkId'), c.req.query('status'))
+    return c.json({ items: result.items, nextCursor: result.nextCursor })
+  })
   for (const action of ['accept', 'defer', 'dismiss'] as const) app.post(`/api/suggestions/:id/${action}`, async (c) => {
     const result = action === 'accept' ? await repository.suggestions.accept(c.req.param('id'), 'user') : await repository.suggestions.resolve(c.req.param('id'), action === 'defer' ? 'deferred' : 'dismissed')
     if (!result) return skillError(c, 'NOT_FOUND', 404, 'Suggestion not found')
     if (action !== 'accept') await repository.operationLog.append({ actor: 'user', action: action === 'dismiss' ? 'dismiss_suggestion' : 'update', targetType: 'suggestion', targetId: c.req.param('id') })
-    return c.json(result)
+    return c.json({ ok: true, suggestion: result })
   })
 
   app.get('/api/operation-log', async (c) => c.json({ items: await repository.operationLog.list({ actor: c.req.query('actor'), action: c.req.query('action') }), nextCursor: null }))
@@ -286,13 +336,29 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.put('/api/settings', async (c) => {
     const body = await c.req.json().catch(() => undefined) as Record<string, unknown> | undefined
     if (!body) return invalidRequest(c)
-    const entries = Object.entries(body).filter(([key]) => !key.includes('token') && !key.includes('password'))
+    const validated = settingsWhitelistSchema.safeParse(body)
+    if (!validated.success) return invalidRequest(c, validated.error.flatten())
+    const entries = Object.entries(validated.data).filter(([key]) => !key.includes('token') && !key.includes('password'))
     const items = await Promise.all(entries.map(([key, value]) => repository.settings.set(key, value)))
     return c.json({ items })
   })
   app.get('/api/jobs', async (c) => c.json({ items: await repository.archiveJobs.list(c.req.query('bookmarkId')), nextCursor: null }))
-  app.post('/api/jobs/:id/retry', async (c) => c.json(await repository.archiveJobs.update(c.req.param('id'), { status: 'pending' })))
-  app.post('/api/jobs/:id/cancel', async (c) => c.json(await repository.archiveJobs.update(c.req.param('id'), { status: 'cancelled' })))
+  app.post('/api/jobs/:id/retry', async (c) => {
+    const currentStatus = await repository.archiveJobs.getStatus(c.req.param('id'))
+    if (!currentStatus) return skillError(c, 'NOT_FOUND', 404, 'Job not found')
+    if (currentStatus !== 'failed') {
+      return c.json({ error: { code: 'CONFLICT' as const, message: 'Only failed jobs can be retried' } }, 409)
+    }
+    return c.json(await repository.archiveJobs.update(c.req.param('id'), { status: 'pending' }))
+  })
+  app.post('/api/jobs/:id/cancel', async (c) => {
+    const currentStatus = await repository.archiveJobs.getStatus(c.req.param('id'))
+    if (!currentStatus) return skillError(c, 'NOT_FOUND', 404, 'Job not found')
+    if (!['pending', 'running'].includes(currentStatus)) {
+      return c.json({ error: { code: 'CONFLICT' as const, message: 'Only pending or running jobs can be cancelled' } }, 409)
+    }
+    return c.json(await repository.archiveJobs.update(c.req.param('id'), { status: 'cancelled' }))
+  })
   app.post('/api/bookmarks/:bookmarkId/archives', async (c) => {
     const body = await c.req.json().catch(() => ({})) as { type?: string }
     if (body.type && body.type !== 'snapshot') return skillError(c, 'NOT_SUPPORTED', 400, 'Archive type is not supported')
@@ -329,20 +395,61 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       try { configuredCapabilities = JSON.parse(String((configured as { value: unknown }).value)) } catch { configuredCapabilities = capabilities }
     }
     const capability = skillCapability(name) as keyof typeof capabilities
-    if (!configuredCapabilities[capability]) return skillError(c, 'CAPABILITY_DISABLED', 403, 'Skill capability is disabled')
+    if (!configuredCapabilities[capability]) {
+      await repository.skillUsage.increment('blocked')
+      return skillError(c, 'CAPABILITY_DISABLED', 403, 'Skill capability is disabled')
+    }
     const limit = skillLimit(name)
     usage[limit] += 1
-    if (usage[limit] > limits[limit]) return skillError(c, 'RATE_LIMITED', 429, 'Skill rate limit exceeded')
+    if (usage[limit] > limits[limit]) {
+      await repository.skillUsage.increment('blocked')
+      return skillError(c, 'RATE_LIMITED', 429, 'Skill rate limit exceeded')
+    }
+    const bucket = limit === 'read' ? 'read' : 'write'
+    await repository.skillUsage.increment(bucket)
     await next()
   }
 
   app.get('/.well-known/capabilities', (c) => c.json({ name: 'DogEar', version: 'v1', auth: 'Bearer token', skills: skillDefinitions }))
   app.use('/api/skill/:name', requireSkill)
 
+  app.put('/api/skill/capabilities', async (c) => {
+    const body = skillCapabilitiesBodySchema.safeParse(await jsonBody(c))
+    if (!body.success) return invalidRequest(c, body.error.flatten())
+    await repository.settings.set('skill.capabilities', body.data)
+    return c.json(body.data)
+  })
+
+  app.get('/api/skill/usage', async (c) => {
+    const today = new Date().toISOString().split('T')[0]
+    const usage = await repository.skillUsage.getDaily(today)
+    return c.json({ date: today, requests: usage.read, writes: usage.write, blocked: usage.blocked })
+  })
+
   app.post('/api/skill/save_bookmark', async (c) => {
     const input = saveBookmarkSkillInputSchema.safeParse(await jsonBody(c))
     if (!input.success) return invalidRequest(c, input.error.flatten())
-    const record = await repository.create({ id: randomUUID(), url: input.data.url, status: 'unread', source: 'agent', note: input.data.note, intent: input.data.intent, syncStatus: 'synced' })
+    await repository.skillUsage.increment('write')
+    const idempotencyKey = c.req.header('Idempotency-Key')
+    const actor = 'agent'
+    if (idempotencyKey) {
+      const replay = await repository.idempotency.findReplay(idempotencyKey, actor)
+      if (replay) {
+        const keyEntry = (await repository.get(JSON.parse(replay.responseBody).id))
+        return c.json({ bookmark: serializeBookmark(keyEntry ?? {}), idempotent: true, replay: true }, 201)
+      }
+    }
+    const id = randomUUID()
+    const record = await repository.create({ id, url: input.data.url, status: 'unread', source: 'agent', note: input.data.note, intent: input.data.intent, syncStatus: 'synced' })
+    if (idempotencyKey) {
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+      await repository.idempotency.store({
+        key: idempotencyKey, actor,
+        requestPath: c.req.path, requestBodyHash: '',
+        statusCode: 201, responseBody: JSON.stringify(record),
+        expiresAt, createdAt: new Date(),
+      })
+    }
     const saved = { ...serializeBookmark(record), snapshotStatus: 'not_requested', suggestions: [] }
     if (input.data.snapshot && repository.archiveJobs) {
       const job = await repository.archiveJobs.create({ id: randomUUID(), bookmarkId: saved.id, source: 'agent', type: 'snapshot' }) as any
@@ -357,23 +464,23 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     const input = searchBookmarksSkillInputSchema.safeParse(await jsonBody(c))
     if (!input.success) return invalidRequest(c, input.error.flatten())
     const filters = { ...(input.data.filters ?? {}), q: input.data.query, includeDeleted: false }
-    const items = await repository.search(filters)
-    return c.json({ items: items.filter((item: any) => input.data.filters?.includePrivate || !item.private).slice(0, input.data.limit).map(serializeBookmark), nextCursor: null })
+    const result = await repository.search(filters, input.data.limit)
+    return c.json({ items: result.items.filter((item: any) => input.data.filters?.includePrivate || !item.private).map(serializeBookmark), nextCursor: result.nextCursor })
   })
 
   app.post('/api/skill/list_bookmarks', async (c) => {
     const input = listBookmarksSkillInputSchema.safeParse(await jsonBody(c))
     if (!input.success) return invalidRequest(c, input.error.flatten())
-    const items = await repository.list({ ...input.data, includeDeleted: false })
-    return c.json({ items: items.filter((item: any) => !item.private).slice(0, input.data.limit).map(serializeBookmark), nextCursor: null })
+    const result = await repository.list({ ...input.data, includeDeleted: false }, input.data.limit)
+    return c.json({ items: result.items.filter((item: any) => !item.private).map(serializeBookmark), nextCursor: result.nextCursor })
   })
 
   app.post('/api/skill/get_stats', async (c) => {
     const input = getStatsSkillInputSchema.safeParse(await jsonBody(c))
     if (!input.success) return invalidRequest(c, input.error.flatten())
-    const items = await repository.list()
-    const statuses = Object.fromEntries(['unread', 'saved', 'archived'].map((status) => [status, items.filter((item: any) => item.status === status).length]))
-    return c.json({ total: items.length, inbox: statuses.unread, statuses, scenes: [] })
+    const result = await repository.list()
+    const statuses = Object.fromEntries(['unread', 'saved', 'archived'].map((status) => [status, result.items.filter((item: any) => item.status === status).length]))
+    return c.json({ total: result.items.length, inbox: statuses.unread, statuses, scenes: [] })
   })
 
   app.post('/api/skill/trigger_archive', async (c) => {

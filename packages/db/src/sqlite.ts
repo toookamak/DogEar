@@ -123,9 +123,28 @@ const tableDefinitions: Record<string, string> = {
     error TEXT,
     retry_count INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
+    updated_at INTEGER,
     started_at INTEGER,
     completed_at INTEGER,
     FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+  )`,
+  idempotency_keys: `CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    request_path TEXT NOT NULL,
+    request_body_hash TEXT NOT NULL,
+    status_code INTEGER NOT NULL,
+    response_body TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (key, actor)
+  )`,
+  skill_usage: `CREATE TABLE IF NOT EXISTS skill_usage (
+    date TEXT NOT NULL,
+    bucket TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (date, bucket)
   )`,
 }
 
@@ -167,6 +186,12 @@ function createIndexes(database: SqliteDatabase) {
   database.run('CREATE INDEX IF NOT EXISTS access_records_bookmark_id_opened_at_idx ON access_records(bookmark_id, opened_at)')
   database.run('CREATE INDEX IF NOT EXISTS suggestions_bookmark_id_status_idx ON suggestions(bookmark_id, status)')
   database.run('CREATE INDEX IF NOT EXISTS operation_log_created_at_idx ON operation_log(created_at)')
+  database.run('CREATE INDEX IF NOT EXISTS idempotency_keys_expires_at_idx ON idempotency_keys(expires_at)')
+}
+
+function migrateJobStatus(database: SqliteDatabase) {
+  database.run("UPDATE archive_jobs SET status = 'running' WHERE status = 'processing'")
+  database.run("UPDATE archive_jobs SET status = 'succeeded' WHERE status = 'completed'")
 }
 
 function seedDefaults(database: SqliteDatabase) {
@@ -194,13 +219,17 @@ export function initializeSqliteSchema(database: SqliteDatabase) {
     for (const [column, statement] of Object.entries(bookmarkColumns)) {
       if (!columns.has(column)) database.run(statement)
     }
-    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs']) {
+    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs', 'idempotency_keys', 'skill_usage']) {
       database.run(tableDefinitions[table])
     }
     if (!columnsFor(database, 'access_records').has('client')) {
       database.run("ALTER TABLE access_records ADD COLUMN client TEXT NOT NULL DEFAULT 'workbench'")
     }
+    if (!columnsFor(database, 'archive_jobs').has('updated_at')) {
+      database.run('ALTER TABLE archive_jobs ADD COLUMN updated_at INTEGER')
+    }
     createIndexes(database)
+    migrateJobStatus(database)
     seedDefaults(database)
     database.run('COMMIT')
   } catch (error) {

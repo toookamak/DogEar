@@ -1,0 +1,21 @@
+# M4 API 后端补齐验证清单
+
+- [ ] `GET /api/bookmarks` 返回 `{ items, nextCursor }`，支持 `limit`/`cursor`，keyset 稳定排序。
+- [ ] `GET /api/bookmarks/search` 返回 `{ items, nextCursor }`，支持分页。
+- [ ] `GET /api/inbox` 返回 `{ bookmarks, nextCursor }`，支持分页。
+- [ ] `GET /api/recycle-bin` 返回 `{ items, nextCursor }`，支持分页。
+- [ ] `POST /api/bookmarks` 支持 `Idempotency-Key`，24h 内相同 key 返回同一结果。
+- [ ] `POST /api/skill/save_bookmark` 支持 `Idempotency-Key`。
+- [ ] `PATCH /api/bookmarks/:id` 校验 `version`，不匹配返回 `409 CONFLICT` 含 `currentVersion`。
+- [ ] `PUT /api/settings` 只接受 `recycle.retention_days` 和 `skill.capabilities`。
+- [ ] `PUT /api/skill/capabilities` 写入能力设置。
+- [ ] `GET /api/skill/usage` 返回当日用量 `{ date, requests, writes, blocked }`。
+- [ ] `POST /api/jobs/:id/retry` 只允许 `failed` 状态。
+- [ ] `POST /api/jobs/:id/cancel` 只允许 `pending`/`running` 状态。
+- [ ] `PATCH /api/bookmarks/batch` 的 `skipped` 返回 `{ id, reason }`。
+- [ ] 回收站 restore 返回 `{ ok: true, bookmark }`，purge 返回 `{ ok: true }`，empty 返回 `{ ok: true, purged: n }`。
+- [ ] suggestions accept/defer/dismiss 返回 `{ ok: true, suggestion }`，list 返回 `{ items, nextCursor }`。
+- [ ] `purgeDeleted` 正确使用 `lt` 而非 `like`。
+- [ ] `archiveJobs.create` 设置 `updatedAt = createdAt`。
+- [ ] `pnpm test`、`pnpm typecheck`、`pnpm lint` 全绿。
+- [ ] `CHANGELOG.md` 已更新，后端代码已提交 git。

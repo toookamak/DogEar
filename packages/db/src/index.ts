@@ -5,9 +5,11 @@ export {
   bookmarkTags,
   bookmarks,
   folders,
+  idempotencyKeys,
   operationLog,
   scenes,
   settings,
+  skillUsage,
   suggestions,
   tags,
 } from './schema.js'
