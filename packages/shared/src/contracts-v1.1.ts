@@ -145,3 +145,86 @@ export type ArchiveJob = z.infer<typeof archiveJobSchema>
 export type ArchiveJobStatus = z.infer<typeof archiveJobStatusSchema>
 export type ArchiveCreateInput = z.infer<typeof archiveCreateInputSchema>
 export type ArchiveCreateResponse = z.infer<typeof archiveCreateResponseSchema>
+
+export const syncQueueStatusSchema = z.enum(['pending', 'processing', 'succeeded', 'failed'])
+export const syncQueueActionSchema = z.enum(['create', 'update', 'delete'])
+export const channelNameSchema = z.enum(['raindrop', 's3', 'webdav'])
+
+export const syncQueueItemSchema = z.object({
+  id: z.string().uuid(),
+  action: syncQueueActionSchema,
+  targetType: z.string().min(1),
+  targetId: z.string().min(1),
+  channel: channelNameSchema,
+  payload: z.string().nullable(),
+  status: syncQueueStatusSchema,
+  retryCount: z.number().int().nonnegative(),
+  error: z.string().nullable(),
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+})
+
+export const channelConfigSchema = z.object({
+  id: z.string().uuid(),
+  channel: channelNameSchema,
+  label: z.string().min(1).max(100),
+  config: z.string().min(1), // JSON string
+  enabled: z.boolean(),
+  createdAt: z.number().int().nonnegative(),
+  updatedAt: z.number().int().nonnegative(),
+})
+
+export const channelConfigInputSchema = z.object({
+  channel: channelNameSchema,
+  label: z.string().min(1).max(100),
+  config: z.string().min(1),
+  enabled: z.boolean().optional(),
+})
+
+export type SyncQueueItem = z.infer<typeof syncQueueItemSchema>
+export type ChannelConfig = z.infer<typeof channelConfigSchema>
+export type ChannelConfigInput = z.infer<typeof channelConfigInputSchema>
+
+export const archiveTierSchema = z.enum(['snapshot', 'reader', 'metadata'])
+export const archiveStatusSchema = z.enum(['pending', 'completed', 'failed'])
+export const backupTierSchema = z.enum(['light', 'medium', 'full'])
+export const backupStatusSchema = z.enum(['pending', 'running', 'completed', 'failed'])
+
+export const archiveSchema = z.object({
+  id: z.string().uuid(),
+  bookmarkId: z.string().uuid(),
+  type: archiveTierSchema,
+  status: archiveStatusSchema,
+  filePath: z.string().nullable(),
+  fileSize: z.number().int().nonnegative().nullable(),
+  mimeType: z.string().nullable(),
+  metadata: z.string().nullable(),
+  error: z.string().nullable(),
+  createdAt: z.number().int().nonnegative(),
+  completedAt: z.number().int().nonnegative().nullable(),
+})
+
+export const backupSchema = z.object({
+  id: z.string().uuid(),
+  tier: backupTierSchema,
+  target: z.string().min(1),
+  status: backupStatusSchema,
+  filePath: z.string().nullable(),
+  fileSize: z.number().int().nonnegative().nullable(),
+  includes: z.string().min(1),
+  error: z.string().nullable(),
+  createdAt: z.number().int().nonnegative(),
+  completedAt: z.number().int().nonnegative().nullable(),
+})
+
+export const backupConfigSchema = z.object({
+  tier: backupTierSchema,
+  target: z.string().min(1),
+  frequencyHours: z.number().int().nonnegative(),
+  retentionCount: z.number().int().positive().default(10),
+  enabled: z.boolean().default(false),
+})
+
+export type Archive = z.infer<typeof archiveSchema>
+export type Backup = z.infer<typeof backupSchema>
+export type BackupConfig = z.infer<typeof backupConfigSchema>

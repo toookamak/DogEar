@@ -1,5 +1,37 @@
 import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
+export const archives = sqliteTable('archives', {
+  id: text('id').primaryKey(),
+  bookmarkId: text('bookmark_id').notNull().references(() => bookmarks.id, { onDelete: 'cascade' }),
+  type: text('type').notNull().default('snapshot'), // 'snapshot' | 'reader' | 'metadata'
+  status: text('status').notNull().default('pending'), // 'pending' | 'completed' | 'failed'
+  filePath: text('file_path'),
+  fileSize: integer('file_size'),
+  mimeType: text('mime_type'),
+  metadata: text('metadata'), // JSON string of extracted metadata
+  error: text('error'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+}, (table) => ({
+  bookmarkStatusIdx: index('archives_bookmark_id_status_idx').on(table.bookmarkId, table.status),
+}))
+
+export const backups = sqliteTable('backups', {
+  id: text('id').primaryKey(),
+  tier: text('tier').notNull(), // 'light' | 'medium' | 'full'
+  target: text('target').notNull(), // 'local' | 's3' | 'webdav'
+  status: text('status').notNull().default('pending'), // 'pending' | 'running' | 'completed' | 'failed'
+  filePath: text('file_path'),
+  fileSize: integer('file_size'),
+  includes: text('includes').notNull(), // JSON array of included content types
+  error: text('error'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+}, (table) => ({
+  tierTargetIdx: index('backups_tier_target_idx').on(table.tier, table.target),
+  createdAtIdx: index('backups_created_at_idx').on(table.createdAt),
+}))
+
 export const folders = sqliteTable('folders', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -164,4 +196,33 @@ export const skillUsage = sqliteTable('skill_usage', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => ({
   pk: primaryKey({ columns: [table.date, table.bucket] }),
+}))
+
+export const syncQueue = sqliteTable('sync_queue', {
+  id: text('id').primaryKey(),
+  action: text('action').notNull(), // 'create' | 'update' | 'delete'
+  targetType: text('target_type').notNull(), // 'bookmark' | 'channel'
+  targetId: text('target_id').notNull(),
+  channel: text('channel').notNull(), // 'raindrop' | 's3' | 'webdav'
+  payload: text('payload'), // JSON string
+  status: text('status').notNull().default('pending'), // 'pending' | 'processing' | 'succeeded' | 'failed'
+  retryCount: integer('retry_count').notNull().default(0),
+  error: text('error'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => ({
+  statusChannelIdx: index('sync_queue_status_channel_idx').on(table.status, table.channel),
+  createdAtIdx: index('sync_queue_created_at_idx').on(table.createdAt),
+}))
+
+export const channelConfig = sqliteTable('channel_config', {
+  id: text('id').primaryKey(),
+  channel: text('channel').notNull(), // 'raindrop' | 's3' | 'webdav'
+  label: text('label').notNull(),
+  config: text('config').notNull(), // JSON string of channel-specific config
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+}, (table) => ({
+  channelEnabledIdx: index('channel_config_channel_enabled_idx').on(table.channel, table.enabled),
 }))

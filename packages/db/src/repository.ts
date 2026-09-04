@@ -3,6 +3,8 @@ import { drizzle as drizzleD1 } from 'drizzle-orm/d1'
 import {
   accessRecords,
   archiveJobs,
+  archives,
+  backups,
   bookmarkScenes,
   bookmarkTags,
   bookmarks,
@@ -13,6 +15,7 @@ import {
   settings,
   skillUsage,
   suggestions,
+  syncQueue,
   tags,
 } from './schema.js'
 
@@ -71,6 +74,20 @@ export type SkillUsageKey = {
   bucket: 'read' | 'write' | 'blocked'
 }
 
+export type SyncQueueItem = {
+  id: string
+  action: 'create' | 'update' | 'delete'
+  targetType: string
+  targetId: string
+  channel: string
+  payload: string | null
+  status: 'pending' | 'processing' | 'succeeded' | 'failed'
+  retryCount: number
+  error: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
 export type BookmarkRepository = {
   create: (input: BookmarkInput) => Promise<unknown>
   list: (filters?: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
@@ -100,8 +117,11 @@ export type BookmarkRepository = {
   suggestions: ResourceRepositories['suggestions']
   operationLog: ResourceRepositories['operationLog']
   settings: ResourceRepositories['settings']
+  archives: ResourceRepositories['archives']
   archiveJobs: ResourceRepositories['archiveJobs']
-}
+  syncQueue: ResourceRepositories['syncQueue']
+	  backups: ResourceRepositories['backups']
+	}
 
 type ResourceRepositories = {
   scenes: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
@@ -110,11 +130,32 @@ type ResourceRepositories = {
   suggestions: { list: (bookmarkId: string, status?: string) => Promise<PageResult<unknown>>; create: (input: Record<string, unknown>) => Promise<unknown>; resolve: (id: string, status: string) => Promise<unknown | undefined>; accept: (id: string, actor?: string) => Promise<unknown | undefined> }
   operationLog: { list: (filters?: Record<string, unknown>) => Promise<unknown[]>; append: (input: Record<string, unknown>) => Promise<unknown> }
   settings: { list: () => Promise<unknown[]>; get: (key: string) => Promise<unknown | undefined>; set: (key: string, value: unknown) => Promise<unknown> }
+  archives: {
+    create: (data: { id: string; bookmarkId: string; type: string; status?: string; error?: string }) => Promise<unknown>
+    get: (id: string) => Promise<unknown | undefined>
+    listByBookmark: (bookmarkId: string) => Promise<unknown[]>
+    updateStatus: (id: string, status: string, data?: { filePath?: string; fileSize?: number; mimeType?: string; error?: string; metadata?: string }) => Promise<unknown | undefined>
+    listPending: (limit?: number) => Promise<unknown[]>
+    countPending: () => Promise<number>
+  }
   archiveJobs: {
     list: (bookmarkId?: string) => Promise<unknown[]>
     create: (input: Record<string, unknown>) => Promise<unknown>
     update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>
     getStatus: (id: string) => Promise<string | undefined>
+  }
+  syncQueue: {
+    enqueue: (action: string, targetType: string, targetId: string, channel: string, payload?: string | null) => Promise<SyncQueueItem>
+    getPending: (limit?: number) => Promise<SyncQueueItem[]>
+    updateStatus: (id: string, status: string, error?: string | null) => Promise<SyncQueueItem | undefined>
+    remove: (id: string) => Promise<boolean>
+    countPending: () => Promise<number>
+  }
+  backups: {
+    create: (data: { id: string; tier: string; target: string; includes: string }) => Promise<unknown>
+    get: (id: string) => Promise<unknown | undefined>
+    list: (limit?: number) => Promise<unknown[]>
+    updateStatus: (id: string, status: string, data?: { filePath?: string; fileSize?: number; error?: string }) => Promise<unknown | undefined>
   }
 }
 
@@ -348,6 +389,53 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     get: async (key) => (await db.select().from(settings).where(eq(settings.key, key)).all())[0],
     set: async (key, value) => { const record = { key, value: typeof value === 'string' ? value : JSON.stringify(value), updatedAt: now() }; await db.insert(settings).values(record).onConflictDoUpdate({ target: settings.key, set: { value: record.value, updatedAt: record.updatedAt } }).run(); return record },
   }
+  repository.archives = {
+    create: async (data) => {
+      const timestamp = now()
+      const record = {
+        id: data.id,
+        bookmarkId: data.bookmarkId,
+        type: data.type,
+        status: data.status ?? 'pending',
+        error: data.error ?? null,
+        filePath: null,
+        fileSize: null,
+        mimeType: null,
+        metadata: null,
+        completedAt: null,
+        createdAt: timestamp,
+      }
+      await db.insert(archives).values(record).run()
+      return record
+    },
+    get: async (id) => {
+      const rows = await db.select().from(archives).where(eq(archives.id, id)).all()
+      return rows[0]
+    },
+    listByBookmark: async (bookmarkId) => {
+      return db.select().from(archives).where(eq(archives.bookmarkId, bookmarkId)).orderBy(desc(archives.createdAt)).all()
+    },
+    updateStatus: async (id, status, data) => {
+      const timestamp = now()
+      const setData: Record<string, unknown> = { status }
+      if (data?.filePath !== undefined) setData.filePath = data.filePath
+      if (data?.fileSize !== undefined) setData.fileSize = data.fileSize
+      if (data?.mimeType !== undefined) setData.mimeType = data.mimeType
+      if (data?.error !== undefined) setData.error = data.error
+      if (data?.metadata !== undefined) setData.metadata = data.metadata
+      if (status === 'completed') setData.completedAt = timestamp
+      await db.update(archives).set(setData).where(eq(archives.id, id)).run()
+      const rows = await db.select().from(archives).where(eq(archives.id, id)).all()
+      return rows[0]
+    },
+    listPending: async (limit = 10) => {
+      return db.select().from(archives).where(eq(archives.status, 'pending')).orderBy(archives.createdAt).limit(limit).all()
+    },
+    countPending: async () => {
+      const result = await db.select({ count: count() }).from(archives).where(eq(archives.status, 'pending')).all()
+      return Number(result[0]?.count ?? 0)
+    },
+  }
   repository.archiveJobs = {
     list: async (bookmarkId) => db.select().from(archiveJobs).where(bookmarkId ? eq(archiveJobs.bookmarkId, bookmarkId) : undefined).orderBy(desc(archiveJobs.createdAt)).all(),
     create: async (input) => {
@@ -378,6 +466,75 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     getStatus: async (id) => {
       const row = (await db.select({ status: archiveJobs.status }).from(archiveJobs).where(eq(archiveJobs.id, id)).all())[0]
       return row?.status
+    },
+  }
+
+  repository.syncQueue = {
+    enqueue: async (action, targetType, targetId, channel, payload = null) => {
+      const timestamp = now()
+      const id = crypto.randomUUID()
+      const record = { id, action, targetType, targetId, channel, payload, status: 'pending', retryCount: 0, error: null, createdAt: timestamp, updatedAt: timestamp }
+      await db.insert(syncQueue).values(record).run()
+      return record as SyncQueueItem
+    },
+    getPending: async (limit = 50) => {
+      const rows = await db.select().from(syncQueue).where(eq(syncQueue.status, 'pending')).orderBy(syncQueue.createdAt).limit(limit).all()
+      return rows as SyncQueueItem[]
+    },
+    updateStatus: async (id, status, error = null) => {
+      const timestamp = now()
+      const setData: Record<string, unknown> = { status, updatedAt: timestamp }
+      if (error !== undefined) setData.error = error
+      if (status === 'failed') setData.retryCount = sql`${syncQueue.retryCount} + 1`
+      await db.update(syncQueue).set(setData).where(eq(syncQueue.id, id)).run()
+      const row = (await db.select().from(syncQueue).where(eq(syncQueue.id, id)).all())[0]
+      return row as SyncQueueItem | undefined
+    },
+    remove: async (id) => {
+      await db.delete(syncQueue).where(eq(syncQueue.id, id)).run()
+      return true
+    },
+    countPending: async () => {
+      const result = await db.select({ count: count() }).from(syncQueue).where(eq(syncQueue.status, 'pending')).all()
+      return Number(result[0]?.count ?? 0)
+    },
+  }
+
+  repository.backups = {
+    create: async (data) => {
+      const timestamp = now()
+      const record = {
+        id: data.id,
+        tier: data.tier,
+        target: data.target,
+        status: 'pending',
+        filePath: null,
+        fileSize: null,
+        includes: data.includes,
+        error: null,
+        completedAt: null,
+        createdAt: timestamp,
+      }
+      await db.insert(backups).values(record).run()
+      return record
+    },
+    get: async (id) => {
+      const rows = await db.select().from(backups).where(eq(backups.id, id)).all()
+      return rows[0]
+    },
+    list: async (limit = 50) => {
+      return db.select().from(backups).orderBy(desc(backups.createdAt)).limit(limit).all()
+    },
+    updateStatus: async (id, status, data) => {
+      const timestamp = now()
+      const setData: Record<string, unknown> = { status }
+      if (data?.filePath !== undefined) setData.filePath = data.filePath
+      if (data?.fileSize !== undefined) setData.fileSize = data.fileSize
+      if (data?.error !== undefined) setData.error = data.error
+      if (status === 'completed') setData.completedAt = timestamp
+      await db.update(backups).set(setData).where(eq(backups.id, id)).run()
+      const rows = await db.select().from(backups).where(eq(backups.id, id)).all()
+      return rows[0]
     },
   }
 

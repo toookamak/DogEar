@@ -80,6 +80,7 @@ export const updateBookmarkFieldsSchema = z.object({
   folderId: z.string().uuid().nullable().optional(),
   tagIds: z.array(z.string().uuid()).optional(),
   sceneIds: z.array(z.string().uuid()).optional(),
+  version: z.number().int().positive().optional(),
   confirmStructure: z.boolean().optional(),
 })
 

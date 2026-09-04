@@ -146,7 +146,55 @@ const tableDefinitions: Record<string, string> = {
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (date, bucket)
   )`,
-}
+  sync_queue: `CREATE TABLE IF NOT EXISTS sync_queue (
+    id TEXT PRIMARY KEY NOT NULL,
+    action TEXT NOT NULL,
+    target_type TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    payload TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`,
+  channel_config: `CREATE TABLE IF NOT EXISTS channel_config (
+	    id TEXT PRIMARY KEY NOT NULL,
+	    channel TEXT NOT NULL,
+	    label TEXT NOT NULL,
+	    config TEXT NOT NULL,
+	    enabled INTEGER NOT NULL DEFAULT 1,
+	    created_at INTEGER NOT NULL,
+	    updated_at INTEGER NOT NULL
+	  )`,
+	  archives: `CREATE TABLE IF NOT EXISTS archives (
+	    id TEXT PRIMARY KEY NOT NULL,
+	    bookmark_id TEXT NOT NULL,
+	    type TEXT NOT NULL DEFAULT 'snapshot',
+	    status TEXT NOT NULL DEFAULT 'pending',
+	    file_path TEXT,
+	    file_size INTEGER,
+	    mime_type TEXT,
+	    metadata TEXT,
+	    error TEXT,
+	    created_at INTEGER NOT NULL,
+	    completed_at INTEGER,
+	    FOREIGN KEY (bookmark_id) REFERENCES bookmarks(id) ON DELETE CASCADE
+	  )`,
+	  backups: `CREATE TABLE IF NOT EXISTS backups (
+	    id TEXT PRIMARY KEY NOT NULL,
+	    tier TEXT NOT NULL,
+	    target TEXT NOT NULL,
+	    status TEXT NOT NULL DEFAULT 'pending',
+	    file_path TEXT,
+	    file_size INTEGER,
+	    includes TEXT NOT NULL,
+	    error TEXT,
+	    created_at INTEGER NOT NULL,
+	    completed_at INTEGER
+	  )`,
+	}
 
 const bookmarkColumns: Record<string, string> = {
   title: 'ALTER TABLE bookmarks ADD COLUMN title TEXT',
@@ -187,6 +235,12 @@ function createIndexes(database: SqliteDatabase) {
   database.run('CREATE INDEX IF NOT EXISTS suggestions_bookmark_id_status_idx ON suggestions(bookmark_id, status)')
   database.run('CREATE INDEX IF NOT EXISTS operation_log_created_at_idx ON operation_log(created_at)')
   database.run('CREATE INDEX IF NOT EXISTS idempotency_keys_expires_at_idx ON idempotency_keys(expires_at)')
+  database.run('CREATE INDEX IF NOT EXISTS sync_queue_status_channel_idx ON sync_queue(status, channel)')
+  database.run('CREATE INDEX IF NOT EXISTS sync_queue_created_at_idx ON sync_queue(created_at)')
+  database.run('CREATE INDEX IF NOT EXISTS channel_config_channel_enabled_idx ON channel_config(channel, enabled)')
+  database.run('CREATE INDEX IF NOT EXISTS archives_bookmark_id_status_idx ON archives(bookmark_id, status)')
+  database.run('CREATE INDEX IF NOT EXISTS backups_tier_target_idx ON backups(tier, target)')
+  database.run('CREATE INDEX IF NOT EXISTS backups_created_at_idx ON backups(created_at)')
 }
 
 function migrateJobStatus(database: SqliteDatabase) {
@@ -219,7 +273,7 @@ export function initializeSqliteSchema(database: SqliteDatabase) {
     for (const [column, statement] of Object.entries(bookmarkColumns)) {
       if (!columns.has(column)) database.run(statement)
     }
-    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs', 'idempotency_keys', 'skill_usage']) {
+    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs', 'idempotency_keys', 'skill_usage', 'sync_queue', 'channel_config', 'archives', 'backups']) {
       database.run(tableDefinitions[table])
     }
     if (!columnsFor(database, 'access_records').has('client')) {

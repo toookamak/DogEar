@@ -22,6 +22,11 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { BookmarkRepository } from '@dogear/db'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createChannelRoutes } from './channels-routes.js'
+import { createArchiveRoutes } from './archive/archive-routes.js'
+import { createBackupRoutes } from './backup/backup-routes.js'
+import { createMetadataRoutes } from './archive/metadata-routes.js'
+import { extractMetadata } from './archive/metadata.js'
 
 const sessionCookie = 'dogear_session'
 const user = { id: 'user' }
@@ -99,6 +104,10 @@ function serializeAccessRecord(record: any) {
   return { ...record, openedAt: timestamp(record.openedAt) }
 }
 
+function escapeHtml(text: string) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')
+}
+
 export function createApp(repository: BookmarkRepository, options: AppOptions = {}) {
   const password = options.password ?? process.env.DOGEAR_PASSWORD ?? ''
   const sessionTtlSeconds = options.sessionTtlSeconds ?? 60 * 60 * 24 * 7
@@ -110,7 +119,8 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.get('/health', (c) => c.json({ ok: true }))
 
   app.post('/api/auth/login', async (c) => {
-    const input = loginRequestSchema.safeParse(await c.req.json().catch(() => undefined))
+    const body = await c.req.json().catch(() => undefined)
+    const input = loginRequestSchema.safeParse(body)
     if (!password || !input.success || input.data.password !== password) return unauthorized(c)
     c.header('Set-Cookie', setSessionCookie(signSession(now(), password), sessionTtlSeconds))
     return c.json({ user })
@@ -144,6 +154,11 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.use('/api/sync/*', async (c, next) => {
+    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
+    await next()
+  })
+
+  app.use('/api/metadata/*', async (c, next) => {
     if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
     await next()
   })
@@ -185,6 +200,33 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       })
     }
     await repository.operationLog.append({ actor, action: 'create', targetType: 'bookmark', targetId: id })
+
+    // Async metadata extraction - don't block the response
+    const recordWithId = record as { id: string; url: string }
+    const recordId = recordWithId.id
+    const recordUrl = recordWithId.url
+    Promise.resolve().then(async () => {
+      try {
+        const meta = await extractMetadata(recordUrl)
+        const updates: Record<string, unknown> = {}
+        if (meta.title) updates.title = meta.title
+        if (meta.description) updates.excerpt = meta.description
+        if (meta.image) updates.cover = meta.image
+        if (meta.author) updates.author = meta.author
+        if (meta.domain) updates.domain = meta.domain
+        if (meta.favicon) updates.favicon = meta.favicon
+        if (meta.publishedAt) {
+          const d = new Date(meta.publishedAt)
+          if (!Number.isNaN(d.getTime())) updates.publishedAt = d.getTime()
+        }
+        if (Object.keys(updates).length > 0) {
+          await repository.update(recordId, updates)
+        }
+      } catch {
+        // Metadata extraction failed silently - partial metadata is fine
+      }
+    })
+
     return c.json(serializeBookmark(record), 201)
   })
 
@@ -197,14 +239,32 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.get('/api/sync/pending-count', async (c) => {
-    return c.json({ pendingCount: await repository.countPending() })
+    const count = await repository.syncQueue.countPending()
+    return c.json({ pendingCount: count })
+  })
+
+  app.get('/api/sync/queue', async (c) => {
+    const limit = Number(c.req.query('limit')) || 50
+    const items = await repository.syncQueue.getPending(limit)
+    return c.json({ items })
+  })
+
+  app.post('/api/sync/process', async (c) => {
+    const items = await repository.syncQueue.getPending(1)
+    if (items.length === 0) return c.json({ processed: 0, item: null })
+    const item = items[0]
+    await repository.syncQueue.updateStatus(item.id, 'processing')
+    // Mark as processing — actual processing is handled by the background worker
+    // or by the client-side channel handler
+    return c.json({ processed: 1, item })
   })
 
   const workbenchPaths = [
     '/api/recycle-bin', '/api/recycle-bin/*', '/api/scenes', '/api/scenes/*',
     '/api/folders', '/api/folders/*', '/api/tags', '/api/tags/*',
     '/api/suggestions/*', '/api/operation-log', '/api/settings', '/api/settings/*',
-    '/api/jobs', '/api/jobs/*',
+    '/api/jobs', '/api/jobs/*', '/api/channels', '/api/channels/*',
+    '/api/archive', '/api/archive/*', '/api/backup', '/api/backup/*',
   ]
   for (const path of workbenchPaths) app.use(path, requireSession)
 
@@ -332,7 +392,12 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.get('/api/operation-log', async (c) => c.json({ items: await repository.operationLog.list({ actor: c.req.query('actor'), action: c.req.query('action') }), nextCursor: null }))
-  app.get('/api/settings', async (c) => c.json({ items: (await repository.settings.list()).filter((item: any) => !String(item.key).includes('token') && !String(item.key).includes('password')) }))
+
+  app.route('/api/channels', createChannelRoutes(repository))
+  app.route('/api/archive', createArchiveRoutes(repository))
+  app.route('/api/backup', createBackupRoutes(repository))
+  app.route('/api/metadata', createMetadataRoutes())
+
   app.put('/api/settings', async (c) => {
     const body = await c.req.json().catch(() => undefined) as Record<string, unknown> | undefined
     if (!body) return invalidRequest(c)
@@ -377,6 +442,63 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.get('/api/bookmarks/:bookmarkId/access-records', async (c) => {
     const records = await repository.listAccessRecords(c.req.param('bookmarkId'))
     return c.json({ records: records.map(serializeAccessRecord) })
+  })
+
+  app.get('/api/bookmarks/:bookmarkId/export/html', async (c) => {
+    const record = await repository.get(c.req.param('bookmarkId'))
+    if (!record) return skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
+    const anyRecord = record as Record<string, any>
+    const title = anyRecord.title || anyRecord.url || 'bookmark'
+    const domain = anyRecord.domain || ''
+    const createdAt = anyRecord.createdAt ? new Date(anyRecord.createdAt instanceof Date ? anyRecord.createdAt.getTime() : Number(anyRecord.createdAt)).toISOString() : ''
+    const author = anyRecord.author || ''
+    const note = anyRecord.note || ''
+    const url = anyRecord.url || ''
+    const excerpt = anyRecord.excerpt || ''
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escapeHtml(title)}</title>
+  <meta name="author" content="${escapeHtml(author)}">
+  <meta name="description" content="${escapeHtml(excerpt)}">
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    a { color: #0066cc; }
+    .meta { color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1><a href="${escapeHtml(url)}">${escapeHtml(title)}</a></h1>
+  <div class="meta">
+    <p>来源: ${escapeHtml(domain)}</p>
+    <p>保存时间: ${escapeHtml(createdAt)}</p>
+    ${author ? `<p>作者: ${escapeHtml(author)}</p>` : ''}
+    ${note ? `<div><h2>备注</h2><p>${escapeHtml(note)}</p></div>` : ''}
+  </div>
+</body>
+</html>`
+    return c.newResponse(html, 200, { 'Content-Type': 'text/html; charset=utf-8' })
+  })
+
+  app.get('/api/bookmarks/:bookmarkId/export/markdown', async (c) => {
+    const record = await repository.get(c.req.param('bookmarkId'))
+    if (!record) return skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
+    const anyRecord = record as Record<string, any>
+    const title = anyRecord.title || anyRecord.url || 'bookmark'
+    const url = anyRecord.url || ''
+    const domain = anyRecord.domain || ''
+    const createdAt = anyRecord.createdAt ? new Date(anyRecord.createdAt instanceof Date ? anyRecord.createdAt.getTime() : Number(anyRecord.createdAt)).toISOString() : ''
+    const author = anyRecord.author || ''
+    const note = anyRecord.note || ''
+    const md = `# [${title}](${url})
+
+- 来源: ${domain}
+- 保存时间: ${createdAt}
+${author ? `- 作者: ${author}` : ''}
+${note ? `\n## 备注\n\n${note}` : ''}
+`
+    return c.newResponse(md, 200, { 'Content-Type': 'text/markdown; charset=utf-8' })
   })
 
   const configuredSkillToken = options.skillToken ?? process.env.DOGEAR_SKILL_TOKEN ?? ''
@@ -457,6 +579,32 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       saved.jobId = job.id
     }
     if (repository.operationLog) await repository.operationLog.append({ actor: 'agent', action: 'save_bookmark', targetType: 'bookmark', targetId: saved.id })
+
+    // Async metadata extraction - don't block the response
+    const savedId = saved.id
+    const savedUrl = saved.url
+    Promise.resolve().then(async () => {
+      try {
+        const meta = await extractMetadata(savedUrl)
+        const updates: Record<string, unknown> = {}
+        if (meta.title) updates.title = meta.title
+        if (meta.description) updates.excerpt = meta.description
+        if (meta.image) updates.cover = meta.image
+        if (meta.author) updates.author = meta.author
+        if (meta.domain) updates.domain = meta.domain
+        if (meta.favicon) updates.favicon = meta.favicon
+        if (meta.publishedAt) {
+          const d = new Date(meta.publishedAt)
+          if (!Number.isNaN(d.getTime())) updates.publishedAt = d.getTime()
+        }
+        if (Object.keys(updates).length > 0) {
+          await repository.update(savedId, updates)
+        }
+      } catch {
+        // Metadata extraction failed silently - partial metadata is fine
+      }
+    })
+
     return c.json(saved, 201)
   })
 

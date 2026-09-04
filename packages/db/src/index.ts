@@ -1,6 +1,7 @@
 export {
   accessRecords,
   archiveJobs,
+  archives,
   bookmarkScenes,
   bookmarkTags,
   bookmarks,

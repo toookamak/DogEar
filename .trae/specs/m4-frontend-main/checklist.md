@@ -1,0 +1,23 @@
+# M4 正式前端验证清单
+
+- [x] 目录结构符合 spec 描述
+- [x] 登录页可输入密码，登录后设置 Cookie 并跳转工作台
+- [x] 401 响应自动跳转登录页
+- [x] 退出登录清除 Cookie 并返回登录页
+- [x] 工作台壳层含 Sidebar、TopBar、内容区，导航项可用
+- [x] Inbox 分页加载，显示 status=unread 书签
+- [x] 书签列表分页搜索，支持 status/scene/folder/tag/important/source 筛选
+- [x] 保存书签表单含 note/intent/important/private 可选字段
+- [x] 书签详情面板可编辑 title/note/status/scene/folder/tag
+- [x] ⌘K 命令面板可唤起，MiniSearch 端侧索引输入即筛
+- [x] 批量选择工具栏可多选并执行批量操作
+- [x] 回收站列表分页、恢复、永久删除、清空均有二次确认
+- [x] AI 建议四落点占位 UI 展示建议来源，无模型时不崩溃
+- [x] Scene/Folder/Tag 创建、修改、删除、挂载/摘除可用
+- [x] 操作日志列表展示
+- [x] 设置展示/保存，敏感字段过滤
+- [x] Skill 能力开关展示，用量展示
+- [x] Job 列表 + 重试/取消
+- [x] 视觉符合 DESIGN.md（颜色/字体/间距/圆角）
+- [x] pnpm test、pnpm typecheck、pnpm build 通过
+- [x] CHANGELOG.md 已更新，前端代码已提交 git

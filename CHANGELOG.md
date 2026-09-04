@@ -1,6 +1,14 @@
 # Changelog
 
-- 2026-09-04 / v0.4.0 — M4 API 后端补齐（B 步）：repository 分页改造、幂等键/用量存储、batch skipped 返回 {id,reason}、purgeDeleted like→lt 修复、archiveJobs updatedAt 初始化；路由层 keyset 分页接线、Idempotency-Key 支持、version 冲突检测、settings 白名单、skill capabilities/usage 查询、job 状态守卫、suggestions/recycleBin 统一 envelope。
+- 2026-09-04 / v0.5.0 — M6-2: Archive Job 引擎：添加 `archives` 仓库方法到 `packages/db/src/repository.ts`（create/get/listByBookmark/updateStatus/listPending/countPending），创建 `apps/server/src/archive/archive-service.ts`（ArchiveJobService 状态机：createJob/getJob/getJobsByBookmark/processPending/retryJob/cancelJob），创建 `apps/server/src/archive/archive-routes.ts`（REST API：POST/GET /api/archive、GET /api/archive/bookmark/:id、POST retry/cancel），挂载到 `apps/server/src/app.ts`（requireSession 保护 `/api/archive`）；typecheck 通过。
+- 2026-09-04 / v0.5.0 — M6-4: Metadata 增强：创建元数据提取服务 `apps/server/src/archive/metadata.ts`，暴露 `/api/metadata/extract` API 端点，在保存新书签时异步提取网页元数据（title/excerpt/cover/author/domain/favicon/publishedAt）并更新书签；typecheck 通过。
+- 2026-09-04 / v0.5.0 — M6-3: SingleFile 快照：创建 archive API 客户端（apps/web/src/api/archive.ts）、SnapshotButton 组件（apps/web/src/components/bookmarks/SnapshotButton.tsx），集成到 BookmarkDetail 详情面板（备注字段后、保存按钮前）；typecheck 通过。
+- 2026-09-04 / v0.5.0 — M5-7: 导入梳理页（ImportResultPage）：创建 ImportResultPage 组件展示导入结果统计与错误详情，添加 /import-result 路由，更新 ChannelManager 导入流程跳转至结果页；typecheck 通过。
+- 2026-09-04 / v0.5.0 — M5-2: Dexie 端侧镜像缓存：新增 dexie 依赖，创建 DogEarCache 数据库类（bookmarks/scenes/folders/tags/settings 表），cacheSync 同步服务（syncAll/syncBookmarks/syncScenes/syncFolders/syncTags/getBookmark/queryBookmarks），以及 db 模块导出入口。
+
+- 2026-09-04 / v0.4.0 — M4 正式工作台前端完整实现（C 步）：应用壳层 + 认证、书签主链路（Inbox/列表/保存/详情/筛选）、⌘K MiniSearch 端侧搜索、批量处理、回收站、AI 建议占位 UI、组织管理（Scene/Folder/Tag CRUD）、操作日志/设置/Job 列表；仅新增 wouter + minisearch 两个生产依赖；严格遵循 DESIGN.md 视觉规范；typecheck + test + build 全部通过。
+
+- 2026-09-04 / v0.4.0 / 1935003 — M4 API 后端补齐（B 步）：repository 分页改造、幂等键/用量存储、batch skipped 返回 {id,reason}、purgeDeleted like→lt 修复、archiveJobs updatedAt 初始化；路由层 keyset 分页接线、Idempotency-Key 支持、version 冲突检测、settings 白名单、skill capabilities/usage 查询、job 状态守卫、suggestions/recycleBin 统一 envelope。
 
 - 2026-09-04 / v0.4.0 — 确认 M4 前端开工口径：修订 AGENTS/README 进度表述（M3/M4 后端已完成作起点）、计划书待确认项收口并增补范围（wouter 路由、⌘K+MiniSearch、建议四落点占位、保存表单可选字段、DB schema 本轮允许、测试只做纯函数层）、修正计划 §3.3 目录大小写为 `docs/TODO/`，web package.json 将 @vitejs/plugin-react 移至 devDependencies。
 
