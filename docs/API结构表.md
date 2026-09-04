@@ -1,8 +1,8 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.0
+> **文档版本**：v1.1
 > **应用版本**：v0.2.0
-> **文档状态**：生效
+> **文档状态**：评审中
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
 > **配套**：[数据库结构表](./数据库结构表.md) · [API 设计](./modules/20260904_API设计.md)
@@ -14,6 +14,7 @@
 > | v1.0 | v0.2.0 | 2026-09-04 | 初稿：从设计稿抽出工作台 REST、Skill、回执与错误码 | grok-4.6 |
 > | v1.0 | v0.2.0 | 2026-09-04 | 文头补当前覆盖与升级条件 | grok-4.6 |
 > | v1.0 | v0.2.0 | 2026-09-04 | 当前覆盖与升级条件改为正文第 1 章，避免文头被跳过 | grok-4.6 |
+> | v1.1 | v0.2.0 | 2026-09-04 | 补齐 M4 工作台 API 的请求、回执、分页、错误和 Skill 管理契约，供正式前端接线评审 | gpt-5 |
 
 # API 结构表
 
@@ -297,3 +298,174 @@ Skill 本版无批量。
 | 新路径替代 M2 已有 URL | 只加参数或新路径 |
 
 M2 已有且必须保留：`/api/auth/*`、`POST/GET /api/bookmarks`、`GET /api/inbox`、`GET /api/sync/pending-count`、`POST/GET .../access-records`。
+
+---
+
+## 8. M4 实现补充契约（v1.1）
+
+本章是 v1.1 为正式前端接线补充的明确约定。与前文的概略描述冲突时，以本章的请求、回执、错误和状态约定为准；本章不新增 M5/M6 路径。
+
+### 8.1 查询参数与分页
+
+所有带“分页”标记的列表接口使用同一规则：`limit` 缺省为 50，允许 1–100 的十进制整数；`cursor` 是服务端生成的不透明字符串，客户端不得解析或拼接。非法 `limit`、`cursor` 返回 400 `VALIDATION_ERROR`。排序必须稳定，并以 `id` 作为同时间排序的次级键。
+
+列表接口不得先读取全量数据后在内存中截断。无下一页时 `nextCursor` 为 `null`。空字符串参数按缺省处理；布尔 query 只接受 `true` 或 `false`，其它值返回 `VALIDATION_ERROR`。
+
+书签列表和搜索的 query：
+
+```text
+status=unread|saved|archived
+sceneId=<uuid>
+folderId=<uuid>|none
+tagId=<uuid>
+important=true|false
+source=page|agent|extension
+q=<string>
+limit=<1..100>
+cursor=<opaque string>
+```
+
+`GET /api/inbox` 只接受 `limit`、`cursor`，回执固定为 `{bookmarks: Bookmark[], nextCursor: string|null}`。
+
+### 8.2 统一成功和错误回执
+
+除特别注明外，列表回执使用 `{items: [], nextCursor: null}`；单对象回执使用完整书签对象或资源对象；删除、恢复和动作回执必须使用明确的 `{ok: true, ...}` 或动作结果对象，不返回 `null`。
+
+请求 JSON 缺失、解析失败、字段类型错误或枚举值错误均返回：
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "请求参数无效",
+    "details": {"field": "原因"}
+  }
+}
+```
+
+以下错误映射在 M4 中固定：
+
+| 场景 | HTTP | code |
+| --- | ---: | --- |
+| 无会话或密码/Token 错误 | 401 | `UNAUTHORIZED` |
+| Skill 能力关闭 | 403 | `CAPABILITY_DISABLED` |
+| 对象不存在或活接口访问回收站对象 | 404 | `NOT_FOUND` |
+| 活书签 PATCH 命中回收站对象 | 409 | `BOOKMARK_DELETED` |
+| version 不一致 | 409 | `CONFLICT` |
+| 场景仍有成员 | 409 | `SCENE_IN_USE` |
+| 批量 ids 超过 100 | 400 | `BATCH_TOO_LARGE` |
+| Skill 限速 | 429 | `RATE_LIMITED` |
+
+### 8.3 书签请求与回执
+
+`POST /api/bookmarks` 接受：
+
+```json
+{
+  "url": "https://example.com/article",
+  "note": "可选备注",
+  "intent": "保存原因",
+  "important": false,
+  "private": false
+}
+```
+
+服务端必须保存上述可选字段，并返回完整书签对象；固定写入 `source=page`、`status=unread`、`syncStatus=synced`，记录 `actor=user` 的 create 日志。若带 `Idempotency-Key`，24 小时内同一会话和同一请求键重放首次成功回执，不重复创建。
+
+`PATCH /api/bookmarks/:id` 接受部分字段：`title`、`excerpt`、`note`、`important`、`private`、`status`、`folderId`、`tagIds`、`sceneIds`、`version`。`folderId` 可为 null；数组字段表示整份替换。带 `version` 时必须与服务端当前版本一致，否则返回 `409 CONFLICT`，details 中包含 `currentVersion`。成功后 version 加一，并返回完整书签对象。
+
+批量 PATCH 必须先校验整个请求，再在一个事务中执行；返回：
+
+```json
+{
+  "updated": ["<uuid>"],
+  "skipped": [{"id": "<uuid>", "reason": "not_found|deleted"}]
+}
+```
+
+批量体中的 `ids` 至少 1 个且最多 100 个；数组 ID 必须为 UUID。`deleted=true` 执行软删，不能与 `folderId`、成员替换字段同时使用；冲突或非法组合返回 `VALIDATION_ERROR`。
+
+### 8.4 组织资源
+
+场景：
+
+```json
+{
+  "name": "工作研究",
+  "description": null,
+  "icon": null,
+  "sortOrder": 0,
+  "enabled": true,
+  "aerr": "reference"
+}
+```
+
+POST 必须有非空 `name`；`aerr` 缺省为 `reference`。PATCH 只允许上述可编辑字段。GET `/api/scenes` 返回 `{items}`，按 `sortOrder`、`name`、`id` 稳定排序，并包含停用场景。删除仍有成员时返回 `SCENE_IN_USE`。
+
+文件夹创建和更新字段为 `name`、`parentId`、`sortOrder`；`name` 非空，`parentId` 可为 null，父节点必须存在且不得形成环。GET `/api/folders` 返回 `{items}`。删除文件夹后，其书签 `folderId` 置 null。
+
+标签创建字段为 `name`，服务端生成规范化的 `nameKey`；同一 `nameKey` 返回已有标签而不重复创建。GET `/api/tags` 返回 `{items}`。DELETE `/api/tags/:id` 不存在返回 `NOT_FOUND`，存在时只解除书签挂载，不删除书签。
+
+### 8.5 回收站、建议、访问记录
+
+`GET /api/recycle-bin` 使用 `deletedAt` 倒序分页。restore 成功返回 `{ok:true, bookmark}`；永久删除返回 `{ok:true}`，并清理书签成员、建议、访问记录和未完成归档 Job。`POST /api/recycle-bin/empty` 接受 `{onlyExpired?: boolean}`，缺省为 true，返回 `{ok:true,purged:<number>}`。
+
+`GET /api/bookmarks/:id/suggestions` 返回 `{items,nextCursor}`，默认 `status=pending`，书签不存在返回 404。accept、defer、dismiss 成功返回 `{ok:true, suggestion}`；已处理建议再次执行返回当前状态，不重复写入归属，保持幂等。
+
+访问记录 POST 接受可选 `{source:"original"}`，书签不存在返回 404；回收站书签允许记录一次打开。成功返回 201 的记录对象，并回写 `lastOpenedAt`。GET 返回 `{records}`。
+
+### 8.6 设置、能力、用量和 Job
+
+`GET /api/settings` 返回 `{items:[{key,value,updatedAt}]}`；敏感设置按 key 和 value 双重过滤，不返回口令、Token、摘要或密钥。`PUT /api/settings` 只允许 M4 白名单：`recycle.retention_days`、`skill.capabilities`，未知 key 返回 `VALIDATION_ERROR`。复杂 value 使用 JSON 原值，不向前端暴露内部字符串化细节。
+
+`PUT /api/skill/capabilities` 接受并返回：
+
+```json
+{
+  "read": true,
+  "write_new": true,
+  "update_existing": false
+}
+```
+
+更新只允许工作台会话，立即影响后续 Skill 请求，并记录设置变更日志。`GET /api/skill/usage` 返回：
+
+```json
+{
+  "date": "YYYY-MM-DD",
+  "requests": 0,
+  "writes": 0,
+  "blocked": 0
+}
+```
+
+Job 回执固定包含 `id`、`bookmarkId`、`type`、`status`、`retryCount`、`error`、`createdAt`、`updatedAt`。状态为 `pending|running|succeeded|failed|cancelled`；retry 只允许 failed，cancel 只允许 pending/running，状态不允许时返回 `CONFLICT`；不存在返回 `NOT_FOUND`。`POST /api/bookmarks/:id/archives` 返回 `{jobId,snapshotStatus:"queued_pending_browser"}`，仍不返回文件 URL。
+
+### 8.7 M4 前端接线清单
+
+正式前端只依赖以下 M4 路径：
+
+```text
+/api/auth/*
+/api/bookmarks
+/api/bookmarks/:id
+/api/bookmarks/search
+/api/bookmarks/batch
+/api/bookmarks/:id/access-records
+/api/inbox
+/api/sync/pending-count
+/api/recycle-bin*
+/api/scenes*
+/api/folders*
+/api/tags*
+/api/bookmarks/:id/suggestions
+/api/suggestions/:id/{accept,defer,dismiss}
+/api/operation-log
+/api/settings
+/api/skill/capabilities
+/api/skill/usage
+/api/bookmarks/:id/archives
+/api/jobs*
+```
+
+本清单仅用于前端接线，不代表新增路由。`/channels/*`、`/backup`、归档内容传输和导航规则仍按第 7 章禁止实现。
