@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-04 / v0.6.0 / 9c1cf10 — 数据库/API 结构表升至 v1.2：收编已有 M5–M7 表名与路径；本版只覆盖通道测试连通与一次上下传、三档备份可下载、导航规则存储；冲突/双向同步/快照产文件/规则求值仍禁止。
+
 - 2026-09-04 / v0.6.0 — F-1: Docker 部署：创建 `apps/server/Dockerfile`（Bun + pnpm monorepo 多阶段构建）、`apps/web/Dockerfile`（Vite 构建 + Nginx 静态托管）、`apps/web/nginx.conf`（API 反向代理 + SPA fallback）、`docker-compose.yml`（server + web 双服务编排、持久卷、健康检查）、`.dockerignore`；更新 README 进度表与 AGENTS.md 状态为 M5-M7 完工
 - 2026-09-04 / v0.5.0 — M7-3: 前端导航页：创建 nav API 客户端 `apps/web/src/api/nav.ts`，创建 `NavPage` 组件 `apps/web/src/pages/NavPage.tsx`（展示最近访问 + 全部书签分页加载），添加 `/nav` 路由，在侧边栏添加导航链接；typecheck 通过。
 - 2026-09-04 / v0.5.0 — M6-2: Archive Job 引擎：添加 `archives` 仓库方法到 `packages/db/src/repository.ts`（create/get/listByBookmark/updateStatus/listPending/countPending），创建 `apps/server/src/archive/archive-service.ts`（ArchiveJobService 状态机：createJob/getJob/getJobsByBookmark/processPending/retryJob/cancelJob），创建 `apps/server/src/archive/archive-routes.ts`（REST API：POST/GET /api/archive、GET /api/archive/bookmark/:id、POST retry/cancel），挂载到 `apps/server/src/app.ts`（requireSession 保护 `/api/archive`）；typecheck 通过。

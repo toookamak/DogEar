@@ -1,8 +1,8 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.1
-> **应用版本**：v0.2.0
-> **文档状态**：评审中
+> **文档版本**：v1.2
+> **应用版本**：v0.6.0
+> **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
 > **配套**：[数据库结构表](./数据库结构表.md) · [API 设计](./modules/20260904_API设计.md)
@@ -15,32 +15,33 @@
 > | v1.0 | v0.2.0 | 2026-09-04 | 文头补当前覆盖与升级条件 | grok-4.6 |
 > | v1.0 | v0.2.0 | 2026-09-04 | 当前覆盖与升级条件改为正文第 1 章，避免文头被跳过 | grok-4.6 |
 > | v1.1 | v0.2.0 | 2026-09-04 | 补齐 M4 工作台 API 的请求、回执、分页、错误和 Skill 管理契约，供正式前端接线评审 | gpt-5 |
+> | v1.2 | v0.6.0 | 2026-09-04 | 开放通道连通、备份三档下载、导航规则 CRUD；快照内容、冲突、双向同步、规则求值仍禁止 | grok-4.6 |
 
 # API 结构表
 
 ## 1. 当前覆盖与升级条件
 
-写代码前先读本章。v1.0 只覆盖到这里；超出范围先停、先讨论、先升文档版本，再接线。
+写代码前先读本章。v1.2 只覆盖到这里；超出范围先停、先讨论、先升文档版本，再接线。
 
 | 项 | 口径 |
 | --- | --- |
-| 当前覆盖 | **v1.0 = M3 + M4**。在 M2 登录/创建/Inbox/未推送数/访问打点之上，补全整理与 Agent 能存。 |
-| 本版有的 | `/api/auth/*` 书签 CRUD/搜索/批量 Inbox 回收站 场景/文件夹/标签 建议 日志 设置 Job 占位；`/.well-known/capabilities`；七个 `POST /api/skill/<name>` |
-| 本版没有的 | `/channels/*`、`/backup`、归档内容下载/上传、`/navigation/rules`、Skill 批量与删除、离线保存接口 |
-| 升级规则 | 下表任一触发即停。先讨论升级方案、升本文档版本，再接线。禁止边写代码边加路由。M3/M4 做完本身不构成升级。 |
+| 当前覆盖 | **v1.2 = M3 + M4 + 通道连通 + 三档备份 + 导航规则存储**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
+| 本版有的 | v1.1 全部；外加通道 CRUD/测试/一次导入导出、备份创建/列表/下载、导航规则 CRUD、导航书签/最近（默认过滤，规则求值推后） |
+| 本版没有的 | 快照文件 `GET/PUT .../content`、冲突合并、默认双向同步、Dexie 专用接口、导航规则求值后的展示集合、备份恢复/ZIP 导入、Skill 批量与删除、离线保存 |
+| 升级规则 | 下表任一触发即停。先讨论升级方案、升本文档版本，再接线。禁止边写代码边加路由。 |
 
 ### 1.1 何时讨论升级（触发即停）
 
 | 触发 | 典型要补的 | 对应里程碑 |
 | --- | --- | --- |
-| 要配置或走 Raindrop / S3 / WebDAV | `CRUD /channels/*`；导入导出；未推送数可能不再恒为 0 | M5 |
-| 端侧缓存上线，工作台不再每笔直打真源 | 成功口径与 pending-count 语义；Skill 仍禁止走缓存 | M5 |
-| 要下载/替换快照文件，而不只是 Job | `GET/PUT /archives/:id/content`；回执不得再用「文件还没有」撒谎 | M6 |
-| 要跑备份并查历史 | `POST /backup`、`GET /backup/history` | M6 |
-| 导航页要读写圈选规则 | `GET /navigation`、`CRUD /navigation/rules` | M7 |
-| 要打开 Skill 改结构/删除/批量，或改默认能力 | 能力开关默认值、`confirmStructure`、批量 Skill | M4 末期或之后，须单独立项 |
+| 要默认双向同步或冲突合并 | 队列真消费、`conflict` API | M5 后期（本版不做） |
+| 端侧缓存上线，工作台不再每笔直打真源 | 成功口径与 pending-count；Skill 仍禁止走缓存 | M5 后期（本版不做） |
+| 要下载/替换快照文件，而不只是 Job | `GET/PUT /api/archive/:id/content`；回执不得在无文件时给下载 URL | M6 后期（本版不做） |
+| 备份恢复、每目标调度 | 另开目标与恢复接口 | 备份设计稿，本版不做 |
+| 导航按规则圈选并保证刷新一致 | 求值接口与展示集合 | M7 后期 |
+| 要打开 Skill 改结构/删除/批量，或改默认能力 | 能力开关默认值、`confirmStructure`、批量 Skill | 须单独立项 |
 | 要改 M2 已有路径名或书签回执必含字段 | 破坏兼容，必须升级讨论 | 随时 |
-| 实现中发现缺接口，不补就做不完当前 Mx | 先对照设计稿；仍缺则升级讨论，不私加 | 随时 |
+| 实现中发现缺接口，不补就做不完当前覆盖 | 先对照本文；仍缺则升级讨论，不私加 | 随时 |
 
 工程约定（未升级前不变）：Hono + Zod；JSON 驼峰；时间毫秒；id 为 UUID；禁止 `tmp_`；工作台 Cookie、Skill Bearer；同一仓库。落点 `apps/server`、`packages/shared`。
 
@@ -169,7 +170,7 @@ Skill 本版无批量。
 | 方法 | 路径 | 成功 | 要点 |
 | --- | --- | --- | --- |
 | GET | `/api/inbox` | `{bookmarks,nextCursor}` | `status=unread` 且未软删 |
-| GET | `/api/sync/pending-count` | `{pendingCount}` | 直写真源成功后为 0 |
+| GET | `/api/sync/pending-count` | `{pendingCount}` | `sync_queue` 中 `pending` 条数；未入队则为 0。真源写入成功不占用此数 |
 | POST | `/api/bookmarks/:id/access-records` | 201 记录 | 体可选 `{source:"original"}`；回写 `lastOpenedAt` |
 | GET | `/api/bookmarks/:id/access-records` | `{records}` | 时间倒序 |
 
@@ -220,11 +221,11 @@ Skill 本版无批量。
 | PUT | `/api/skill/capabilities` | 三级开关 |
 | GET | `/api/skill/usage` | 今日请求量/写入量/拦截次数 |
 | POST | `/api/bookmarks/:id/archives` | 体 `{type:"snapshot"}`；只建 Job；回执必须带 `snapshotStatus:"queued_pending_browser"` |
-| GET | `/api/jobs` | |
+| GET | `/api/jobs` | 与 `/api/archive` 读同一套 `archive_jobs`，禁止两套列表 |
 | POST | `/api/jobs/:id/retry` | |
 | POST | `/api/jobs/:id/cancel` | |
 
-禁止返回快照文件 URL。下载/上传是 M6，本版不做。
+无 `archives.file_path` 时禁止返回快照文件 URL。`/api/archive` 与 `/api/jobs` 必须互通，见第 9 章。
 
 ---
 
@@ -288,14 +289,17 @@ Skill 本版无批量。
 
 | 不要做 | 原因 |
 | --- | --- |
-| `GET/PUT /archives/:id/content` | 无快照文件 |
-| `CRUD /channels/*` | M5 |
-| `POST /backup` | M6 |
-| `CRUD /navigation/rules` | M7 |
+| `GET/PUT /api/archive/:id/content` | 本版不产快照文件 |
+| 冲突合并接口 | `conflict` 未建表 |
+| Raindrop 定时双向同步 | 开发计划不做默认双向 |
+| Dexie 专用读写接口 | 缓存推后；Skill 禁止走缓存 |
+| 导航规则求值后的展示集合接口 | 本版只存规则 |
+| 备份恢复 / ZIP 导入 | 三档下载即可 |
 | Skill 批量/删除 | 过关不依赖；默认能力关 |
 | 离线保存专用接口 | 应用不可达 = 失败 |
 | 把 Cookie CORS 扩成 `*` | M2 已收紧工作台源 |
 | 新路径替代 M2 已有 URL | 只加参数或新路径 |
+| 把掩码密钥写回配置 | 会毁掉 Token |
 
 M2 已有且必须保留：`/api/auth/*`、`POST/GET /api/bookmarks`、`GET /api/inbox`、`GET /api/sync/pending-count`、`POST/GET .../access-records`。
 
@@ -416,7 +420,7 @@ POST 必须有非空 `name`；`aerr` 缺省为 `reference`。PATCH 只允许上�
 
 ### 8.6 设置、能力、用量和 Job
 
-`GET /api/settings` 返回 `{items:[{key,value,updatedAt}]}`；敏感设置按 key 和 value 双重过滤，不返回口令、Token、摘要或密钥。`PUT /api/settings` 只允许 M4 白名单：`recycle.retention_days`、`skill.capabilities`，未知 key 返回 `VALIDATION_ERROR`。复杂 value 使用 JSON 原值，不向前端暴露内部字符串化细节。
+`GET /api/settings` 返回 `{items:[{key,value,updatedAt}]}`；敏感设置按 key 和 value 双重过滤，不返回口令、Token、摘要或密钥。`PUT /api/settings` 只允许白名单：`recycle.retention_days`、`skill.capabilities`，未知 key 返回 `VALIDATION_ERROR`。通道配置不走本接口，走 `/api/channels`。复杂 value 使用 JSON 原值，不向前端暴露内部字符串化细节。必须提供 `GET /api/settings`，不得只实现 PUT。
 
 `PUT /api/skill/capabilities` 接受并返回：
 
@@ -468,4 +472,94 @@ Job 回执固定包含 `id`、`bookmarkId`、`type`、`status`、`retryCount`、
 /api/jobs*
 ```
 
-本清单仅用于前端接线，不代表新增路由。`/channels/*`、`/backup`、归档内容传输和导航规则仍按第 7 章禁止实现。
+本清单仅用于 M4 前端接线。v1.2 通道、备份、导航路径见第 9 章。归档内容传输仍按第 7 章禁止。
+
+---
+
+## 9. M5–M7 基础连通契约（v1.2）
+
+与第 4–8 章冲突时，路径以已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs` 为准。本版只做配置、测试连通、一次上传或下载、三档备份可下载、导航规则能存。复杂同步与快照产文件仍禁止。
+
+除注明外均需工作台会话。
+
+### 9.1 通道
+
+配置落 `channel_config`，不落 `settings`。列表回执必须掩码 `token` `secretAccessKey` `password`（首尾可见、中间 `*`）。创建/更新不得把掩码串当新密钥保存：密钥字段空或仍是掩码则保留库中旧值。
+
+| 方法 | 路径 | 请求 | 成功 | 要点 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/channels` | — | `{items}` | 掩码后的配置 |
+| POST | `/api/channels` | `{channel,label,config,enabled?}` | 201 `{ok,id}` | `channel`=`raindrop`\|`s3`\|`webdav`；`config` 为对象或 JSON 字符串，键见数据库结构表 §17 |
+| PATCH | `/api/channels/:id` | 部分字段 | 200 掩码后的对象 | 可省略；没有则用删+建 |
+| DELETE | `/api/channels/:id` | — | `{ok:true}` | 真删行，不要写成 `settings` 空字符串 |
+| POST | `/api/channels/:id/test` | — | `{ok:true,message?}` | **本版必做**。Raindrop：调用户信息或等价轻量接口。S3：HeadBucket 或列举。WebDAV：PROPFIND/OPTIONS 目标 URL。失败 400 `VALIDATION_ERROR` 或 502 用 `NOT_SUPPORTED` 以外的明确 message，不要空成功 |
+| POST | `/api/channels/:id/export` | 可选 `{limit?}` | `{exported,failed,errors?}` | **一次上传冒烟**。S3/WebDAV：上传一份书签 CSV 或小对象。Raindrop：按 Link 级创建，不写 Scene/Status，跳过回收站。未测通允许失败，不得把失败标成 exported |
+| POST | `/api/channels/:id/import` | 可选 `{intoInbox?:true}` | `{imported,skipped,errors}` | **一次下载冒烟**。Raindrop 按 `raindrop_id` 去重，禁止用远端 `_id` 当本应用 `bookmarks.id`。`intoInbox` 默认 true（`status=unread`）。WebDAV 本版可返回 400 `NOT_SUPPORTED` 并写明「仅导出/测试」 |
+
+未配置通道时，`POST /api/bookmarks` 与 Skill `save_bookmark` 行为与 v1.1 完全相同。
+
+### 9.2 备份
+
+三档：`light` \| `medium` \| `full`。默认 `target=local`。完成后必须能下载，禁止只写库记录没有文件。
+
+| 方法 | 路径 | 请求 | 成功 | 要点 |
+| --- | --- | --- | --- | --- |
+| POST | `/api/backup` | `{tier, target?}` | 202 或 201 记录 | `tier` 必填；`target` 缺省 `local` |
+| GET | `/api/backup` | — | `{items}` | 时间倒序 |
+| GET | `/api/backup/:id` | — | 记录 | 无文件也返回记录，`filePath` 为 null |
+| GET | `/api/backup/:id/download` | — | 文件流 | **本版必做**。`status!=completed` 或无 `file_path` → 409 `CONFLICT` 或 404 |
+
+`light` 至少一种可下载格式（CSV 即可）。`medium` = 轻档 + 设置（无密钥）。`full` = SQLite 或全表导出；没有快照文件则 `includes` 不得声称含快照。失败不删书签。
+
+### 9.3 归档 Job（两套路径必须同一数据）
+
+| 方法 | 路径 | 成功 | 要点 |
+| --- | --- | --- | --- |
+| POST | `/api/archive` | 201 `{jobId,snapshotStatus:"queued_pending_browser"}` | 体 `{bookmarkId,type?}`；写入 `archive_jobs` |
+| GET | `/api/archive/:id` | Job | |
+| GET | `/api/archive/bookmark/:bookmarkId` | `{items}` | |
+| POST | `/api/archive/:id/retry` | `{ok,job}` | 仅 failed |
+| POST | `/api/archive/:id/cancel` | `{ok,job}` | 仅 pending/running |
+| GET | `/api/jobs` | `{items,nextCursor}` | **必须列出同一批 Job** |
+| POST | `/api/bookmarks/:id/archives` | `{jobId,snapshotStatus:"queued_pending_browser"}` | 与 POST `/api/archive` 同语义 |
+
+无文件时 `snapshotStatus` 只能是 `not_requested` 或 `queued_pending_browser`。本版不实现内容 GET/PUT。元数据提取可异步，失败不影响 Link；不强制 metascraper（推后）。
+
+### 9.4 单条导出
+
+| 方法 | 路径 | 要点 |
+| --- | --- | --- |
+| GET | `/api/bookmarks/:id/export/html` | 元数据卡片 HTML，**不是**快照文件 |
+| GET | `/api/bookmarks/:id/export/markdown` | 元数据 Markdown |
+
+有快照文件之前，不要把这两条说成 Snapshot 下载。
+
+### 9.5 导航
+
+| 方法 | 路径 | 请求 | 成功 | 要点 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/nav/rules` | — | `{items}` | |
+| POST | `/api/nav/rules` | `{name,mode?,rule?,searchQuery?,sortOrder?,enabled?}` | 201 规则 | `mode` 默认 `all` |
+| PATCH | `/api/nav/rules/:id` | 部分字段 | 200 规则 | |
+| DELETE | `/api/nav/rules/:id` | — | `{ok:true}` | |
+| GET | `/api/nav/bookmarks` | `limit` `cursor` | `{items,nextCursor}` | 本版固定排除 `private` 与 `status=unread`。**不求值** `nav_rules`。条目只返回 `id,title,favicon,url,domain`，不要把 `note` 带出 |
+| GET | `/api/nav/recent` | `limit` | `{items}` | 按 `access_records.opened_at` 倒序，去重书签；同样排除私密与 Inbox |
+
+访问记录：`POST /api/bookmarks/:id/access-records` 体可带 `client`：`workbench` \| `navigation` \| `plugin` \| `unknown`，缺省 `workbench`。导航点击必须传 `navigation`。
+
+未登录打 `/api/nav/*` → 401。前端无会话应进密码页，不要先渲染条目。
+
+### 9.6 访问记录 `client`
+
+v1.2 允许请求体 `{source, client}`。服务端写入 `access_records.client`。列表不按 client 过滤，除非调用方指定。
+
+### 9.7 本版连通验收（实现时按此勾）
+
+- 未配通道，工作台与 Skill 保存仍成功。
+- 三个通道都能保存配置；GET 见掩码不见全文密钥。
+- `POST .../test` 对已配通道返回真实连通结果（失败不得 ok:true）。
+- S3 或 WebDAV 至少一次上传小对象或导出文件成功；Raindrop 至少一次导入或导出冒烟（按 `raindrop_id` 去重）。
+- 三档备份能建记录，轻档可下载文件。
+- Job 列表与快照按钮入队能对上同一条。
+- 导航规则能增删改；`/nav` 书签不含备注、不含 Inbox/私密。
+- 不实现：双向同步、冲突表、快照 HTML 文件、规则圈选求值、备份恢复。
