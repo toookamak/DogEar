@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-09-04 / v0.2.0 — 正式注册核心账本与窗口定稿：`wiki/DogEar-数据库设计.md`、`wiki/DogEar-API设计.md`（v1.0 生效）；新增 `wiki/README.md` 定稿目录；草案原文归档。
+
+- 2026-09-04 / v0.2.0 — 新增 M3/M4 核心账本与窗口草案：`docs/modules/数据库设计.md`、`docs/modules/API设计.md`（含业务逻辑说明；不改 wiki、不写代码）。
+
 - 2026-09-04 / v0.2.0 — 修复 M2 浏览器登录 CORS credentials 配置，仅允许 <http://localhost:5173> 携带 Cookie 的请求。
 
 - 2026-09-03 / v0.2.0 — 完成 M2 Task 6 收口复核：通过 shared/db/server/web 自动化验证与真实 SQLite 进程重启验证，更新 M2 tasks/checklist；浏览器级页面联调因 Chromium 不可用仍未勾选。
