@@ -25,11 +25,11 @@
   - [x] 实现 Scene/Folder/Tag CRUD、建议查询与接受/暂缓/忽略、操作日志、设置和 Job 占位接口。
   - [x] 增加 API 测试：过滤、批量上限、回收站恢复/清空、Scene 删除保护、建议事务和日志记录。
 
-- [ ] Task 6: 验证 M3/M4 后端闭环并收口
-  - [ ] 运行 shared、db、server 的 test、typecheck、lint，修复全部失败。
-  - [ ] 联调有效 Token 保存 Bookmark，确认返回正式 UUID 且工作台 Inbox 可见；验证无 Token 被拒。
-  - [ ] 检查本变更未引入 Dexie、通道、快照文件、备份、导航页、Skill 批量/删除。
-  - [ ] 按仓库规则更新根目录 `CHANGELOG.md`；代码与文档分别提交 git。
+- [x] Task 6: 验证 M3/M4 后端闭环并收口
+  - [x] 运行 shared、db、server 的 test、typecheck、lint，修复全部失败。
+  - [x] 联调有效 Token 保存 Bookmark，确认返回正式 UUID 且工作台 Inbox 可见；验证无 Token 被拒。
+  - [x] 检查本变更未引入 Dexie、通道、快照文件、备份、导航页、Skill 批量/删除。
+  - [x] 按仓库规则更新根目录 `CHANGELOG.md`；代码与文档分别提交 git。
 
 # Task Dependencies
 - Task 2 depends on Task 1.
