@@ -276,6 +276,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     '/api/jobs', '/api/jobs/*', '/api/channels', '/api/channels/*',
     '/api/archive', '/api/archive/*', '/api/backup', '/api/backup/*',
     '/api/nav', '/api/nav/*',
+    '/api/skill/usage', '/api/skill/capabilities',
   ]
   for (const path of workbenchPaths) app.use(path, requireSession)
 
@@ -528,10 +529,12 @@ ${note ? `\n## 备注\n\n${note}` : ''}
   const capabilities = { read: true, write_new: true, update_existing: false }
   const skillLimit = (name: string): SkillLimit => name === 'update_bookmark' ? 'batch' : ['search_bookmarks', 'list_bookmarks', 'get_stats', 'suggest_scene'].includes(name) ? 'read' : 'write'
   const skillCapability = (name: string) => name === 'update_bookmark' ? 'update_existing' : ['search_bookmarks', 'list_bookmarks', 'get_stats', 'suggest_scene'].includes(name) ? 'read' : 'write_new'
+  const skillRouteNames = new Set(skillDefinitions.map((skill) => skill.name))
   const requireSkill = async (c: any, next: any) => {
+    const name = c.req.param('name')
+    if (!name || !skillRouteNames.has(name)) return next()
     const authorization = c.req.header('Authorization')
     if (!configuredSkillToken || authorization !== `Bearer ${configuredSkillToken}`) return skillError(c, 'UNAUTHORIZED', 401, 'Unauthorized')
-    const name = c.req.param('name')
     const configured = repository.settings && typeof repository.settings.get === 'function' ? await repository.settings.get('skill.capabilities') : undefined
     let configuredCapabilities = capabilities
     if (configured && typeof configured === 'object' && 'value' in configured) {

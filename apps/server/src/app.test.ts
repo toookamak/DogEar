@@ -225,6 +225,15 @@ describe('workbench REST API', () => {
     expect((await app.request('/api/recycle-bin')).status).toBe(401)
     expect((await app.request('/api/scenes')).status).toBe(401)
   })
+
+  it('lets a logged-in workbench session read skill usage without a Bearer token', async () => {
+    const app = createApp(repository(), { password: 'secret', skillToken: 'skill-secret' })
+    expect((await app.request('/api/skill/usage')).status).toBe(401)
+    const { cookie } = await login(app)
+    const response = await app.request('/api/skill/usage', { headers: { cookie } })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ requests: expect.any(Number), writes: expect.any(Number), blocked: expect.any(Number) })
+  })
 })
 
 describe('skill API', () => {

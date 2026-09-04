@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-04 / v0.6.0 — 修复设置页请求 GET /api/skill/usage 被当成 Skill Bearer 鉴权而 401、整页踢回登录。
+
 - 2026-09-04 / v0.6.0 — 工作台能整理：详情可改 Scene/Folder/Tag/状态并删进回收站；列表筛选与加载更多；批量改状态/加场景/软删；⌘K 含标签；操作日志可加载；建议空槽保留。
 
 - 2026-09-04 / v0.6.0 — M7 导航收口：导航列表只返回标题/图标/URL，排除 Inbox 与私密；最近访问走 access_records；点击记 client=navigation；未登录进密码页。
