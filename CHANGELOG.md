@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-04 / v0.2.0 — 新增开发约束：`docs/数据库结构表.md`、`docs/API结构表.md`；设计说明仍留 `docs/modules/`，不进 wiki。
+
 - 2026-09-04 / v0.2.0 — 撤回误写入 wiki 的账本/API 定稿与注册表；现行生效稿改回 `docs/modules/数据库设计.md`、`docs/modules/API设计.md`；技术总纲恢复原承接表述。
 
 - 2026-09-04 / v0.2.0 / 453fa27 — 正式注册核心账本与窗口定稿：`wiki/DogEar-数据库设计.md`、`wiki/DogEar-API设计.md`（v1.0 生效）；新增 `wiki/README.md` 定稿目录；草案原文归档。
