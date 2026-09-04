@@ -23,7 +23,17 @@ function connectivityRepo(): any {
     },
     get: async (id: string) => bookmarks.find((row) => row.id === id),
     findByRaindropId: async (raindropId: string) => bookmarks.find((row) => row.raindropId === raindropId),
-    list: async () => ({ items: bookmarks.filter((row) => !row.deletedAt), nextCursor: null }),
+    list: async (filters?: any) => {
+      const items = bookmarks.filter((row) => {
+        if (row.deletedAt) return false
+        if (filters?.private === false && row.private) return false
+        if (filters?.excludeStatus && row.status === filters.excludeStatus) return false
+        if (filters?.status && row.status !== filters.status) return false
+        return true
+      })
+      return { items, nextCursor: null }
+    },
+    listRecentOpened: async (limit = 20) => bookmarks.filter((row) => !row.private && row.status !== 'unread').slice(0, limit),
     listInbox: async () => ({ bookmarks: bookmarks.filter((row) => row.status === 'unread'), nextCursor: null }),
     listRecycleBin: async () => ({ items: [], nextCursor: null }),
     search: async () => ({ items: bookmarks, nextCursor: null }),
@@ -38,7 +48,7 @@ function connectivityRepo(): any {
     restore: async () => undefined,
     purgeDeleted: async () => 0,
     countPending: async () => 0,
-    createAccessRecord: async (record: any) => record,
+    createAccessRecord: async (record: any) => ({ ...record, openedAt: Date.now(), source: record.source ?? 'original', client: record.client ?? 'workbench' }),
     listAccessRecords: async () => [],
     scenes: { list: async () => [], create: async (input: any) => input, update: async () => undefined, remove: async () => true },
     folders: { list: async () => [], create: async (input: any) => input, update: async () => undefined, remove: async () => true },
@@ -213,5 +223,35 @@ describe('connectivity APIs', () => {
     await repo.create({ id: '33333333-3333-4333-8333-333333333333', url: 'https://example.com/a', status: 'unread', raindropId: '99' })
     expect(await repo.findByRaindropId('99')).toMatchObject({ url: 'https://example.com/a' })
     expect(await repo.get('99')).toBeUndefined()
+  })
+
+  it('returns projected nav bookmarks without notes, inbox, or private items', async () => {
+    const repo = connectivityRepo()
+    await repo.create({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', url: 'https://example.com/saved', status: 'saved', title: 'Saved', note: 'secret note', private: false, domain: 'example.com', favicon: 'https://example.com/f.ico' })
+    await repo.create({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', url: 'https://example.com/inbox', status: 'unread', title: 'Inbox', note: 'hidden', private: false })
+    await repo.create({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', url: 'https://example.com/private', status: 'saved', title: 'Private', note: 'nope', private: true })
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+    const response = await app.request('/api/nav/bookmarks', { headers: { cookie } })
+    const body = await response.json()
+    expect(response.status).toBe(200)
+    expect(body.items).toEqual([
+      { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', title: 'Saved', favicon: 'https://example.com/f.ico', url: 'https://example.com/saved', domain: 'example.com' },
+    ])
+    expect(JSON.stringify(body)).not.toContain('secret note')
+  })
+
+  it('writes navigation client on access records', async () => {
+    const repo = connectivityRepo()
+    await repo.create({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', url: 'https://example.com/nav', status: 'saved' })
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+    const response = await app.request('/api/bookmarks/dddddddd-dddd-4ddd-8ddd-dddddddddddd/access-records', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ source: 'original', client: 'navigation' }),
+    })
+    expect(response.status).toBe(201)
+    expect(await response.json()).toMatchObject({ bookmarkId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', source: 'original', client: 'navigation' })
   })
 })

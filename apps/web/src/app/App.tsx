@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Route, Switch, useLocation } from 'wouter'
 import { AppShell } from './AppShell.js'
 import { LoginPage } from '../pages/LoginPage.js'
@@ -7,13 +8,23 @@ import { OrganizationPage } from '../pages/OrganizationPage.js'
 import { SettingsPage } from '../pages/SettingsPage.js'
 import { ImportResultPage } from '../pages/ImportResultPage.js'
 import { NavPage } from '../pages/NavPage.js'
+import { useSession } from '../hooks/useSession.js'
 
 export function App() {
-  const [location] = useLocation()
+  const [location, setLocation] = useLocation()
+  const session = useSession()
 
-  // If on login page, render without shell
+  useEffect(() => {
+    if (session.loading || location === '/login' || session.authenticated) return
+    setLocation(`/login?next=${encodeURIComponent(location)}`)
+  }, [session.loading, session.authenticated, location, setLocation])
+
   if (location === '/login') {
     return <LoginPage />
+  }
+
+  if (session.loading || !session.authenticated) {
+    return <div style={{ padding: 'var(--spacing-16)', fontFamily: 'var(--font-ui)' }}>加载中...</div>
   }
 
   return (

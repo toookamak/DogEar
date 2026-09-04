@@ -23,6 +23,7 @@ export const bookmarksApi = {
   delete: (id: string) => api.delete<{ ok: boolean; deletedAt: number | null }>(`/api/bookmarks/${id}`),
   batchUpdate: (data: { ids: string[]; status?: string; folderId?: string | null; addSceneIds?: string[]; removeSceneIds?: string[]; addTagIds?: string[]; removeTagIds?: string[]; deleted?: boolean }) => api.patch<BatchUpdateResponse>('/api/bookmarks/batch', data),
   listAccessRecords: (bookmarkId: string) => api.get<{ records: AccessRecordResponse[] }>(`/api/bookmarks/${bookmarkId}/access-records`),
-  createAccessRecord: (bookmarkId: string) => api.post<AccessRecordResponse>(`/api/bookmarks/${bookmarkId}/access-records`),
+  createAccessRecord: (bookmarkId: string, data?: { source?: 'original' | 'snapshot'; client?: 'workbench' | 'navigation' | 'plugin' | 'unknown' }) =>
+    api.post<AccessRecordResponse>(`/api/bookmarks/${bookmarkId}/access-records`, data ?? {}),
   pendingCount: () => api.get<{ pendingCount: number }>('/api/sync/pending-count'),
 }

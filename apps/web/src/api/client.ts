@@ -9,7 +9,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...options,
   })
   if (res.status === 401) {
-    window.location.href = '/login'
+    const next = window.location.pathname + window.location.search
+    window.location.href = next && next !== '/login' ? `/login?next=${encodeURIComponent(next)}` : '/login'
     throw new Error('Unauthorized')
   }
   const body = await res.json().catch(() => null)

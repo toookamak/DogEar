@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-04 / v0.6.0 — M7 导航收口：导航列表只返回标题/图标/URL，排除 Inbox 与私密；最近访问走 access_records；点击记 client=navigation；未登录进密码页。
+
 - 2026-09-04 / v0.6.0 — M5/M6 连通：通道配置改走 channel_config，GET 掩码且禁止把 *** 写回；三通道 test；Raindrop 按 raindrop_id 去重导入；S3/WebDAV 导出冒烟；轻档备份可下载；快照入队并入 archive_jobs。
 
 - 2026-09-04 / v0.6.0 / 42a6f84 — 数据库/API 结构表升至 v1.2：收编已有 M5–M7 表名与路径；本版只覆盖通道测试连通与一次上下传、三档备份可下载、导航规则存储；冲突/双向同步/快照产文件/规则求值仍禁止。

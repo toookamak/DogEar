@@ -5,15 +5,28 @@ import { Loading } from '../components/feedback/Loading.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import { EmptyState } from '../components/feedback/EmptyState.js'
 import { navApi } from '../api/nav.js'
+import { bookmarksApi } from '../api/bookmarks.js'
 import type { BookmarkResponse } from '../types/api.js'
 
+type NavItem = Pick<BookmarkResponse, 'id' | 'url'> & {
+  title?: string | null
+  favicon?: string | null
+  domain?: string | null
+}
+
 export function NavPage() {
-  const [bookmarks, setBookmarks] = useState<BookmarkResponse[]>([])
+  const [bookmarks, setBookmarks] = useState<NavItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [showRecent, setShowRecent] = useState(true)
-  const [recentBookmarks, setRecentBookmarks] = useState<BookmarkResponse[]>([])
+  const [recentBookmarks, setRecentBookmarks] = useState<NavItem[]>([])
+
+  const openBookmark = async (bookmark: NavItem) => {
+    try {
+      await bookmarksApi.createAccessRecord(bookmark.id, { source: 'original', client: 'navigation' })
+    } catch { /* ignore */ }
+    window.open(bookmark.url, '_blank', 'noopener')
+  }
 
   const loadBookmarks = async () => {
     setLoading(true)
@@ -44,7 +57,7 @@ export function NavPage() {
     if (!nextCursor) return
     try {
       const result = await navApi.bookmarks(50, nextCursor)
-      setBookmarks(prev => [...prev, ...result.items])
+      setBookmarks((prev) => [...prev, ...result.items])
       setNextCursor(result.nextCursor)
     } catch { /* ignore */ }
   }
@@ -53,14 +66,14 @@ export function NavPage() {
     <div>
       <TopBar title="导航页" />
 
-      {recentBookmarks.length > 0 && showRecent && (
+      {recentBookmarks.length > 0 && (
         <div style={{ padding: 'var(--spacing-16)', borderBottom: '1px solid var(--border-primary)' }}>
           <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 500, margin: '0 0 var(--spacing-8)' }}>
             最近访问
           </h3>
           <BookmarkListView
-            bookmarks={recentBookmarks}
-            onSelect={() => {}}
+            bookmarks={recentBookmarks as BookmarkResponse[]}
+            onSelect={(bookmark) => openBookmark(bookmark)}
             viewMode="list"
           />
         </div>
@@ -76,8 +89,8 @@ export function NavPage() {
         {!loading && !error && bookmarks.length === 0 && <EmptyState message="导航页暂无书签" />}
         {!loading && !error && bookmarks.length > 0 && (
           <BookmarkListView
-            bookmarks={bookmarks}
-            onSelect={() => {}}
+            bookmarks={bookmarks as BookmarkResponse[]}
+            onSelect={(bookmark) => openBookmark(bookmark)}
             viewMode="grid"
           />
         )}

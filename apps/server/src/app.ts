@@ -443,7 +443,11 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.post('/api/bookmarks/:bookmarkId/access-records', async (c) => {
     const bookmarkId = c.req.param('bookmarkId')
     if (!bookmarkId) return invalidRequest(c)
-    const record = await repository.createAccessRecord({ id: randomUUID(), bookmarkId, source: 'original' })
+    if (!await repository.get(bookmarkId, true)) return skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
+    const body = await c.req.json().catch(() => ({})) as { source?: string; client?: string }
+    const source = body.source === 'snapshot' ? 'snapshot' : 'original'
+    const client = ['workbench', 'navigation', 'plugin', 'unknown'].includes(body.client ?? '') ? body.client : 'workbench'
+    const record = await repository.createAccessRecord({ id: randomUUID(), bookmarkId, source, client })
     return c.json(serializeAccessRecord(record), 201)
   })
 

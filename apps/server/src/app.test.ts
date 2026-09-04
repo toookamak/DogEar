@@ -62,6 +62,7 @@ function repository(): any {
     backups: { create: async (input: Record<string, unknown>) => input, get: async () => undefined, list: async () => [], updateStatus: async () => undefined },
     navRules: { list: async () => [], get: async () => undefined, create: async (input: Record<string, unknown>) => input, update: async () => undefined, remove: async () => undefined },
 
+    listRecentOpened: async () => [],
     list: async (filters?: any, limit?: number, cursor?: string) => {
       return { items: [...records], nextCursor: null }
     },
@@ -357,12 +358,18 @@ describe('bookmark and access record API', () => {
     const repo = repository()
     const app = createApp(repo, { password: 'secret' })
     const { cookie } = await login(app)
-    const createResponse = await app.request('/api/bookmarks/bookmark-1/access-records', { method: 'POST', headers: { cookie } })
+    const bookmarkResponse = await app.request('/api/bookmarks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ url: 'https://example.com/opened' }),
+    })
+    const bookmark = await bookmarkResponse.json()
+    const createResponse = await app.request(`/api/bookmarks/${bookmark.id}/access-records`, { method: 'POST', headers: { cookie } })
     const created = await createResponse.json()
-    const listResponse = await app.request('/api/bookmarks/bookmark-1/access-records', { headers: { cookie } })
+    const listResponse = await app.request(`/api/bookmarks/${bookmark.id}/access-records`, { headers: { cookie } })
 
     expect(createResponse.status).toBe(201)
-    expect(created).toMatchObject({ bookmarkId: 'bookmark-1', source: 'original' })
+    expect(created).toMatchObject({ bookmarkId: bookmark.id, source: 'original' })
     expect(created.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(created.openedAt).toEqual(expect.any(Number))
     expect(await listResponse.json()).toEqual({ records: [created] })
@@ -401,6 +408,10 @@ describe('bookmark and access record API', () => {
           const createdAt = Date.now()
           database.prepare('INSERT INTO bookmarks (id, url, status, sync_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(input.id, input.url, input.status, 'synced', createdAt, createdAt)
           return { ...input, syncStatus: 'synced' as const, createdAt, updatedAt: createdAt }
+        },
+        async get(id: string) {
+          const row = database.prepare('SELECT id, url, status FROM bookmarks WHERE id = ?').get(id) as { id: string } | undefined
+          return row
         },
         async list() {
           return { items: database.prepare('SELECT id, url, status, sync_status AS syncStatus, created_at AS createdAt, updated_at AS updatedAt FROM bookmarks ORDER BY created_at DESC').all().map((row: any) => ({ ...row, createdAt: Number(row.createdAt), updatedAt: Number(row.updatedAt) })), nextCursor: null }

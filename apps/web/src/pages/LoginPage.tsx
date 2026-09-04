@@ -22,7 +22,8 @@ export function LoginPage() {
         setError('密码错误')
         return
       }
-      setLocation('/')
+      const next = new URLSearchParams(window.location.search).get('next') || '/'
+      setLocation(next.startsWith('/') && !next.startsWith('//') ? next : '/')
     } catch {
       setError('登录失败，请重试')
     } finally {

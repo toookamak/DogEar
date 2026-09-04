@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNotNull, isNull, like, lt, or, sql } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, isNotNull, isNull, like, lt, ne, or, sql } from 'drizzle-orm'
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1'
 import {
   accessRecords,
@@ -44,6 +44,8 @@ type BookmarkFilters = {
   source?: string
   q?: string
   includeDeleted?: boolean
+  private?: boolean
+  excludeStatus?: string
 }
 type BookmarkUpdate = Record<string, unknown> & { folderId?: string | null; tagIds?: string[]; sceneIds?: string[] }
 type BatchUpdate = BookmarkUpdate & { ids: string[]; addSceneIds?: string[]; removeSceneIds?: string[]; addTagIds?: string[]; removeTagIds?: string[]; deleted?: boolean }
@@ -100,6 +102,7 @@ export type BookmarkRepository = {
   listAccessRecords: (bookmarkId: string) => Promise<unknown[]>
   get: (id: string, includeDeleted?: boolean) => Promise<unknown | undefined>
   findByRaindropId: (raindropId: string) => Promise<unknown | undefined>
+  listRecentOpened: (limit?: number) => Promise<unknown[]>
   search: (filters: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   update: (id: string, input: BookmarkUpdate) => Promise<unknown | undefined>
   batchUpdate: (input: BatchUpdate) => Promise<{ updated: unknown[]; skipped: BatchUpdateSkippedItem[] }>
@@ -243,6 +246,8 @@ function filterCondition(filters: BookmarkFilters = {}) {
   else if (filters.folderId) conditions.push(eq(bookmarks.folderId, filters.folderId))
   if (filters.important !== undefined) conditions.push(eq(bookmarks.important, filters.important))
   if (filters.source) conditions.push(eq(bookmarks.source, filters.source))
+  if (filters.private !== undefined) conditions.push(eq(bookmarks.private, filters.private))
+  if (filters.excludeStatus) conditions.push(ne(bookmarks.status, filters.excludeStatus))
   if (filters.sceneId) conditions.push(eq(bookmarkScenes.sceneId, filters.sceneId))
   if (filters.tagId) conditions.push(eq(bookmarkTags.tagId, filters.tagId))
   if (filters.q) {
@@ -309,6 +314,30 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
   repository.findByRaindropId = async (raindropId) => {
     const rows = await db.select().from(bookmarks).where(and(eq(bookmarks.raindropId, raindropId), isNull(bookmarks.deletedAt))).all()
     return rows[0]
+  }
+  repository.listRecentOpened = async (limit = 20) => {
+    const rows = await db.select({
+      id: bookmarks.id,
+      url: bookmarks.url,
+      title: bookmarks.title,
+      favicon: bookmarks.favicon,
+      domain: bookmarks.domain,
+      openedAt: accessRecords.openedAt,
+    }).from(accessRecords)
+      .innerJoin(bookmarks, eq(accessRecords.bookmarkId, bookmarks.id))
+      .where(and(isNull(bookmarks.deletedAt), eq(bookmarks.private, false), ne(bookmarks.status, 'unread')))
+      .orderBy(desc(accessRecords.openedAt))
+      .limit(Math.max(limit, 1) * 10)
+      .all()
+    const seen = new Set<string>()
+    const items: unknown[] = []
+    for (const row of rows) {
+      if (seen.has(row.id)) continue
+      seen.add(row.id)
+      items.push(row)
+      if (items.length >= limit) break
+    }
+    return items
   }
   repository.search = async (filters, limit = 50, cursor?: string) => repository.list(filters, limit, cursor)
   repository.update = async (id, input) => transaction(db, async (tx) => {
