@@ -228,15 +228,12 @@ async function handleRaindropImport(
           await repository.create({
             id: bookmarkId,
             url: rd.link,
-            note: rd.note || null,
-            status: 'unread',
+            title: rd.title || rd.link,
+            status: intoInbox ? 'unread' : 'saved',
             source: 'page',
             private: false,
             syncStatus: 'synced',
-          })
-          await repository.update(bookmarkId, {
-            title: rd.title || rd.link,
-            status: intoInbox ? 'unread' : 'saved',
+            note: rd.note || null,
             raindropId,
             raindropExtras: JSON.stringify({
               excerpt: rd.excerpt,

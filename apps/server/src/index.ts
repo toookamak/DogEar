@@ -37,4 +37,9 @@ syncWorkerTimer = setInterval(processSyncQueue, syncWorkerInterval)
 // Run first tick immediately after a short delay
 setTimeout(processSyncQueue, 5000)
 
-export default { port: Number(process.env.PORT ?? 8787), fetch: app.fetch }
+export default {
+  port: Number(process.env.PORT ?? 8787),
+  fetch: app.fetch,
+  // Raindrop 拉取/导入等长任务可超过默认 10s 空闲超时，调大避免被 Bun 掐断
+  idleTimeout: Number(process.env.DOGEAR_IDLE_TIMEOUT ?? 120),
+}

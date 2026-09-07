@@ -26,13 +26,16 @@ type Db = any
 type BookmarkInput = {
   id: string
   url: string
-  status: 'unread'
+  status: 'unread' | 'saved' | 'archived'
   source?: 'page' | 'agent' | 'extension'
   note?: string | null
   intent?: string | null
   important?: boolean
   private?: boolean
   syncStatus?: 'pending' | 'synced'
+  title?: string
+  raindropId?: string | null
+  raindropExtras?: string | null
 }
 type AccessRecordInput = { id: string; bookmarkId: string; source?: 'original' | 'snapshot'; client?: string }
 type BookmarkFilters = {
