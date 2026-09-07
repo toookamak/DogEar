@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-07 / v0.6.1 / e4c6b75 — Raindrop OAuth 登录：新增 Client ID/Secret 配置与「通过 OAuth 授权」按钮，后端加 /api/channels/oauth/exchange 换 access token 写回通道，新增 /settings/oauth/callback 回调页并挂路由，通道卡片展示授权状态；保留手动 Token 方式。
+
 - 2026-09-04 / v0.6.0 — 修复设置页请求 GET /api/skill/usage 被当成 Skill Bearer 鉴权而 401、整页踢回登录。
 
 - 2026-09-04 / v0.6.0 — 工作台能整理：详情可改 Scene/Folder/Tag/状态并删进回收站；列表筛选与加载更多；批量改状态/加场景/软删；⌘K 含标签；操作日志可加载；建议空槽保留。
