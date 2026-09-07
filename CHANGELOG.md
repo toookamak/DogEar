@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-07 / v0.6.2 / ef321f2 — 修复 Raindrop 导入超时 500：Bun serve idleTimeout 默认提到 120s；导入合并 create+update 两次写为一次，写入减半；扩展 db 内部 BookmarkInput 支持 title/raindropId/raindropExtras。
+
 - 2026-09-07 / v0.6.1 / e4c6b75 — Raindrop OAuth 登录：新增 Client ID/Secret 配置与「通过 OAuth 授权」按钮，后端加 /api/channels/oauth/exchange 换 access token 写回通道，新增 /settings/oauth/callback 回调页并挂路由，通道卡片展示授权状态；保留手动 Token 方式。
 
 - 2026-09-04 / v0.6.0 — 修复设置页请求 GET /api/skill/usage 被当成 Skill Bearer 鉴权而 401、整页踢回登录。
