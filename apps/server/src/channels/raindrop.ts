@@ -48,6 +48,26 @@ export class RaindropClient {
     this.token = token
   }
 
+  /** Step 3 of the OAuth code flow: exchange an authorization code for an access token. */
+  static async exchangeCode(params: { clientId: string; clientSecret: string; code: string; redirectUri: string }): Promise<string> {
+    const response = await fetch('https://raindrop.io/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        client_id: params.clientId,
+        client_secret: params.clientSecret,
+        code: params.code,
+        redirect_uri: params.redirectUri,
+      }),
+    })
+    const data = await response.json().catch(() => undefined) as { access_token?: string; error?: string; error_description?: string } | undefined
+    if (!response.ok || !data?.access_token) {
+      throw new Error(data?.error_description || data?.error || `Raindrop OAuth token exchange failed: ${response.status} ${response.statusText}`)
+    }
+    return data.access_token
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const url = `${BASE_URL}${path}`
     const headers = {

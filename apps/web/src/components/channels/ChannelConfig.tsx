@@ -23,6 +23,8 @@ export function ChannelConfig({ channel, defaultChannel = 'raindrop', onSaved, o
   const [label, setLabel] = useState(channel?.label || '')
   // Raindrop fields
   const [token, setToken] = useState('')
+  const [clientId, setClientId] = useState(String(channel?.config.client_id || ''))
+  const [clientSecret, setClientSecret] = useState('')
   // WebDAV fields
   const [webdavUrl, setWebdavUrl] = useState('')
   const [webdavUsername, setWebdavUsername] = useState('')
@@ -61,6 +63,19 @@ export function ChannelConfig({ channel, defaultChannel = 'raindrop', onSaved, o
     }
   }
 
+  const handleOAuth = () => {
+    if (channelType !== 'raindrop') return
+    const id = clientId.trim() || String(channel?.config.client_id || '')
+    if (!id) {
+      setTestResult({ ok: false, message: '请先填写 Client ID' })
+      return
+    }
+    const redirectUri = `${window.location.origin}/settings/oauth/callback`
+    const state = channel?.id ?? ''
+    const authUrl = `https://raindrop.io/oauth/authorize?client_id=${encodeURIComponent(id)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${encodeURIComponent(state)}`
+    window.location.href = authUrl
+  }
+
   const handleSave = async () => {
     if (!label.trim()) {
       setTestResult({ ok: false, message: '请输入配置名称' })
@@ -69,11 +84,16 @@ export function ChannelConfig({ channel, defaultChannel = 'raindrop', onSaved, o
 
     let configJson: string
     if (channelType === 'raindrop') {
-      if (!token.trim() && isNew) {
-        setTestResult({ ok: false, message: '请输入 Raindrop API Token' })
+      const hasOAuthCreds = (clientId.trim() || clientSecret.trim()) !== ''
+      if (!token.trim() && isNew && !hasOAuthCreds) {
+        setTestResult({ ok: false, message: '请输入 Raindrop API Token，或填写 OAuth Client ID / Secret' })
         return
       }
-      configJson = JSON.stringify(token.trim() ? { token: token.trim() } : {})
+      const cfg: Record<string, string> = {}
+      if (token.trim()) cfg.token = token.trim()
+      cfg.client_id = clientId.trim() || String(channel?.config.client_id || '')
+      if (clientSecret.trim()) cfg.client_secret = clientSecret.trim()
+      configJson = JSON.stringify(cfg)
     } else if (channelType === 'webdav') {
       if (!webdavUrl.trim() && isNew) {
         setTestResult({ ok: false, message: '请输入 WebDAV 地址' })
@@ -179,9 +199,56 @@ export function ChannelConfig({ channel, defaultChannel = 'raindrop', onSaved, o
               style={{ width: '400px' }}
             />
             <p style={{ fontFamily: 'var(--font-ui)', fontSize: '12px', color: 'var(--color-text-muted)', margin: 'var(--spacing-4) 0 0 0' }}>
-              在 Raindrop 设置 → 集成 → 创建新的 API Token
+              手动 Token（Test Token 24h 过期）。也可用下方 OAuth 授权获取长期 access token。
             </p>
           </div>
+        )}
+
+        {channelType === 'raindrop' && (
+          <>
+            <div style={{ borderTop: '1px solid var(--border-primary)', paddingTop: 'var(--spacing-12)' }}>
+              <p style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)', margin: '0 0 var(--spacing-8)' }}>
+                OAuth 授权（官方）
+              </p>
+              <p style={{ fontFamily: 'var(--font-ui)', fontSize: '12px', color: 'var(--color-text-muted)', margin: '0 0 var(--spacing-8)' }}>
+                到 Raindrop「设置 → 集成 → 创建 App」，填 Redirect URI：<code>{window.location.origin}/settings/oauth/callback</code>，拿到 Client ID / Secret 后填入。
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-12)' }}>
+                <div>
+                  <label style={{ display: 'block', fontFamily: 'var(--font-ui)', fontSize: '14px', marginBottom: 'var(--spacing-4)', color: 'var(--color-text-secondary)' }}>
+                    Client ID
+                  </label>
+                  <input
+                    type="text"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    placeholder={isNew ? 'Raindrop App Client ID' : `已保存 ${clientId || ''}，留空则保留`}
+                    className="input"
+                    style={{ width: '400px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontFamily: 'var(--font-ui)', fontSize: '14px', marginBottom: 'var(--spacing-4)', color: 'var(--color-text-secondary)' }}>
+                    Client Secret
+                    {!isNew && String(channel?.config.client_secret) && ' (已保存，留空则保留)'}
+                  </label>
+                  <input
+                    type="password"
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
+                    placeholder={isNew ? 'Raindrop App Client Secret' : `已保存 ${displayMasked(channel?.config.client_secret)}，留空则保留`}
+                    className="input"
+                    style={{ width: '400px' }}
+                  />
+                </div>
+              </div>
+              <div style={{ marginTop: 'var(--spacing-12)' }}>
+                <button onClick={handleOAuth} className="btn-secondary">
+                  通过 OAuth 授权
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
         {channelType === 'webdav' && (

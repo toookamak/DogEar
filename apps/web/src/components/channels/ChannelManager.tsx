@@ -221,6 +221,7 @@ export function ChannelManager() {
                 </div>
                 <div style={{ fontFamily: 'var(--font-ui)', fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
                   {ch.enabled ? '已启用' : '已禁用'}
+                  {ch.channel === 'raindrop' && (String(ch.config?.token || '') ? ' · 已授权' : ' · 未授权')}
                 </div>
               </div>
 

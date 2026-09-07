@@ -9,7 +9,7 @@ export interface ChannelConfig {
 }
 
 const SECRET_KEYS: Record<string, string[]> = {
-  raindrop: ['token'],
+  raindrop: ['token', 'client_secret'],
   s3: ['secretAccessKey'],
   webdav: ['password'],
 }

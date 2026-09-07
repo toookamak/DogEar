@@ -7,6 +7,7 @@ import { RecycleBinPage } from '../pages/RecycleBinPage.js'
 import { OrganizationPage } from '../pages/OrganizationPage.js'
 import { SettingsPage } from '../pages/SettingsPage.js'
 import { ImportResultPage } from '../pages/ImportResultPage.js'
+import { OAuthCallbackPage } from '../pages/OAuthCallbackPage.js'
 import { NavPage } from '../pages/NavPage.js'
 import { useSession } from '../hooks/useSession.js'
 
@@ -35,6 +36,7 @@ export function App() {
         <Route path="/organization" component={OrganizationPage} />
         <Route path="/recycle-bin" component={RecycleBinPage} />
         <Route path="/settings" component={SettingsPage} />
+        <Route path="/settings/oauth/callback" component={OAuthCallbackPage} />
         <Route path="/import-result" component={ImportResultPage} />
         <Route path="/nav" component={NavPage} />
         <Route>404</Route>

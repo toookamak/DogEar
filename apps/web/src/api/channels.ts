@@ -28,6 +28,17 @@ export interface TestResponse {
   message?: string
 }
 
+export interface OAuthExchangeRequest {
+  channelId: string
+  code: string
+  redirectUri: string
+}
+
+export interface OAuthExchangeResponse {
+  ok: boolean
+  channel: ChannelConfigItem
+}
+
 export interface SaveChannelRequest {
   channel: 'raindrop' | 's3' | 'webdav'
   label: string
@@ -45,4 +56,5 @@ export const channelsApi = {
   import: (id: string) => api.post<ImportResponse>(`/api/channels/${id}/import`),
   export: (id: string) => api.post<ExportResponse>(`/api/channels/${id}/export`),
   test: (id: string) => api.post<TestResponse>(`/api/channels/${id}/test`),
+  oauthExchange: (req: OAuthExchangeRequest) => api.post<OAuthExchangeResponse>('/api/channels/oauth/exchange', req),
 }

@@ -159,6 +159,38 @@ export function createChannelRoutes(repository: BookmarkRepository) {
     }
   })
 
+  // OAuth code exchange (browser-only callback flow): swaps a Raindrop `code` for an access token
+  // using the channel's stored client_id / client_secret, then persists the token back to the channel.
+  app.post('/oauth/exchange', async (c) => {
+    const body = await c.req.json().catch(() => undefined) as { channelId?: string; code?: string; redirectUri?: string; state?: string } | undefined
+    if (!body?.channelId || !body.code || !body.redirectUri) {
+      return invalidRequest(c, { message: 'channelId, code and redirectUri are required' })
+    }
+    const config = await manager.getChannelConfig(body.channelId)
+    if (!config) return skillError(c, 'NOT_FOUND', 404, 'Channel not found')
+    if (config.channel !== 'raindrop') return skillError(c, 'NOT_SUPPORTED', 400, 'OAuth exchange is only supported for raindrop channels')
+    const clientId = String(config.config.client_id || '')
+    const clientSecret = String(config.config.client_secret || '')
+    if (!clientId || !clientSecret) return invalidRequest(c, { message: 'client_id / client_secret not configured' })
+    try {
+      const token = await RaindropClient.exchangeCode({
+        clientId,
+        clientSecret,
+        code: body.code,
+        redirectUri: body.redirectUri,
+      })
+      const saved = await manager.setChannelConfig(body.channelId, {
+        channel: 'raindrop',
+        label: config.label,
+        config: { ...config.config, token },
+        enabled: config.enabled,
+      })
+      return c.json({ ok: true, channel: maskConfig(saved) })
+    } catch (e) {
+      return c.json({ error: { code: 'OAUTH_FAILED', message: e instanceof Error ? e.message : 'OAuth exchange failed' } }, 400)
+    }
+  })
+
   return app
 }
 
