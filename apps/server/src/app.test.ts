@@ -42,7 +42,12 @@ function repository(): any {
     folders: {},
     tags: {},
     suggestions: { create: async (input: Record<string, unknown>) => input },
-    operationLog: { append: async (input: Record<string, unknown>) => input },
+    operationLog: {
+      list: async () => [],
+      get: async () => undefined,
+      append: async (input: Record<string, unknown>) => ({ id: 'log-1', ...input }),
+      consumeRevert: async () => undefined,
+    },
     archiveJobs: {
       list: async () => [],
       get: async () => undefined,

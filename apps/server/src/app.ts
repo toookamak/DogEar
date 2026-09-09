@@ -272,7 +272,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   const workbenchPaths = [
     '/api/recycle-bin', '/api/recycle-bin/*', '/api/scenes', '/api/scenes/*',
     '/api/folders', '/api/folders/*', '/api/tags', '/api/tags/*',
-    '/api/suggestions/*', '/api/operation-log', '/api/settings', '/api/settings/*',
+    '/api/suggestions/*', '/api/operation-log', '/api/operation-log/*', '/api/settings', '/api/settings/*',
     '/api/jobs', '/api/jobs/*', '/api/channels', '/api/channels/*',
     '/api/archive', '/api/archive/*', '/api/backup', '/api/backup/*',
     '/api/nav', '/api/nav/*',
@@ -296,9 +296,21 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.patch('/api/bookmarks/batch', async (c) => {
     const body = batchUpdateRequestSchema.safeParse(await c.req.json().catch(() => undefined))
     if (!body.success) return invalidRequest(c)
+    const snapshots = []
+    for (const id of body.data.ids) {
+      const existing = await repository.get(id, true) as { id: string; status?: string; folderId?: string | null; deletedAt?: unknown } | undefined
+      if (existing) snapshots.push({ id: existing.id, status: existing.status ?? 'unread', folderId: existing.folderId ?? null, deleted: Boolean(existing.deletedAt) })
+    }
     const result = await repository.batchUpdate(body.data as any)
-    for (const item of result.updated) await repository.operationLog.append({ actor: 'user', action: 'update', targetType: 'bookmark', targetId: String((item as any).id) })
-    return c.json({ updated: result.updated.map(serializeBookmark), skipped: result.skipped })
+    const log = await repository.operationLog.append({
+      actor: 'user',
+      action: body.data.deleted ? 'delete' : 'update',
+      targetType: 'bookmark',
+      targetId: body.data.ids[0],
+      detail: JSON.stringify({ ids: body.data.ids }),
+      revertToken: JSON.stringify({ kind: 'batch', snapshots }),
+    }) as { id: string }
+    return c.json({ updated: result.updated.map(serializeBookmark), skipped: result.skipped, undoId: log.id })
   })
 
   app.get('/api/bookmarks/:bookmarkId', async (c) => {
@@ -326,9 +338,15 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
 
   app.delete('/api/bookmarks/:bookmarkId', async (c) => {
     const deleted = await repository.softDelete(c.req.param('bookmarkId'))
-    if (!deleted) return c.json({ ok: true, deletedAt: null })
-    await repository.operationLog.append({ actor: 'user', action: 'delete', targetType: 'bookmark', targetId: c.req.param('bookmarkId') })
-    return c.json({ ok: true, deletedAt: timestamp((deleted as any).deletedAt) })
+    if (!deleted) return c.json({ ok: true, deletedAt: null, undoId: null })
+    const log = await repository.operationLog.append({
+      actor: 'user',
+      action: 'delete',
+      targetType: 'bookmark',
+      targetId: c.req.param('bookmarkId'),
+      revertToken: JSON.stringify({ kind: 'undelete', ids: [c.req.param('bookmarkId')] }),
+    }) as { id: string }
+    return c.json({ ok: true, deletedAt: timestamp((deleted as any).deletedAt), undoId: log.id })
   })
 
   app.get('/api/recycle-bin', async (c) => {
@@ -404,6 +422,28 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.get('/api/operation-log', async (c) => c.json({ items: await repository.operationLog.list({ actor: c.req.query('actor'), action: c.req.query('action') }), nextCursor: null }))
+  app.post('/api/operation-log/:id/revert', async (c) => {
+    const row = await repository.operationLog.consumeRevert(c.req.param('id')) as { revertToken?: string | null } | undefined
+    if (!row?.revertToken) return skillError(c, 'CONFLICT', 409, 'Nothing to undo')
+    let payload: { kind?: string; ids?: string[]; snapshots?: Array<{ id: string; status: string; folderId: string | null; deleted: boolean }> }
+    try {
+      payload = JSON.parse(row.revertToken)
+    } catch {
+      return invalidRequest(c)
+    }
+    if (payload.kind === 'undelete') {
+      for (const id of payload.ids ?? []) await repository.restore(id)
+    } else if (payload.kind === 'batch') {
+      for (const snapshot of payload.snapshots ?? []) {
+        if (snapshot.deleted) continue
+        await repository.restore(snapshot.id)
+        await repository.update(snapshot.id, { status: snapshot.status, folderId: snapshot.folderId })
+      }
+    } else {
+      return invalidRequest(c)
+    }
+    return c.json({ ok: true })
+  })
 
   app.route('/api/channels', createChannelRoutes(repository))
   app.route('/api/archive', createArchiveRoutes(repository))

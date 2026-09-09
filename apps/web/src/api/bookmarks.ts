@@ -20,8 +20,9 @@ export const bookmarksApi = {
   get: (id: string) => api.get<BookmarkResponse>(`/api/bookmarks/${id}`),
   create: (data: { url: string; note?: string | null; intent?: string | null; important?: boolean; private?: boolean }) => api.post<BookmarkResponse>('/api/bookmarks', data),
   update: (id: string, data: Record<string, unknown>) => api.patch<BookmarkResponse>(`/api/bookmarks/${id}`, data),
-  delete: (id: string) => api.delete<{ ok: boolean; deletedAt: number | null }>(`/api/bookmarks/${id}`),
-  batchUpdate: (data: { ids: string[]; status?: string; folderId?: string | null; addSceneIds?: string[]; removeSceneIds?: string[]; addTagIds?: string[]; removeTagIds?: string[]; deleted?: boolean }) => api.patch<BatchUpdateResponse>('/api/bookmarks/batch', data),
+  delete: (id: string) => api.delete<{ ok: boolean; deletedAt: number | null; undoId?: string | null }>(`/api/bookmarks/${id}`),
+  batchUpdate: (data: { ids: string[]; status?: string; folderId?: string | null; addSceneIds?: string[]; removeSceneIds?: string[]; addTagIds?: string[]; removeTagIds?: string[]; deleted?: boolean }) => api.patch<BatchUpdateResponse & { undoId?: string }>('/api/bookmarks/batch', data),
+  revert: (undoId: string) => api.post<{ ok: boolean }>(`/api/operation-log/${undoId}/revert`),
   listAccessRecords: (bookmarkId: string) => api.get<{ records: AccessRecordResponse[] }>(`/api/bookmarks/${bookmarkId}/access-records`),
   createAccessRecord: (bookmarkId: string, data?: { source?: 'original' | 'snapshot'; client?: 'workbench' | 'navigation' | 'plugin' | 'unknown' }) =>
     api.post<AccessRecordResponse>(`/api/bookmarks/${bookmarkId}/access-records`, data ?? {}),

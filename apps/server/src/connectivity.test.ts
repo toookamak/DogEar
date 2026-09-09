@@ -11,6 +11,7 @@ function connectivityRepo(): any {
   const jobs: any[] = []
   const backupRows: any[] = []
   const settingsRows: any[] = [{ key: 'recycle.retention_days', value: '7' }]
+  const logs: Record<string, any> = {}
 
   return {
     bookmarks,
@@ -44,8 +45,18 @@ function connectivityRepo(): any {
       return row
     },
     batchUpdate: async () => ({ updated: [], skipped: [] }),
-    softDelete: async () => undefined,
-    restore: async () => undefined,
+    softDelete: async (id: string) => {
+      const row = bookmarks.find((item) => item.id === id)
+      if (!row) return undefined
+      row.deletedAt = Date.now()
+      return row
+    },
+    restore: async (id: string) => {
+      const row = bookmarks.find((item) => item.id === id)
+      if (!row) return undefined
+      row.deletedAt = null
+      return row
+    },
     purgeDeleted: async () => 0,
     countPending: async () => 0,
     createAccessRecord: async (record: any) => ({ ...record, openedAt: Date.now(), source: record.source ?? 'original', client: record.client ?? 'workbench' }),
@@ -54,7 +65,22 @@ function connectivityRepo(): any {
     folders: { list: async () => [], create: async (input: any) => input, update: async () => undefined, remove: async () => true },
     tags: { list: async () => [], create: async (input: any) => input, remove: async () => true },
     suggestions: { list: async () => ({ items: [], nextCursor: null }), create: async (input: any) => input, resolve: async () => undefined, accept: async () => undefined },
-    operationLog: { list: async () => [], append: async (input: any) => input },
+    operationLog: {
+      list: async () => [],
+      get: async (id: string) => logs[id],
+      append: async (input: any) => {
+        const row = { id: input.id ?? 'log-1', ...input }
+        logs[row.id] = row
+        return row
+      },
+      consumeRevert: async (id: string) => {
+        const row = logs[id]
+        if (!row?.revertToken) return undefined
+        const copy = { ...row }
+        row.revertToken = null
+        return copy
+      },
+    },
     settings: {
       list: async () => settingsRows,
       get: async (key: string) => settingsRows.find((row) => row.key === key),
@@ -239,6 +265,21 @@ describe('connectivity APIs', () => {
       { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', title: 'Saved', favicon: 'https://example.com/f.ico', url: 'https://example.com/saved', domain: 'example.com' },
     ])
     expect(JSON.stringify(body)).not.toContain('secret note')
+  })
+
+  it('returns undoId on delete and restores the bookmark', async () => {
+    const repo = connectivityRepo()
+    await repo.create({ id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', url: 'https://example.com/undo', status: 'saved' })
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+    const deleted = await app.request('/api/bookmarks/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', { method: 'DELETE', headers: { cookie } })
+    const body = await deleted.json()
+    expect(deleted.status).toBe(200)
+    expect(body.undoId).toBeTruthy()
+    expect(repo.bookmarks[0].deletedAt).toBeTruthy()
+    const reverted = await app.request(`/api/operation-log/${body.undoId}/revert`, { method: 'POST', headers: { cookie } })
+    expect(reverted.status).toBe(200)
+    expect(repo.bookmarks[0].deletedAt).toBeNull()
   })
 
   it('writes navigation client on access records', async () => {

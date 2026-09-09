@@ -6,6 +6,7 @@ import { SnapshotButton } from '../bookmarks/SnapshotButton.js'
 import { SceneSelector } from '../organization/SceneSelector.js'
 import { FolderSelector } from '../organization/FolderSelector.js'
 import { TagSelector } from '../organization/TagSelector.js'
+import { offerUndo } from '../../undo.js'
 
 interface BookmarkDetailProps {
   bookmark: BookmarkResponse
@@ -61,7 +62,8 @@ export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onCl
   const handleDelete = async () => {
     if (!window.confirm('移入回收站？')) return
     try {
-      await bookmarksApi.delete(bookmark.id)
+      const result = await bookmarksApi.delete(bookmark.id)
+      if (result.undoId) offerUndo({ undoId: result.undoId, message: '删除' })
       onDeleted?.(bookmark.id)
       onClose()
     } catch (e) {

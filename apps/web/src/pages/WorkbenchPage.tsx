@@ -13,6 +13,7 @@ import { bookmarksApi } from '../api/bookmarks.js'
 import { organizationApi } from '../api/organization.js'
 import type { BookmarkListParams } from '../api/bookmarks.js'
 import type { BookmarkResponse, SceneResponse, FolderResponse, TagResponse } from '../types/api.js'
+import { offerUndo } from '../undo.js'
 
 export function WorkbenchPage() {
   const [location] = useLocation()
@@ -116,8 +117,9 @@ export function WorkbenchPage() {
 
   const runBatch = async (data: Parameters<typeof bookmarksApi.batchUpdate>[0]) => {
     try {
-      await bookmarksApi.batchUpdate(data)
+      const result = await bookmarksApi.batchUpdate(data)
       setSelectedIds(new Set())
+      if (result.undoId) offerUndo({ undoId: result.undoId, message: data.deleted ? '删除' : '批量修改' })
       await loadBookmarks()
     } catch (e) {
       alert(e instanceof Error ? e.message : '批量操作失败')

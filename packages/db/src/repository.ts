@@ -145,7 +145,12 @@ type ResourceRepositories = {
   folders: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
   tags: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; remove: (id: string) => Promise<boolean> }
   suggestions: { list: (bookmarkId: string, status?: string) => Promise<PageResult<unknown>>; create: (input: Record<string, unknown>) => Promise<unknown>; resolve: (id: string, status: string) => Promise<unknown | undefined>; accept: (id: string, actor?: string) => Promise<unknown | undefined> }
-  operationLog: { list: (filters?: Record<string, unknown>) => Promise<unknown[]>; append: (input: Record<string, unknown>) => Promise<unknown> }
+  operationLog: {
+    list: (filters?: Record<string, unknown>) => Promise<unknown[]>
+    get: (id: string) => Promise<unknown | undefined>
+    append: (input: Record<string, unknown>) => Promise<unknown>
+    consumeRevert: (id: string) => Promise<unknown | undefined>
+  }
   settings: { list: () => Promise<unknown[]>; get: (key: string) => Promise<unknown | undefined>; set: (key: string, value: unknown) => Promise<unknown> }
   archives: {
     create: (data: { id: string; bookmarkId: string; type: string; status?: string; error?: string }) => Promise<unknown>
@@ -449,7 +454,14 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
   }
   repository.operationLog = {
     list: async (filters = {}) => { const conditions: any[] = []; if (typeof filters.actor === 'string') conditions.push(eq(operationLog.actor, filters.actor)); if (typeof filters.action === 'string') conditions.push(eq(operationLog.action, filters.action)); return db.select().from(operationLog).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(operationLog.createdAt)).all() },
+    get: async (id) => (await db.select().from(operationLog).where(eq(operationLog.id, id)).all())[0],
     append: async (input) => { const record = { ...input, id: input.id ?? crypto.randomUUID(), createdAt: input.createdAt ?? now(), detail: input.detail ?? null, revertToken: input.revertToken ?? null }; await db.insert(operationLog).values(record).run(); return record },
+    consumeRevert: async (id) => {
+      const row = (await db.select().from(operationLog).where(eq(operationLog.id, id)).all())[0]
+      if (!row?.revertToken) return undefined
+      await db.update(operationLog).set({ revertToken: null }).where(eq(operationLog.id, id)).run()
+      return row
+    },
   }
   repository.settings = {
     list: async () => db.select().from(settings).all(),
