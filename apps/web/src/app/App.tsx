@@ -21,7 +21,14 @@ export function App() {
   }, [session.loading, session.authenticated, location, setLocation])
 
   if (location === '/login') {
-    return <LoginPage />
+    return (
+      <LoginPage
+        onSuccess={async (next) => {
+          await session.checkAuth()
+          setLocation(next)
+        }}
+      />
+    )
   }
 
   if (session.loading || !session.authenticated) {

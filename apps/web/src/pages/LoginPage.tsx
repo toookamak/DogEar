@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLocation } from 'wouter'
 
-export function LoginPage() {
+export function LoginPage({ onSuccess }: { onSuccess?: (next: string) => Promise<void> | void }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,7 +23,9 @@ export function LoginPage() {
         return
       }
       const next = new URLSearchParams(window.location.search).get('next') || '/'
-      setLocation(next.startsWith('/') && !next.startsWith('//') ? next : '/')
+      const target = next.startsWith('/') && !next.startsWith('//') ? next : '/'
+      if (onSuccess) await onSuccess(target)
+      else setLocation(target)
     } catch {
       setError('登录失败，请重试')
     } finally {

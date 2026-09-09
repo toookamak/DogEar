@@ -4,6 +4,8 @@
 
 - 2026-09-07 / v0.6.1 / e4c6b75 — Raindrop OAuth 登录：新增 Client ID/Secret 配置与「通过 OAuth 授权」按钮，后端加 /api/channels/oauth/exchange 换 access token 写回通道，新增 /settings/oauth/callback 回调页并挂路由，通道卡片展示授权状态；保留手动 Token 方式。
 
+- 2026-09-04 / v0.6.0 — 修复登录无反应：Vite 代理改回 8789，登录成功后先刷新会话再进工作台。
+
 - 2026-09-04 / v0.6.0 — L1：状态栏显示未推送条数；删除/批量可撤销；首次向导可跳过且不强制 Raindrop。
 
 - 2026-09-04 / v0.6.0 — 修复设置页请求 GET /api/skill/usage 被当成 Skill Bearer 鉴权而 401、整页踢回登录。
