@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { PageHeader } from '../components/layout/PageHeader.js'
-import { BookmarkListView } from '../components/bookmarks/BookmarkListView.js'
+import { BookmarkGridView } from '../components/bookmarks/BookmarkGridView.js'
 import { Loading } from '../components/feedback/Loading.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import { EmptyState } from '../components/feedback/EmptyState.js'
@@ -13,6 +13,9 @@ type NavItem = Pick<BookmarkResponse, 'id' | 'url'> & {
   favicon?: string | null
   domain?: string | null
 }
+
+/** 导航页不做多选，传空集合即可 */
+const EMPTY_SELECTION: Set<string> = new Set()
 
 export function NavPage() {
   const [bookmarks, setBookmarks] = useState<NavItem[]>([])
@@ -71,10 +74,12 @@ export function NavPage() {
           <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 500, margin: '0 0 var(--spacing-8)' }}>
             最近访问
           </h3>
-          <BookmarkListView
+          <BookmarkGridView
             bookmarks={recentBookmarks as BookmarkResponse[]}
-            onSelect={(bookmark) => openBookmark(bookmark)}
-            viewMode="list"
+            activeId={null}
+            selectedIds={EMPTY_SELECTION}
+            onOpen={(bookmark) => openBookmark(bookmark)}
+            onToggleSelect={() => {}}
           />
         </div>
       )}
@@ -88,10 +93,12 @@ export function NavPage() {
         {error && <ErrorMessage message={error} />}
         {!loading && !error && bookmarks.length === 0 && <EmptyState message="导航页暂无书签" />}
         {!loading && !error && bookmarks.length > 0 && (
-          <BookmarkListView
+          <BookmarkGridView
             bookmarks={bookmarks as BookmarkResponse[]}
-            onSelect={(bookmark) => openBookmark(bookmark)}
-            viewMode="grid"
+            activeId={null}
+            selectedIds={EMPTY_SELECTION}
+            onOpen={(bookmark) => openBookmark(bookmark)}
+            onToggleSelect={() => {}}
           />
         )}
 

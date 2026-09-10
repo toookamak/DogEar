@@ -1,86 +1,70 @@
 import type { BookmarkResponse } from '../../types/api.js'
+import { STATUS_LABELS, SYNC_STATUS_LABELS, label } from '../../utils/format.js'
 
 interface BookmarkCardProps {
   bookmark: BookmarkResponse
   onClick: () => void
+  active?: boolean
   selected?: boolean
   selectable?: boolean
   onToggleSelect?: (id: string) => void
 }
 
-export function BookmarkCard({ bookmark, onClick, selected, selectable, onToggleSelect }: BookmarkCardProps) {
+/** 书签卡片：网格视图与导航页共用。样式见 styles/app.css 的 .bm-card */
+export function BookmarkCard({
+  bookmark,
+  onClick,
+  active,
+  selected,
+  selectable,
+  onToggleSelect,
+}: BookmarkCardProps) {
+  const title = bookmark.title || bookmark.url
+
   return (
-    <div
+    <article
+      className={`bm-card${active ? ' bm-card--active' : ''}${selected ? ' bm-card--selected' : ''}`}
       onClick={onClick}
-      style={{
-        background: selected ? 'var(--color-bg-surface-500)' : 'var(--color-bg-surface-400)',
-        border: `1px solid ${selected ? 'var(--border-medium)' : 'var(--border-primary)'}`,
-        borderRadius: 'var(--radius-comfortable)',
-        padding: 'var(--spacing-12)',
-        cursor: 'pointer',
-        transition: 'background 150ms ease',
+      tabIndex={0}
+      role="button"
+      aria-label={`${title}（打开详情）`}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick()
+        }
       }}
     >
-      {bookmark.favicon && (
-        <img
-          src={bookmark.favicon}
-          alt=""
-          style={{
-            width: '16px',
-            height: '16px',
-            display: 'inline-block',
-            verticalAlign: 'middle',
-            marginRight: 'var(--spacing-8)',
-            borderRadius: 'var(--radius-small)',
-          }}
-        />
-      )}
-      {selectable && (
-        <input
-          type="checkbox"
-          checked={selected}
-          onClick={(event) => event.stopPropagation()}
-          onChange={() => onToggleSelect?.(bookmark.id)}
-          style={{ marginRight: 'var(--spacing-8)', verticalAlign: 'middle' }}
-        />
-      )}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
-        <h3 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '16px',
-          fontWeight: '500',
-          margin: 0,
-          color: 'var(--color-text-primary)',
-          lineHeight: '1.3',
-        }}>
-          {bookmark.title || bookmark.url}
-        </h3>
-        {bookmark.note && (
-          <p style={{
-            fontFamily: 'var(--font-ui)',
-            fontSize: '14px',
-            color: 'var(--color-text-secondary)',
-            margin: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            lineClamp: 2,
-          }}>
-            {bookmark.note}
-          </p>
+      <header className="bm-card-head">
+        {selectable && (
+          <input
+            type="checkbox"
+            className="bm-card-check"
+            checked={Boolean(selected)}
+            onClick={(event) => event.stopPropagation()}
+            onChange={() => onToggleSelect?.(bookmark.id)}
+            aria-label={selected ? '取消选择' : '选择该书签'}
+          />
         )}
-        {bookmark.domain && (
-          <div style={{
-            fontFamily: 'var(--font-ui)',
-            fontSize: '12px',
-            color: 'var(--color-text-muted)',
-            margin: 0,
-          }}>
-            {bookmark.domain}
-          </div>
+        {bookmark.favicon && (
+          <img className="bm-card-fav" src={bookmark.favicon} alt="" loading="lazy" />
         )}
-      </div>
-    </div>
+        <h3 className="bm-card-title">{title}</h3>
+      </header>
+
+      {bookmark.note && <p className="bm-card-note">{bookmark.note}</p>}
+
+      <footer className="bm-card-foot">
+        <span className={`pill pill--status pill--${bookmark.status}`}>
+          {label(STATUS_LABELS, bookmark.status)}
+        </span>
+        {bookmark.important && <span className="pill pill--important">重要</span>}
+        {bookmark.private && <span className="pill">私密</span>}
+        {bookmark.syncStatus === 'pending' && (
+          <span className="pill pill--pending">{label(SYNC_STATUS_LABELS, bookmark.syncStatus)}</span>
+        )}
+        <span className="bm-card-domain">{bookmark.domain ?? ''}</span>
+      </footer>
+    </article>
   )
 }

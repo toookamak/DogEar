@@ -11,6 +11,8 @@ export interface BookmarkListParams {
   important?: string
   source?: string
   q?: string
+  /** 排序：recent（默认）| title | domain，由服务端排序 */
+  sort?: string
 }
 
 export const bookmarksApi = {

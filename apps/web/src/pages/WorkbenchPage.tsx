@@ -1,7 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation, useSearchParams } from 'wouter'
-import { PageHeader } from '../components/layout/PageHeader.js'
-import { BookmarkListView } from '../components/bookmarks/BookmarkListView.js'
+import { ContentHead } from '../components/layout/ContentHead.js'
+import { WorkspaceToolbar, type SortKey, type ViewMode } from '../components/bookmarks/WorkspaceToolbar.js'
+import { BookmarkGridView } from '../components/bookmarks/BookmarkGridView.js'
+import { BookmarkTableView } from '../components/bookmarks/BookmarkTableView.js'
+import { BookmarkBoardView } from '../components/bookmarks/BookmarkBoardView.js'
+import { BookmarkTilesView } from '../components/bookmarks/BookmarkTilesView.js'
 import { BookmarkDetail } from '../components/detail/BookmarkDetail.js'
 import { SaveBookmarkForm } from '../components/detail/SaveBookmarkForm.js'
 import { CommandPalette } from '../components/command/CommandPalette.js'
@@ -15,20 +19,44 @@ import type { BookmarkListParams } from '../api/bookmarks.js'
 import type { BookmarkResponse, SceneResponse, FolderResponse, TagResponse } from '../types/api.js'
 import { offerUndo, onDataChanged } from '../undo.js'
 
+const VIEW_STORAGE_KEY = 'dogear.workbench.view'
+
+/** 各导航位置的标题与说明；说明取自 PRD 对三种处理状态的定位 */
+const NAV_META: Record<string, { title: string; description: string }> = {
+  '/': {
+    title: '待处理',
+    description: 'Inbox：新进入资料库的链接。可长期停留，不强制整理（PRD §2.0.2）。',
+  },
+  '/bookmarks': {
+    title: '书签',
+    description: '全部书签，可按状态、场景、文件夹、标签筛选，或直接搜索。',
+  },
+}
+
+function readStoredView(): ViewMode {
+  try {
+    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY)
+    if (stored === 'grid' || stored === 'tags' || stored === 'list' || stored === 'board') return stored
+  } catch { /* 隐私模式下不可读，用默认值 */ }
+  return 'grid'
+}
+
 export function WorkbenchPage() {
   const [location] = useLocation()
   const isInbox = location === '/'
-  const title = isInbox ? 'Inbox' : location === '/bookmarks' ? '书签' : '工作台'
+  const meta = NAV_META[location] ?? { title: '工作台', description: '' }
 
   const [bookmarks, setBookmarks] = useState<BookmarkResponse[]>([])
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedBookmark, setSelectedBookmark] = useState<BookmarkResponse | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showSaveForm, setShowSaveForm] = useState(false)
   const [showCommand, setShowCommand] = useState(false)
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+  const [viewMode, setViewMode] = useState<ViewMode>(readStoredView)
+  const [sort, setSort] = useState<SortKey>('recent')
   const [scenes, setScenes] = useState<SceneResponse[]>([])
   const [folders, setFolders] = useState<FolderResponse[]>([])
   const [tags, setTags] = useState<TagResponse[]>([])
@@ -63,7 +91,7 @@ export function WorkbenchPage() {
   }, [searchParams, setSearchParams])
 
   const queryParams = useCallback((): BookmarkListParams => {
-    const params: BookmarkListParams = {}
+    const params: BookmarkListParams = { sort }
     if (!isInbox && filters.status) params.status = filters.status
     if (filters.sceneId) params.sceneId = filters.sceneId
     if (filters.folderId) params.folderId = filters.folderId
@@ -71,7 +99,7 @@ export function WorkbenchPage() {
     if (filters.source) params.source = filters.source
     if (filters.q.trim()) params.q = filters.q.trim()
     return params
-  }, [filters, isInbox])
+  }, [filters, isInbox, sort])
 
   const loadBookmarks = useCallback(async (cursor?: string) => {
     if (!cursor) setLoading(true)
@@ -91,6 +119,7 @@ export function WorkbenchPage() {
       setError(e instanceof Error ? e.message : '加载失败')
     }
     setLoading(false)
+    setLoadingMore(false)
   }, [isInbox, queryParams, filters.q])
 
   // 外壳中的撤销成功后通知刷新列表（替代先前的整页 reload）
@@ -111,9 +140,11 @@ export function WorkbenchPage() {
 
   useEffect(() => { loadBookmarks(); loadOrganization() }, [loadBookmarks, loadOrganization])
 
+  // ⌘K 打开命令面板（与顶栏搜索入口的键帽提示一致）。
+  // 工具栏内的输入框是「就地筛选当前列表」，不占用该快捷键，避免一个键两种行为。
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setShowCommand((v) => !v)
       }
@@ -121,6 +152,11 @@ export function WorkbenchPage() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [])
+
+  const changeView = (next: ViewMode) => {
+    setViewMode(next)
+    try { window.localStorage.setItem(VIEW_STORAGE_KEY, next) } catch { /* 忽略 */ }
+  }
 
   const handleSave = async (data: { url: string; note?: string; intent?: string; important?: boolean; private?: boolean }) => {
     try {
@@ -157,147 +193,185 @@ export function WorkbenchPage() {
     }
   }
 
+  /** 行内/看板改状态：单条 PATCH，成功后就地更新，避免整页重载 */
+  const moveStatus = async (id: string, status: 'unread' | 'saved' | 'archived') => {
+    const current = bookmarks.find((b) => b.id === id)
+    if (!current || current.status === status) return
+    setBookmarks((prev) => prev.map((b) => b.id === id ? { ...b, status } : b))
+    try {
+      const updated = await bookmarksApi.update(id, { status })
+      setBookmarks((prev) => prev.map((b) => b.id === id ? updated : b))
+      if (selectedBookmark?.id === id) setSelectedBookmark(updated)
+    } catch (e) {
+      setBookmarks((prev) => prev.map((b) => b.id === id ? { ...b, status: current.status } : b))
+      alert(e instanceof Error ? e.message : '状态更新失败')
+    }
+  }
+
+  const hasActiveFilters = filters.q !== '' || filters.source !== '' || filters.status !== '' ||
+    filters.sceneId !== '' || filters.folderId !== '' || filters.tagId !== ''
+
+  const clearFilters = () => setFilters({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
+
+  const loadMore = () => {
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
+    void loadBookmarks(nextCursor)
+  }
+
+  const openBookmark = (bookmark: BookmarkResponse) => setSelectedBookmark(bookmark)
+
+  const renderView = () => {
+    const shared = {
+      bookmarks,
+      activeId: selectedBookmark?.id ?? null,
+      selectedIds,
+      onOpen: openBookmark,
+    }
+    if (viewMode === 'grid') {
+      return <BookmarkGridView {...shared} onToggleSelect={toggleSelect} />
+    }
+    if (viewMode === 'list') {
+      return <BookmarkTableView {...shared} onToggleSelect={toggleSelect} onMoveStatus={moveStatus} />
+    }
+    if (viewMode === 'board') {
+      return <BookmarkBoardView {...shared} onMoveStatus={moveStatus} />
+    }
+    return <BookmarkTilesView {...shared} />
+  }
+
   return (
-    <div>
-      <PageHeader
-        title={title}
+    <div className="workbench">
+      <ContentHead
+        title={meta.title}
+        count={bookmarks.length}
+        description={meta.description}
         actions={
-          <>
-            <button onClick={() => setShowSaveForm(true)} className="btn-primary">
-              + 保存
-            </button>
-            <button
-              onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-              className="btn-secondary-pill"
-            >
-              {viewMode === 'list' ? '网格' : '列表'}
-            </button>
-          </>
+          <button type="button" className="btn btn--primary" onClick={() => setShowSaveForm(true)}>
+            + 保存
+          </button>
         }
       />
 
-      <div style={{ display: 'flex', height: 'calc(100vh - 52px - 24px)' }}>
-        <div style={{ flex: 1, overflow: 'auto', padding: 'var(--spacing-16)' }}>
-          {showSaveForm && (
-            <div style={{ marginBottom: 'var(--spacing-16)' }}>
-              <SaveBookmarkForm onSave={handleSave} onClose={() => setShowSaveForm(false)} />
-            </div>
-          )}
+      <WorkspaceToolbar
+        query={filters.q}
+        source={filters.source}
+        sort={sort}
+        view={viewMode}
+        onQuery={(q) => setFilters((f) => ({ ...f, q }))}
+        onSource={(source) => setFilters((f) => ({ ...f, source }))}
+        onSort={setSort}
+        onView={changeView}
+      />
 
-          {!isInbox && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-8)', marginBottom: 'var(--spacing-12)' }}>
-              <input
-                className="input"
-                placeholder="搜索标题 / URL / 备注"
-                value={filters.q}
-                onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-                style={{ minWidth: '180px' }}
-              />
-              <select className="input" value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
-                <option value="">全部状态</option>
-                <option value="unread">待处理</option>
-                <option value="saved">已确认</option>
-                <option value="archived">搁置</option>
-              </select>
-              <select className="input" value={filters.sceneId} onChange={(e) => setFilters((f) => ({ ...f, sceneId: e.target.value }))}>
-                <option value="">全部场景</option>
-                {scenes.map((scene) => <option key={scene.id} value={scene.id}>{scene.name}</option>)}
-              </select>
-              <select className="input" value={filters.folderId} onChange={(e) => setFilters((f) => ({ ...f, folderId: e.target.value }))}>
-                <option value="">全部文件夹</option>
-                <option value="none">无文件夹</option>
-                {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-              </select>
-              <select className="input" value={filters.tagId} onChange={(e) => setFilters((f) => ({ ...f, tagId: e.target.value }))}>
-                <option value="">全部标签</option>
-                {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
-              </select>
-              <select className="input" value={filters.source} onChange={(e) => setFilters((f) => ({ ...f, source: e.target.value }))}>
-                <option value="">全部来源</option>
-                <option value="page">工作台</option>
-                <option value="agent">Agent</option>
-                <option value="extension">插件</option>
-              </select>
-            </div>
-          )}
+      {!isInbox && (
+        <div className="filter-row">
+          <select className="input" value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+            <option value="">全部状态</option>
+            <option value="unread">待处理</option>
+            <option value="saved">已确认</option>
+            <option value="archived">搁置</option>
+          </select>
+          <select className="input" value={filters.sceneId} onChange={(e) => setFilters((f) => ({ ...f, sceneId: e.target.value }))}>
+            <option value="">全部场景</option>
+            {scenes.map((scene) => <option key={scene.id} value={scene.id}>{scene.name}</option>)}
+          </select>
+          <select className="input" value={filters.folderId} onChange={(e) => setFilters((f) => ({ ...f, folderId: e.target.value }))}>
+            <option value="">全部文件夹</option>
+            <option value="none">无文件夹</option>
+            {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+          </select>
+          <select className="input" value={filters.tagId} onChange={(e) => setFilters((f) => ({ ...f, tagId: e.target.value }))}>
+            <option value="">全部标签</option>
+            {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+          </select>
+        </div>
+      )}
 
-          {selectedIds.size > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-8)', marginBottom: 'var(--spacing-12)', alignItems: 'center' }}>
-              <span style={{ fontFamily: 'var(--font-ui)', fontSize: '13px' }}>已选 {selectedIds.size}</span>
-              <button className="btn-secondary-pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'saved' })}>标为已确认</button>
-              <button className="btn-secondary-pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'archived' })}>标为搁置</button>
-              <select
-                className="input"
-                defaultValue=""
-                onChange={(e) => {
-                  if (e.target.value) runBatch({ ids: [...selectedIds], addSceneIds: [e.target.value] })
-                  e.target.value = ''
-                }}
-              >
-                <option value="">添加场景...</option>
-                {scenes.filter((scene) => scene.enabled !== false).map((scene) => (
-                  <option key={scene.id} value={scene.id}>{scene.name}</option>
-                ))}
-              </select>
-              <button className="btn-secondary-pill" style={{ color: 'var(--color-error)' }} onClick={() => runBatch({ ids: [...selectedIds], deleted: true })}>移入回收站</button>
-              <button className="btn-secondary-pill" onClick={() => setSelectedIds(new Set())}>取消选择</button>
-            </div>
-          )}
+      {showSaveForm && (
+        <div className="save-form-wrap">
+          <SaveBookmarkForm onSave={handleSave} onClose={() => setShowSaveForm(false)} />
+        </div>
+      )}
 
-          {loading && <Loading />}
-          {error && <ErrorMessage message={error} />}
-          {!loading && !error && bookmarks.length === 0 && <EmptyState message={isInbox ? 'Inbox 为空' : '暂无书签'} />}
+      {selectedIds.size > 0 && (
+        <div className="selection-bar">
+          <span className="selection-bar-count">已选 {selectedIds.size}</span>
+          <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'saved' })}>标为已确认</button>
+          <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'archived' })}>标为搁置</button>
+          <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'unread' })}>退回待处理</button>
+          <select
+            className="input"
+            defaultValue=""
+            onChange={(e) => {
+              if (e.target.value) runBatch({ ids: [...selectedIds], addSceneIds: [e.target.value] })
+              e.target.value = ''
+            }}
+          >
+            <option value="">添加场景…</option>
+            {scenes.filter((scene) => scene.enabled !== false).map((scene) => (
+              <option key={scene.id} value={scene.id}>{scene.name}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn btn--pill"
+            style={{ color: 'var(--color-error)' }}
+            onClick={() => runBatch({ ids: [...selectedIds], deleted: true })}
+          >
+            移入回收站
+          </button>
+          <button type="button" className="btn btn--pill" onClick={() => setSelectedIds(new Set())}>取消选择</button>
+        </div>
+      )}
 
-          {!loading && !error && bookmarks.length > 0 && (
-            <BookmarkListView
-              bookmarks={bookmarks}
-              onSelect={(b) => setSelectedBookmark(b)}
-              viewMode={viewMode}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-            />
-          )}
-
-          {nextCursor && (
-            <div style={{ textAlign: 'center', padding: 'var(--spacing-16)' }}>
-              <button onClick={() => loadBookmarks(nextCursor)} className="btn-secondary-pill">加载更多</button>
-            </div>
+      <section className="bookmark-area">
+        <div className="bookmark-summary">
+          <span>显示 {bookmarks.length} 条{nextCursor ? '（还有更多）' : ''}</span>
+          {hasActiveFilters && (
+            <button type="button" className="clear-btn" onClick={clearFilters}>清除筛选</button>
           )}
         </div>
 
-        {selectedBookmark && (
-          <div style={{
-            width: '360px',
-            minWidth: '360px',
-            overflow: 'auto',
-            padding: 'var(--spacing-16)',
-            borderLeft: '1px solid var(--border-primary)',
-          }}>
-            <BookmarkDetail
-              bookmark={selectedBookmark}
-              scenes={scenes}
-              folders={folders}
-              tags={tags}
-              onUpdate={handleUpdate}
-              onClose={() => setSelectedBookmark(null)}
-              onDeleted={(id) => {
-                setBookmarks((prev) => prev.filter((item) => item.id !== id))
-                setSelectedIds((prev) => {
-                  const next = new Set(prev)
-                  next.delete(id)
-                  return next
-                })
-              }}
-            />
-            <div style={{ marginTop: 'var(--spacing-12)' }}>
-              <SuggestionPanel
-                bookmarkId={selectedBookmark.id}
-                onUpdate={() => loadBookmarks()}
-              />
-            </div>
+        {loading && <Loading />}
+        {error && <ErrorMessage message={error} />}
+        {!loading && !error && bookmarks.length === 0 && (
+          <EmptyState message={isInbox ? 'Inbox 为空' : '暂无书签'} />
+        )}
+        {!loading && !error && bookmarks.length > 0 && renderView()}
+
+        {nextCursor && (
+          <div className="load-more">
+            <button type="button" className="btn btn--pill" disabled={loadingMore} onClick={loadMore}>
+              {loadingMore ? '加载中…' : '加载更多'}
+            </button>
           </div>
         )}
-      </div>
+      </section>
+
+      {selectedBookmark && (
+        <aside className="detail-aside">
+          <BookmarkDetail
+            bookmark={selectedBookmark}
+            scenes={scenes}
+            folders={folders}
+            tags={tags}
+            onUpdate={handleUpdate}
+            onClose={() => setSelectedBookmark(null)}
+            onDeleted={(id) => {
+              setBookmarks((prev) => prev.filter((item) => item.id !== id))
+              setSelectedIds((prev) => {
+                const next = new Set(prev)
+                next.delete(id)
+                return next
+              })
+            }}
+          />
+          <div className="detail-aside-suggestions">
+            <SuggestionPanel bookmarkId={selectedBookmark.id} onUpdate={() => loadBookmarks()} />
+          </div>
+        </aside>
+      )}
 
       <CommandPalette
         bookmarks={bookmarks}
