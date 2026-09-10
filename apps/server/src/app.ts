@@ -1,6 +1,7 @@
 import {
   archiveJobStatusSchema,
   batchUpdateRequestSchema,
+  bookmarkListQuerySchema,
   bookmarkVersionConflictErrorSchema,
   createBookmarkInputSchema,
   getStatsSkillInputSchema,
@@ -167,9 +168,9 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.get('/api/bookmarks', async (c) => {
-    const query = paginationQuerySchema.safeParse(c.req.query())
+    const query = bookmarkListQuerySchema.safeParse(c.req.query())
     if (!query.success) return invalidRequest(c)
-    const { limit, cursor } = query.data
+    const { limit, cursor, sort } = query.data
     const importantQuery = c.req.query('important')
     const result = await repository.list({
       q: c.req.query('q'),
@@ -179,7 +180,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       tagId: c.req.query('tagId'),
       important: importantQuery === 'true' ? true : importantQuery === 'false' ? false : undefined,
       source: c.req.query('source'),
-    }, limit, cursor)
+    }, limit, cursor, { sort })
     return c.json({ items: result.items.map(serializeBookmark), nextCursor: result.nextCursor })
   })
 

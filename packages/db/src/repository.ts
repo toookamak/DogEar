@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNotNull, isNull, like, lt, ne, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, like, lt, ne, or, sql } from 'drizzle-orm'
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1'
 import {
   accessRecords,
@@ -97,7 +97,7 @@ export type SyncQueueItem = {
 
 export type BookmarkRepository = {
   create: (input: BookmarkInput) => Promise<unknown>
-  list: (filters?: BookmarkFilters, limit?: number, cursor?: string, opts?: { orderBy?: string }) => Promise<PageResult<unknown>>
+  list: (filters?: BookmarkFilters, limit?: number, cursor?: string, opts?: { orderBy?: string; sort?: 'recent' | 'title' | 'domain' }) => Promise<PageResult<unknown>>
   listInbox: (limit?: number, cursor?: string) => Promise<InboxPageResult<unknown>>
   listRecycleBin: (limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   countPending: () => Promise<number>
@@ -193,31 +193,70 @@ function now() {
   return new Date()
 }
 
-function encodeCursor(createdAt: Date, id: string): string {
-  const ts = createdAt.getTime().toString(36)
-  return `${ts}_${id}`
+type CursorSort = 'recent' | 'title' | 'domain'
+type Cursor = { sort: CursorSort; value: string; id: string }
+
+// 游标格式：`<sort>~<encodeURIComponent(value)>~<id>`。value 的语义随 sort 变化：
+// recent 为 createdAt 的毫秒时间戳，title/domain 为排序字段值。游标对客户端不透明。
+// 排序键写入游标，保证分页与排序一致（否则改排序后翻页会漏项/重项）。
+function encodeCursor(sort: CursorSort, value: string, id: string): string {
+  return `${sort}~${encodeURIComponent(value)}~${id}`
 }
 
-function decodeCursor(cursor: string): { createdAt: Date; id: string } | null {
-  const idx = cursor.indexOf('_')
-  if (idx < 0) return null
-  const ts = Number.parseInt(cursor.slice(0, idx), 36)
-  if (Number.isNaN(ts)) return null
-  return { createdAt: new Date(ts), id: cursor.slice(idx + 1) }
+function decodeCursor(cursor: string): Cursor | null {
+  const first = cursor.indexOf('~')
+  const last = cursor.lastIndexOf('~')
+  if (first < 0 || last <= first) return null
+  const sort = cursor.slice(0, first)
+  if (sort !== 'recent' && sort !== 'title' && sort !== 'domain') return null
+  try {
+    return { sort, value: decodeURIComponent(cursor.slice(first + 1, last)), id: cursor.slice(last + 1) }
+  } catch {
+    return null
+  }
 }
 
-function keysetCondition(createdAt: Date, id: string) {
+/** title/domain 用 coalesce 归空串，避免 NULL 在升序里的排序歧义与 keyset 漏项 */
+function sortColumn(sort: CursorSort) {
+  if (sort === 'title') return sql`coalesce(${bookmarks.title}, '')`
+  if (sort === 'domain') return sql`coalesce(${bookmarks.domain}, '')`
+  return bookmarks.createdAt
+}
+
+function sortValueOf(sort: CursorSort, row: any): string {
+  const base = row?.bookmarks ?? row
+  if (sort === 'title') return String(base?.title ?? '')
+  if (sort === 'domain') return String(base?.domain ?? '')
+  const createdAt = base?.createdAt
+  return String(createdAt instanceof Date ? createdAt.getTime() : createdAt)
+}
+
+function keysetCondition(cursor: Cursor) {
+  if (cursor.sort === 'recent') {
+    const value = new Date(Number(cursor.value))
+    return or(
+      lt(bookmarks.createdAt, value),
+      and(eq(bookmarks.createdAt, value), lt(bookmarks.id, cursor.id)),
+    )
+  }
+  const col = sortColumn(cursor.sort)
   return or(
-    lt(bookmarks.createdAt, createdAt),
-    and(eq(bookmarks.createdAt, createdAt), lt(bookmarks.id, id)),
+    sql`${col} > ${cursor.value}`,
+    and(sql`${col} = ${cursor.value}`, gt(bookmarks.id, cursor.id)),
   )
 }
 
-function paginatedQuery<T>(rows: T[], limit: number, getCursor: (row: T) => { createdAt: Date; id: string }): { items: T[]; nextCursor: string | null } {
+function paginatedQuery<T>(
+  sort: CursorSort,
+  rows: T[],
+  limit: number,
+  cursorOf: (row: T) => { value: string; id: string },
+): { items: T[]; nextCursor: string | null } {
   const items = rows.slice(0, limit)
   const hasMore = rows.length > limit
-  const nextCursor = hasMore && items.length > 0
-    ? encodeCursor(getCursor(items[items.length - 1]).createdAt, getCursor(items[items.length - 1]).id)
+  const last = items[items.length - 1]
+  const nextCursor = hasMore && last
+    ? (() => { const c = cursorOf(last); return encodeCursor(sort, c.value, c.id) })()
     : null
   return { items, nextCursor }
 }
@@ -282,17 +321,25 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     await db.insert(bookmarks).values(record).run()
     return record
   }
-  repository.list = async (filters = {}, limit = 50, cursor?: string, opts?: { orderBy?: string }) => {
+  repository.list = async (filters = {}, limit = 50, cursor?: string, opts?: { orderBy?: string; sort?: CursorSort }) => {
+    const sort: CursorSort = opts?.sort ?? 'recent'
     const conditions = [filterCondition(filters)]
     if (cursor) {
       const decoded = decodeCursor(cursor)
-      if (decoded) conditions.push(keysetCondition(decoded.createdAt, decoded.id))
+      // 仅当游标的排序键与本次请求一致时才应用 keyset；否则视为无效游标，回到首页，
+      // 避免用另一套排序的边界值去过滤当前排序，产生漏项或重复。
+      if (decoded && decoded.sort === sort) conditions.push(keysetCondition(decoded))
     }
     const whereClause = conditions.length > 1 ? and(...conditions.filter(Boolean)) : conditions[0]
     const query = filters.sceneId || filters.tagId || filters.q ? db.select().from(bookmarks).leftJoin(bookmarkScenes, eq(bookmarks.id, bookmarkScenes.bookmarkId)).leftJoin(bookmarkTags, eq(bookmarks.id, bookmarkTags.bookmarkId)).leftJoin(tags, eq(bookmarkTags.tagId, tags.id)) : db.select().from(bookmarks)
-    const orderBy = opts?.orderBy === 'lastOpenedAt' ? desc(bookmarks.lastOpenedAt) : desc(bookmarks.createdAt)
-    const rows = await query.where(whereClause).orderBy(orderBy, desc(bookmarks.id)).limit(limit + 1).all()
-    const page = paginatedQuery(rows, limit, (row: any) => ({ createdAt: row.createdAt ?? row.bookmarks?.createdAt, id: row.id ?? row.bookmarks?.id }))
+    const orderBy = opts?.orderBy === 'lastOpenedAt'
+      ? desc(bookmarks.lastOpenedAt)
+      : sort === 'recent'
+        ? desc(bookmarks.createdAt)
+        : asc(sortColumn(sort))
+    const tiebreak = sort === 'recent' || opts?.orderBy === 'lastOpenedAt' ? desc(bookmarks.id) : asc(bookmarks.id)
+    const rows = await query.where(whereClause).orderBy(orderBy, tiebreak).limit(limit + 1).all()
+    const page = paginatedQuery(sort, rows, limit, (row: any) => ({ value: sortValueOf(sort, row), id: row.id ?? row.bookmarks?.id }))
     const items = await Promise.all(page.items.map(async (row: any) => {
       const base = row.bookmarks ?? row
       return { ...base, ...(await readRelations(db, base.id)) }
@@ -306,7 +353,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
   repository.listRecycleBin = async (limit = 50, cursor?: string) => {
     const result = await repository.list({ includeDeleted: true }, limit, cursor)
     const filtered = result.items.filter((item: any) => item.deletedAt)
-    const paginated = paginatedQuery(filtered, limit, (row: any) => ({ createdAt: row.createdAt ?? row.bookmarks?.createdAt, id: row.id ?? row.bookmarks?.id }))
+    const paginated = paginatedQuery('recent', filtered, limit, (row: any) => ({ value: sortValueOf('recent', row), id: row.id ?? row.bookmarks?.id }))
     return paginated
   }
   repository.countPending = async () => {

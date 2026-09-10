@@ -31,7 +31,10 @@ function setup() {
       return {
         from(table: any) {
           const target = table === bookmarks ? bookmarkRows : accessRows
+          // readRelations 会经 innerJoin(scenes/tags) 读取关联；内存桩只需保持链式可调用
+          const joined = { where: () => ({ all: () => [] }) }
           return {
+            innerJoin: () => joined,
             where(condition: any) {
               return {
                 all: () => [{ count: bookmarkRows.filter((record) => record.syncStatus === 'pending').length }],

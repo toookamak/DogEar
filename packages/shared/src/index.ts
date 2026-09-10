@@ -42,8 +42,10 @@ export type {
   UnauthorizedError,
 } from './m2.js'
 export {
+  bookmarkListQuerySchema,
   bookmarkListResponseSchema,
   bookmarkListSkillResponseSchema,
+  bookmarkSortSchema,
   capabilitiesResponseSchema,
   capabilityLevelSchema,
   getStatsSkillInputSchema,
@@ -69,6 +71,7 @@ export {
 } from './contracts.js'
 export type {
   BookmarkListResponse,
+  BookmarkSort,
   CapabilitiesResponse,
   CapabilityLevel,
   SkillCapability,
