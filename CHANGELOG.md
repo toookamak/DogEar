@@ -1,5 +1,13 @@
 # Changelog
 
+- 2026-09-10 / v0.7.9 / a0d2441 — 修查询串读取缺陷并完成其余页面对齐。**关键修复**：wouter 的 `useLocation()` 只返回 pathname、不含查询串，而 `OAuthCallbackPage` 与 `ImportResultPage` 都用 `location.split('?')[1]` 取参数——永远取不到，导致 Raindrop OAuth 回调固定报「缺少授权参数」（即 OAuth 登录从未成功过）、导入结果页从不显示数据；改用 `useSearch()` 后两者均正常。其余：登录页/首启向导/导入结果页/导航页/命令面板改 class-based；命令面板补键盘导航（↑↓/Enter/Esc 与 option/combobox 语义，此前只能鼠标点选）；`EmptyState` 补可选操作，`ErrorMessage` 去掉硬编码 oklab 颜色并支持重试。TSX 内硬编码颜色清零，内联样式由 307 处降至 56 处。
+
+- 2026-09-10 / v0.7.8 / 001bf39 — 数据通道表单改 class-based，并修三处通道缺陷：删除通道补二次确认（此前点「删除」立即抹掉配置与凭据且无撤销）；导出失败不再静默（原只显示 exported/failed 两个 0，失败原因无处可看）；`ChannelConfig` 修编辑态 WebDAV 地址与用户名「改不动」（原把 `channel.config` 直接当 value 用，输入不回显）；移除下拉里的 S3 选项（该分支只产出空 config，会存下无配置的 S3 通道，S3 由独立表单处理）；`S3Config` 不再把已保存的遮罩值当输入框内容显示。
+
+- 2026-09-10 / v0.7.7 / 18f993a — 回收站补保留期限提示（取 `recycle.retention_days`）；恢复/永久删除/清理过期项均带按操作区分的确认弹窗；清空改回 `onlyExpired`（原传 `false` 会连未过期的一起删）。保存表单补「标题由服务端异步抓取」说明；建议面板展示类型/目标/置信度/理由，并明确不提供「撤销接受」（API 无该能力）。
+
+- 2026-09-10 / v0.7.6 / 7d7e76f — 反馈层对齐原型：详情改覆盖式浮层（遮罩点击与 Escape 收起，补状态/来源徽标、摘要与 7 项来源信息）；新增 `toast.ts` + `ToastRegion`（aria-live=polite，按类型 3/3.5/6 秒自动消失）；新增 `Skeleton`（网格/表格/图标卡/看板四形态，支持 prefers-reduced-motion）；全部原生 `window.confirm`/`alert` 替换为 `ConfirmDialog` 与 toast，并识别版本冲突给出可行动提示。
+
 - 2026-09-10 / v0.7.5 / f38d9bf — Cloudflare Workers（轨 A）一键部署：新增 `apps/server/src/worker.ts`（与自托管入口共用 `createApp`，仅运行时装配不同）、`wrangler.toml`、`.github/workflows/deploy-cloudflare.yml`（推送 main 即校验→迁移 D1→部署 Worker→可选发布 Pages）；备份路由改为按运行时装注入，避免 `node:fs` 污染 Workers 模块图（Workers 上返回 501 `NOT_SUPPORTED`）。修两处必修缺陷：**D1 不支持 SQL 级事务**（drizzle d1 session 发 `BEGIN TRANSACTION` 被拒，导致 PATCH/批量/回收站清理等写路径在 D1 上全部 500），改为按运行时关闭驱动事务；**迁移链缺 5 张表与 1 个索引**（`archives`/`backups`/`channel_config`/`nav_rules`/`sync_queue` 此前仅由 `initializeSqliteSchema()` 启动时补建，D1 只跑迁移链会缺表），新增 `0004_m5_m7_tables.sql` 并加 `scripts/verify-schema-parity.ts` 持续校验。详见 `docs/modules/20260910_Cloudflare部署.md`。
 
 - 2026-09-10 / v0.7.4 / d2363aa — 组织管理接 `useOrganization` 单一数据源：三个 Manager 原先各持列表副本并直接调 API，导致该 hook 的增删改无调用方、且侧栏与组织页互不同步；新增 `org-events.ts` 广播组织变更，侧栏据此重取（新建场景无需刷新页面即出现）；失败不再吞掉，改为页内提示；`ConfirmDialog` 补 `role="dialog"` 与 class-based 样式。
