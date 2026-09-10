@@ -32,7 +32,7 @@ export function createNavRoutes(repository: BookmarkRepository) {
     if (!body.name || typeof body.name !== 'string') {
       return c.json({ error: { code: 'VALIDATION_ERROR', message: 'name required' } }, 400)
     }
-    const now = Date.now()
+    const now = new Date()
     const rule = await repository.navRules.create({
       id: randomUUID(),
       name: body.name,
@@ -49,7 +49,7 @@ export function createNavRoutes(repository: BookmarkRepository) {
 
   app.patch('/rules/:id', async (c) => {
     const body = await c.req.json().catch(() => ({}))
-    const data = { ...body, updatedAt: Date.now() }
+    const data = { ...body, updatedAt: new Date() }
     const rule = await repository.navRules.update(c.req.param('id'), data)
     if (!rule) return c.json({ error: { code: 'NOT_FOUND', message: 'Rule not found' } }, 404)
     return c.json(rule)

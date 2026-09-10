@@ -10,7 +10,7 @@ export type BackupTier = 'light' | 'medium' | 'full'
 export type BackupTarget = 'local' | 's3' | 'webdav'
 
 export class BackupService {
-  constructor(private repository: BookmarkRepository) {}
+  constructor(private repository: BookmarkRepository, private dbPath?: string) {}
 
   async createBackup(tier: BackupTier, target: BackupTarget): Promise<any> {
     const id = randomUUID()
@@ -109,9 +109,11 @@ export class BackupService {
   }
 
   private async createFullBackup(backupDir: string, backupId: string): Promise<{ filePath: string; fileSize: number }> {
-    const dbPath = process.env.DOGEAR_DB_PATH ?? process.env.DOGEAR_DATABASE_PATH
+    // 真源库路径由调用方注入（与 index.ts 解析出的路径同一份），环境变量仅作回退，
+    // 避免出现「服务端用了默认路径、重档备份却因取不到环境变量而必然失败」的情况。
+    const dbPath = this.dbPath ?? process.env.DOGEAR_DB_PATH ?? process.env.DOGEAR_DATABASE_PATH
     if (!dbPath) {
-      throw new Error('DOGEAR_DB_PATH or DOGEAR_DATABASE_PATH is required for full backup')
+      throw new Error('Database path is required for full backup')
     }
 
     const { copyFile, stat } = await import('node:fs/promises')

@@ -4,9 +4,9 @@ import { basename } from 'node:path'
 import type { BookmarkRepository } from '@dogear/db'
 import { BackupService } from './backup-service.js'
 
-export function createBackupRoutes(repository: BookmarkRepository) {
+export function createBackupRoutes(repository: BookmarkRepository, dbPath?: string) {
   const app = new Hono()
-  const backupService = new BackupService(repository)
+  const backupService = new BackupService(repository, dbPath)
 
   app.post('/', async (c) => {
     const body = await c.req.json().catch(() => ({}))

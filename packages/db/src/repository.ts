@@ -133,7 +133,7 @@ export type BookmarkRepository = {
   navRules: {
     list: () => Promise<unknown[]>
     get: (id: string) => Promise<unknown | undefined>
-    create: (data: { id: string; name: string; mode: string; rule?: string; searchQuery?: string; sortOrder?: number; enabled?: boolean; createdAt?: number; updatedAt?: number }) => Promise<unknown>
+    create: (data: { id: string; name: string; mode: string; rule?: string; searchQuery?: string; sortOrder?: number; enabled?: boolean; createdAt?: Date; updatedAt?: Date }) => Promise<unknown>
     update: (id: string, data: Record<string, unknown>) => Promise<unknown | undefined>
     remove: (id: string) => Promise<void>
   }

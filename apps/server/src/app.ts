@@ -38,6 +38,8 @@ type AppOptions = {
   sessionTtlSeconds?: number
   now?: () => number
   rateLimits?: { read?: number; write?: number; batch?: number }
+  /** 真源库文件路径，供重档备份整库复制使用 */
+  dbPath?: string
 }
 
 type SkillLimit = 'read' | 'write' | 'batch'
@@ -447,7 +449,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
 
   app.route('/api/channels', createChannelRoutes(repository))
   app.route('/api/archive', createArchiveRoutes(repository))
-  app.route('/api/backup', createBackupRoutes(repository))
+  app.route('/api/backup', createBackupRoutes(repository, options.dbPath))
   app.route('/api/metadata', createMetadataRoutes())
   app.route('/api/nav', createNavRoutes(repository))
 

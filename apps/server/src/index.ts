@@ -14,6 +14,7 @@ const pw = process.env.DOGEAR_PASSWORD || 'admin123'
 const repository = createBookmarkRepository(drizzle(sqlite))
 const app = createApp(repository, {
   password: pw,
+  dbPath,
 })
 
 // Background sync queue worker: process pending items every 60 seconds
