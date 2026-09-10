@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-10 / v0.6.3 / ab8b8a3 — 修复本地端口不一致：`apps/web/vite.config.ts` 代理目标由 8789 改回 8787，与服务端默认端口及 `apps/server/Dockerfile`、`docker-compose.yml`、`apps/web/nginx.conf` 的口径统一，`pnpm dev` 无需另设 `PORT` 即可登录；README 补充端口对照表与改端口须知。
+
 - 2026-09-07 / v0.6.2 — 未完成项写入 `docs/TODO.md`；本地备份目录加入 gitignore。
 
 - 2026-09-07 / v0.6.2 / ef321f2 — 修复 Raindrop 导入超时 500：Bun serve idleTimeout 默认提到 120s；导入合并 create+update 两次写为一次，写入减半；扩展 db 内部 BookmarkInput 支持 title/raindropId/raindropExtras。

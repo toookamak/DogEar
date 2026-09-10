@@ -84,6 +84,15 @@ pnpm install
 pnpm dev
 ```
 
+本地默认端口（开发环境）：
+
+| 服务 | 端口 | 说明 |
+| --- | --- | --- |
+| Web 工作台（Vite） | 5173 | 浏览器访问入口 |
+| API 服务（Hono + Bun） | 8787 | 服务端默认端口；工作台以相对路径请求 `/api`，由 Vite 代理转发至此 |
+
+端口以 **8787** 为唯一基准：`apps/server/src/index.ts` 的默认端口、`apps/server/Dockerfile`（`EXPOSE` / `ENV PORT`）、`docker-compose.yml`（含健康检查）与 `apps/web/nginx.conf` 均使用 8787，`apps/web/vite.config.ts` 的代理目标同样指向 8787，因此 `pnpm dev` 无需另设端口即可直接登录。如需更换端口，用 `PORT` 环境变量指定服务端，并同步修改 `vite.config.ts` 的代理目标——两者必须保持一致，否则工作台会出现「登录无反应」或 API 请求失败。
+
 常用检查命令：
 
 ```bash
