@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
 import { navItems, settingsNavItem, isActive } from '../../app/navigation.js'
 import { organizationApi } from '../../api/organization.js'
+import { onOrgChanged } from '../../org-events.js'
 import type { SceneResponse, FolderResponse, TagResponse } from '../../types/api.js'
 
 interface SidebarProps {
@@ -36,7 +37,9 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
       setLoaded(true)
     }
     load()
-    return () => { cancelled = true }
+    // 组织页改动后同步刷新，避免新建的场景要刷新页面才出现在侧栏
+    const off = onOrgChanged(() => { void load() })
+    return () => { cancelled = true; off() }
   }, [])
 
   const go = (path: string) => {

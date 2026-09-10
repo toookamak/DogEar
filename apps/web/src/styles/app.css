@@ -1435,3 +1435,145 @@ body {
 .detail-aside-suggestions {
   margin-top: var(--spacing-12);
 }
+
+/* ---------------------------------------------------------------- 组织管理页 */
+
+.org-page {
+  padding: var(--spacing-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-16);
+}
+
+.org-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-12);
+}
+
+.manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-12);
+}
+
+.manager-create,
+.manager-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  flex: 1;
+}
+
+.manager-create {
+  padding: var(--spacing-12);
+  margin-bottom: var(--spacing-12);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-comfortable);
+  background-color: var(--color-bg-surface-400);
+}
+
+.manager-create-name {
+  flex: 1;
+}
+
+.manager-create-icon {
+  width: 96px;
+}
+
+.manager-create-parent {
+  width: 180px;
+}
+
+.manager-icon {
+  margin-right: var(--spacing-4);
+}
+
+/* 标签云 */
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-8);
+  align-items: flex-start;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-6);
+  padding: var(--spacing-6) var(--spacing-12);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-full-pill);
+  background-color: var(--color-bg-surface-400);
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.tag-chip-remove {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.tag-chip-remove:hover {
+  color: var(--color-error);
+}
+
+/* ---------------------------------------------------------------- 确认弹窗 */
+
+.modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-16);
+}
+
+.modal-scrim {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  background-color: rgba(38, 37, 30, 0.4);
+  cursor: pointer;
+}
+
+.modal {
+  position: relative;
+  width: min(420px, 100%);
+  padding: var(--spacing-16);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-comfortable);
+  background-color: var(--color-bg-surface-400);
+  box-shadow: var(--shadow-card);
+}
+
+.modal-title {
+  margin: 0 0 var(--spacing-8);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.11px;
+  color: var(--color-text-primary);
+}
+
+.modal-message {
+  margin: 0 0 var(--spacing-16);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-8);
+}

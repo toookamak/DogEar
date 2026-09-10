@@ -7,46 +7,69 @@ import { useOrganization } from '../hooks/useOrganization.js'
 import { Loading } from '../components/feedback/Loading.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 
+const TABS = [
+  { key: 'scenes', label: '场景' },
+  { key: 'folders', label: '文件夹' },
+  { key: 'tags', label: '标签' },
+] as const
+
+type TabKey = typeof TABS[number]['key']
+
 export function OrganizationPage() {
-  const [tab, setTab] = useState<'scenes' | 'folders' | 'tags'>('scenes')
-  const { scenes, folders, tags, loading, error } = useOrganization()
+  const [tab, setTab] = useState<TabKey>('scenes')
+  const {
+    scenes, folders, tags, loading, error,
+    addScene, updateScene, deleteScene,
+    addFolder, updateFolder, deleteFolder,
+    addTag, deleteTag,
+  } = useOrganization()
 
   return (
     <div>
       <PageHeader title="组织管理" />
-      <div style={{ padding: 'var(--spacing-16)' }}>
-        <div style={{ display: 'flex', gap: 'var(--spacing-8)', marginBottom: 'var(--spacing-16)', borderBottom: '1px solid var(--border-primary)' }}>
-          {(['scenes', 'folders', 'tags'] as const).map((t) => (
+      <div className="org-page">
+        <nav className="tab-strip" aria-label="组织维度">
+          {TABS.map((item) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                background: 'none',
-                border: 'none',
-                borderBottom: tab === t ? '2px solid var(--color-text-primary)' : '2px solid transparent',
-                padding: 'var(--spacing-8) var(--spacing-12)',
-                fontFamily: 'var(--font-ui)',
-                fontSize: '14px',
-                fontWeight: tab === t ? 600 : 400,
-                color: 'var(--color-text-primary)',
-                cursor: 'pointer',
-              }}
+              key={item.key}
+              type="button"
+              className="tab-btn"
+              aria-current={tab === item.key ? 'true' : undefined}
+              onClick={() => setTab(item.key)}
             >
-              {t === 'scenes' ? '场景' : t === 'folders' ? '文件夹' : '标签'}
+              {item.label}
             </button>
           ))}
+        </nav>
+
+        <div className="org-content">
+          {loading && <Loading />}
+          {error && <ErrorMessage message={error} />}
+
+          {!loading && !error && (
+            <>
+              {tab === 'scenes' && (
+                <SceneManager
+                  scenes={scenes}
+                  onCreate={addScene}
+                  onUpdate={updateScene}
+                  onDelete={deleteScene}
+                />
+              )}
+              {tab === 'folders' && (
+                <FolderManager
+                  folders={folders}
+                  onCreate={addFolder}
+                  onUpdate={updateFolder}
+                  onDelete={deleteFolder}
+                />
+              )}
+              {tab === 'tags' && (
+                <TagManager tags={tags} onCreate={addTag} onDelete={deleteTag} />
+              )}
+            </>
+          )}
         </div>
-
-        {loading && <Loading />}
-        {error && <ErrorMessage message={error} />}
-
-        {!loading && !error && (
-          <>
-            {tab === 'scenes' && <SceneManager scenes={scenes} />}
-            {tab === 'folders' && <FolderManager folders={folders} />}
-            {tab === 'tags' && <TagManager tags={tags} />}
-          </>
-        )}
       </div>
     </div>
   )

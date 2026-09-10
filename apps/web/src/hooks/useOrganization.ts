@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { SceneResponse, FolderResponse, TagResponse } from '../types/api.js'
 import { organizationApi } from '../api/organization.js'
+import { notifyOrgChanged } from '../org-events.js'
 
 export function useOrganization() {
   const [scenes, setScenes] = useState<SceneResponse[]>([])
@@ -31,51 +32,59 @@ export function useOrganization() {
   const addScene = useCallback(async (data: { name: string; icon?: string }) => {
     const res = await organizationApi.scenes.create(data)
     setScenes(prev => [...prev, res])
+    notifyOrgChanged()
     return res
   }, [])
 
   const updateScene = useCallback(async (id: string, data: Record<string, unknown>) => {
     const res = await organizationApi.scenes.update(id, data)
     setScenes(prev => prev.map(s => s.id === id ? res : s))
+    notifyOrgChanged()
     return res
   }, [])
 
   const deleteScene = useCallback(async (id: string) => {
     await organizationApi.scenes.remove(id)
     setScenes(prev => prev.filter(s => s.id !== id))
+    notifyOrgChanged()
   }, [])
 
   const addFolder = useCallback(async (data: { name: string; parentId?: string }) => {
     const res = await organizationApi.folders.create(data)
     setFolders(prev => [...prev, res])
+    notifyOrgChanged()
     return res
   }, [])
 
   const updateFolder = useCallback(async (id: string, data: Record<string, unknown>) => {
     const res = await organizationApi.folders.update(id, data)
     setFolders(prev => prev.map(s => s.id === id ? res : s))
+    notifyOrgChanged()
     return res
   }, [])
 
   const deleteFolder = useCallback(async (id: string) => {
     await organizationApi.folders.remove(id)
     setFolders(prev => prev.filter(s => s.id !== id))
+    notifyOrgChanged()
   }, [])
 
   const addTag = useCallback(async (data: { name: string }) => {
     const res = await organizationApi.tags.create(data)
     setTags(prev => [...prev, res])
+    notifyOrgChanged()
     return res
   }, [])
 
   const deleteTag = useCallback(async (id: string) => {
     await organizationApi.tags.remove(id)
     setTags(prev => prev.filter(t => t.id !== id))
+    notifyOrgChanged()
   }, [])
 
   useEffect(() => {
     load()
-  }, [])
+  }, [load])
 
   return {
     scenes, folders, tags,
