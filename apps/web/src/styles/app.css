@@ -1393,6 +1393,33 @@ body {
   padding: var(--spacing-16);
 }
 
+/* 信息密度：由当前 Scene 的 AERR 原型决定（PRD §2.0.3）。
+ * compact 用于「以后反复查」类场景，收窄间距以容纳更多条目；
+ * 与原型一致只调密度，不改变信息结构。 */
+.bookmark-area[data-density="compact"] {
+  padding: var(--spacing-12);
+}
+
+.bookmark-area[data-density="compact"] .bm-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--spacing-8);
+}
+
+.bookmark-area[data-density="compact"] .bm-card {
+  padding: var(--spacing-8) var(--spacing-10);
+  gap: var(--spacing-4);
+}
+
+.bookmark-area[data-density="compact"] .bm-table-head,
+.bookmark-area[data-density="compact"] .bm-table-row {
+  padding: var(--spacing-4) var(--spacing-12);
+}
+
+.bookmark-area[data-density="compact"] .bm-tiles {
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: var(--spacing-6);
+}
+
 .bookmark-summary {
   display: flex;
   align-items: center;

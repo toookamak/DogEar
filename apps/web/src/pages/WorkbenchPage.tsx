@@ -19,6 +19,7 @@ import type { BookmarkListParams } from '../api/bookmarks.js'
 import type { BookmarkResponse, SceneResponse, FolderResponse, TagResponse } from '../types/api.js'
 import { offerUndo, onDataChanged } from '../undo.js'
 import { toast, errorMessage } from '../toast.js'
+import { presentationForAerr, nextSortOnSceneChange, DEFAULT_PRESENTATION } from '../utils/scene-presentation.js'
 
 const VIEW_STORAGE_KEY = 'dogear.workbench.view'
 
@@ -72,20 +73,40 @@ export function WorkbenchPage() {
   const [filters, setFilters] = useState({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
   const [searchParams, setSearchParams] = useSearchParams()
 
+  // 当前处于哪个 Scene 视图：决定标题、说明与 AERR 呈现（PRD §2.0.3）
+  const activeScene = filters.sceneId ? scenes.find((scene) => scene.id === filters.sceneId) ?? null : null
+  const presentation = presentationForAerr(activeScene?.aerr)
+
+  // Scene 视图切换时调整默认排序：进入某 Scene 用它的原型默认值，
+  // 离开则回到默认排序。仅在 Scene 变化时执行一次，用户手动选的排序不会被反复覆盖。
+  const previousSceneRef = useRef<string | null>(null)
+  useEffect(() => {
+    const nextSceneId = filters.sceneId || null
+    const nextSort = nextSortOnSceneChange(nextSceneId, previousSceneRef.current, presentation)
+    if (nextSort) setSort(nextSort)
+    previousSceneRef.current = nextSceneId
+  }, [filters.sceneId, presentation])
+
   // 外壳（顶栏 / 侧栏）通过 URL 参数下达意图：palette、save 为一次性动作，
-  // sceneId / folderId / tagId 为组织维度筛选。处理完即从 URL 清除这些参数，
-  // 以免与页面内的筛选下拉互相覆盖（下拉改的是本地状态，不回写 URL）。
+  // sceneId / folderId / tagId 为组织维度筛选，clear 表示「回到完整列表」。
+  // 处理完即从 URL 清除这些参数，以免与页面内的筛选下拉互相覆盖
+  // （下拉改的是本地状态，不回写 URL）。
   useEffect(() => {
     const palette = searchParams.get('palette')
     const save = searchParams.get('save')
+    const clear = searchParams.get('clear')
     const sceneId = searchParams.get('sceneId')
     const folderId = searchParams.get('folderId')
     const tagId = searchParams.get('tagId')
-    if (!palette && !save && !sceneId && !folderId && !tagId) return
+    if (!palette && !save && !clear && !sceneId && !folderId && !tagId) return
 
     if (palette === '1') setShowCommand(true)
     if (save === '1') setShowSaveForm(true)
-    if (sceneId || folderId || tagId) {
+    if (clear === '1') {
+      // 清掉全部筛选，并把排序交还给默认值——否则停留在上个 Scene 带过来的排序上
+      setFilters({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
+      setSort(DEFAULT_PRESENTATION.defaultSort)
+    } else if (sceneId || folderId || tagId) {
       setFilters((f) => ({
         ...f,
         sceneId: sceneId ?? f.sceneId,
@@ -95,7 +116,7 @@ export function WorkbenchPage() {
     }
 
     const next = new URLSearchParams(searchParams)
-    for (const key of ['palette', 'save', 'sceneId', 'folderId', 'tagId']) next.delete(key)
+    for (const key of ['palette', 'save', 'clear', 'sceneId', 'folderId', 'tagId']) next.delete(key)
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
 
@@ -271,13 +292,28 @@ export function WorkbenchPage() {
   return (
     <div className="workbench">
       <ContentHead
-        title={meta.title}
+        title={activeScene ? activeScene.name : meta.title}
         count={bookmarks.length}
-        description={meta.description}
+        description={activeScene?.description || meta.description}
         actions={
-          <button type="button" className="btn btn--primary" onClick={() => setShowSaveForm(true)}>
-            + 保存
-          </button>
+          <>
+            <button type="button" className="btn btn--primary" onClick={() => setShowSaveForm(true)}>
+              + 保存
+            </button>
+            {/* Scene 视图的主操作：文案随该 Scene 的 AERR 原型变化（PRD §2.0.3）。
+                这里只换文案与引导，不伪造独立功能——点击后落到当前筛选结果上。 */}
+            {activeScene && (
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => {
+                  document.querySelector('.bookmark-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }}
+              >
+                {presentation.primaryAction}
+              </button>
+            )}
+          </>
         }
       />
 
@@ -353,7 +389,7 @@ export function WorkbenchPage() {
         </div>
       )}
 
-      <section className="bookmark-area">
+      <section className="bookmark-area" data-density={presentation.density}>
         <div className="bookmark-summary">
           <span>显示 {bookmarks.length} 条{nextCursor ? '（还有更多）' : ''}</span>
           {hasActiveFilters && (

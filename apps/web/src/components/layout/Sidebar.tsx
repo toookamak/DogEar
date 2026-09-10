@@ -47,6 +47,16 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
     onNavigate?.()
   }
 
+  /**
+   * 顶部导航（Inbox / 书签等）表示「回到该视图的完整列表」，
+   * 因此要显式下达清除筛选的意图：筛选状态在工作台页内是局部 state，
+   * 若只跳同一路径（例如已按场景筛过再点「书签」）不会有参数变化，
+   * 工作台无从得知该清空，场景筛选会一直黏住。
+   */
+  const goWorkbench = (path: string) => {
+    go(`${path}?clear=1`)
+  }
+
   /** 按组织维度筛选：交给工作台的 query 参数，避免跨层共享状态 */
   const goFiltered = (param: 'sceneId' | 'folderId' | 'tagId', id: string) => {
     go(`/bookmarks?${param}=${encodeURIComponent(id)}`)
@@ -62,7 +72,7 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
               type="button"
               className="nav-item"
               aria-current={isActive(location, item.path) ? 'page' : undefined}
-              onClick={() => go(item.path)}
+              onClick={() => (item.path === '/' || item.path === '/bookmarks' ? goWorkbench(item.path) : go(item.path))}
             >
               {item.label}
             </button>
