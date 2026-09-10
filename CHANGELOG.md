@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-10 / v0.7.0 / c414074 — 正式工作台应用外壳按 DESIGN.md 重做：建立 class-based 样式层（`styles/tokens.css` + `styles/app.css`，`styles.css` 改为入口），新增应用级 TopBar（品牌/搜索/保存/退出）并把原页内标题栏下沉为 `PageHeader`，重写 Sidebar（主区导航 + Scene/文件夹/标签三段含空状态 + 底部设置）与 StatusBar（待同步数 + 撤销，改局部刷新），并修补 `.btn-secondary` 未定义与 6 个无 fallback 变量；外壳 4 个文件内联样式归零。屏稿与确认结论见 `docs/modules/20260910_工作台外壳屏稿.md`。
+
 - 2026-09-10 / v0.6.3 / ab8b8a3 — 修复本地端口不一致：`apps/web/vite.config.ts` 代理目标由 8789 改回 8787，与服务端默认端口及 `apps/server/Dockerfile`、`docker-compose.yml`、`apps/web/nginx.conf` 的口径统一，`pnpm dev` 无需另设 `PORT` 即可登录；README 补充端口对照表与改端口须知。
 
 - 2026-09-07 / v0.6.2 — 未完成项写入 `docs/TODO.md`；本地备份目录加入 gitignore。
