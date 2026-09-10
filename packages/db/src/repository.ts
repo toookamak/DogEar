@@ -261,8 +261,17 @@ function paginatedQuery<T>(
   return { items, nextCursor }
 }
 
-function transaction(db: Db, action: (tx: Db) => Promise<any>) {
-  return typeof db.transaction === 'function' ? db.transaction(action) : action(db)
+/**
+ * 事务执行。
+ *
+ * Cloudflare D1 **不支持 SQL 级事务**：drizzle 的 d1 session 会发 `BEGIN TRANSACTION`，
+ * D1 直接报错（要求改用 Durable Objects 的 storage.transaction()）。若沿用驱动事务，
+ * 所有多步写入路径（更新、批量、回收站清理等）在 D1 上都会 500。
+ * 故由调用方按运行时传入 useSqlTransaction：D1 为 false，多步写入按序执行
+ * （每条语句自身原子，整组不保证原子回滚）；SQLite（Bun / better-sqlite3）为 true，保持真事务。
+ */
+function transaction(db: Db, action: (tx: Db) => Promise<any>, useSqlTransaction = true) {
+  return useSqlTransaction && typeof db.transaction === 'function' ? db.transaction(action) : action(db)
 }
 
 async function replaceRelations(tx: Db, bookmarkId: string, input: BookmarkUpdate, at: Date) {
@@ -309,11 +318,20 @@ function filterCondition(filters: BookmarkFilters = {}) {
   return conditions.length ? and(...conditions) : undefined
 }
 
-export function createD1BookmarkRepository(database: D1Database): BookmarkRepository {
-  return createBookmarkRepository(drizzleD1(database))
+/** 运行时写入能力：D1 无 SQL 事务，SQLite 有 */
+export type RepositoryOptions = {
+  sqlTransactions?: boolean
 }
 
-export function createBookmarkRepository(db: Db): BookmarkRepository {
+export function createD1BookmarkRepository(database: D1Database): BookmarkRepository {
+  // D1 无 SQL 事务能力，显式关闭，避免写路径抛 500
+  return createBookmarkRepository(drizzleD1(database), { sqlTransactions: false })
+}
+
+export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}): BookmarkRepository {
+  const useSqlTransaction = options.sqlTransactions ?? true
+  /** 本仓库实例的事务包装：按运行时能力决定是否真的开事务 */
+  const tx = (action: (t: Db) => Promise<any>) => transaction(db, action, useSqlTransaction)
   const repository = {} as BookmarkRepository
   repository.create = async (input) => {
     const timestamp = now()
@@ -363,7 +381,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
   repository.createAccessRecord = async (input) => {
     const timestamp = now()
     const record = { ...input, source: input.source ?? 'original', client: input.client ?? 'workbench', openedAt: timestamp }
-    await transaction(db, async (tx) => {
+    await tx(async (tx) => {
       await tx.insert(accessRecords).values(record).run()
       if (typeof tx.update === 'function') await tx.update(bookmarks).set({ lastOpenedAt: timestamp, updatedAt: timestamp }).where(eq(bookmarks.id, input.bookmarkId)).run()
     })
@@ -405,7 +423,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     return items
   }
   repository.search = async (filters, limit = 50, cursor?: string) => repository.list(filters, limit, cursor)
-  repository.update = async (id, input) => transaction(db, async (tx) => {
+  repository.update = async (id, input) => tx(async (tx) => {
     const existing = await tx.select().from(bookmarks).where(and(eq(bookmarks.id, id), isNull(bookmarks.deletedAt))).all()
     if (!existing[0]) return undefined
     const timestamp = now()
@@ -415,7 +433,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     await replaceRelations(tx, id, input, timestamp)
     return repository.get(id)
   })
-  repository.batchUpdate = async (input) => transaction(db, async (tx) => {
+  repository.batchUpdate = async (input) => tx(async (tx) => {
     const updated: unknown[] = []
     const skipped: BatchUpdateSkippedItem[] = []
     for (const id of input.ids) {
@@ -447,7 +465,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     await db.update(bookmarks).set({ deletedAt: null, updatedAt: now() }).where(and(eq(bookmarks.id, id), isNotNull(bookmarks.deletedAt))).run()
     return repository.get(id)
   }
-  repository.purgeDeleted = async (ids, before) => transaction(db, async (tx) => {
+  repository.purgeDeleted = async (ids, before) => tx(async (tx) => {
     const conditions: any[] = [isNotNull(bookmarks.deletedAt)]
     if (ids?.length) conditions.push(inArray(bookmarks.id, ids))
     if (before) conditions.push(lt(bookmarks.deletedAt, before))
@@ -487,7 +505,7 @@ export function createBookmarkRepository(db: Db): BookmarkRepository {
     },
     create: async (input) => { const record = { ...input, status: input.status ?? 'pending', createdAt: input.createdAt ?? now(), resolvedAt: null }; await db.insert(suggestions).values(record).run(); return record },
     resolve: async (id, status) => { const record = { status, resolvedAt: now() }; await db.update(suggestions).set(record).where(eq(suggestions.id, id)).run(); return (await db.select().from(suggestions).where(eq(suggestions.id, id)).all())[0] },
-    accept: async (id, actor = 'user') => transaction(db, async (tx) => {
+    accept: async (id, actor = 'user') => tx(async (tx) => {
       const suggestion = (await tx.select().from(suggestions).where(and(eq(suggestions.id, id), eq(suggestions.status, 'pending'))).all())[0]
       if (!suggestion) return undefined
       const timestamp = now()

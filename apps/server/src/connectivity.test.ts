@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createApp } from './app.js'
+import { createBackupRoutes } from './backup/backup-routes.js'
 import { isMaskedSecret, mergeChannelSecrets } from './channels/index.js'
 
 function connectivityRepo(): any {
@@ -151,6 +152,18 @@ function connectivityRepo(): any {
   }
 }
 
+/**
+ * 与自托管入口（src/index.ts）一致的应用组装：注入本地文件备份实现。
+ * 备份路由改为按运行时装注入后，不注入会落到 501（Workers 无本地文件系统），
+ * 故此处显式注入，测试覆盖的才是真实运行的自托管形态。
+ */
+function createLocalApp(repo: any) {
+  return createApp(repo, {
+    password: 'secret',
+    backupRoutes: (r: any) => createBackupRoutes(r),
+  })
+}
+
 async function login(app: ReturnType<typeof createApp>) {
   const response = await app.request('/api/auth/login', {
     method: 'POST',
@@ -172,7 +185,7 @@ describe('channel secret helpers', () => {
 describe('connectivity APIs', () => {
   it('stores channel config outside settings and never returns the raw token', async () => {
     const repo = connectivityRepo()
-    const app = createApp(repo, { password: 'secret' })
+    const app = createLocalApp(repo)
     const { cookie } = await login(app)
     const headers = { 'content-type': 'application/json', cookie }
 
@@ -201,7 +214,7 @@ describe('connectivity APIs', () => {
 
   it('rejects webdav import and queues archive jobs onto archive_jobs', async () => {
     const repo = connectivityRepo()
-    const app = createApp(repo, { password: 'secret' })
+    const app = createLocalApp(repo)
     const { cookie } = await login(app)
     const headers = { 'content-type': 'application/json', cookie }
 
@@ -237,7 +250,7 @@ describe('connectivity APIs', () => {
     const backup = await repo.backups.create({ id: '22222222-2222-4222-8222-222222222222', tier: 'light', target: 'local', includes: '["bookmarks:csv"]' })
     await repo.backups.updateStatus(backup.id, 'completed', { filePath, fileSize: 32 })
 
-    const app = createApp(repo, { password: 'secret' })
+    const app = createLocalApp(repo)
     const { cookie } = await login(app)
     const response = await app.request(`/api/backup/${backup.id}/download`, { headers: { cookie } })
     expect(response.status).toBe(200)
@@ -256,7 +269,7 @@ describe('connectivity APIs', () => {
     await repo.create({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', url: 'https://example.com/saved', status: 'saved', title: 'Saved', note: 'secret note', private: false, domain: 'example.com', favicon: 'https://example.com/f.ico' })
     await repo.create({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', url: 'https://example.com/inbox', status: 'unread', title: 'Inbox', note: 'hidden', private: false })
     await repo.create({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', url: 'https://example.com/private', status: 'saved', title: 'Private', note: 'nope', private: true })
-    const app = createApp(repo, { password: 'secret' })
+    const app = createLocalApp(repo)
     const { cookie } = await login(app)
     const response = await app.request('/api/nav/bookmarks', { headers: { cookie } })
     const body = await response.json()
@@ -270,7 +283,7 @@ describe('connectivity APIs', () => {
   it('returns undoId on delete and restores the bookmark', async () => {
     const repo = connectivityRepo()
     await repo.create({ id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', url: 'https://example.com/undo', status: 'saved' })
-    const app = createApp(repo, { password: 'secret' })
+    const app = createLocalApp(repo)
     const { cookie } = await login(app)
     const deleted = await app.request('/api/bookmarks/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', { method: 'DELETE', headers: { cookie } })
     const body = await deleted.json()
@@ -285,7 +298,7 @@ describe('connectivity APIs', () => {
   it('writes navigation client on access records', async () => {
     const repo = connectivityRepo()
     await repo.create({ id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', url: 'https://example.com/nav', status: 'saved' })
-    const app = createApp(repo, { password: 'secret' })
+    const app = createLocalApp(repo)
     const { cookie } = await login(app)
     const response = await app.request('/api/bookmarks/dddddddd-dddd-4ddd-8ddd-dddddddddddd/access-records', {
       method: 'POST',

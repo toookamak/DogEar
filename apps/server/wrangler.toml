@@ -1,0 +1,33 @@
+# DogEar · Cloudflare Workers（轨 A）部署配置
+# 一键部署：推送到 GitHub 后由 .github/workflows/deploy-cloudflare.yml 自动部署；
+# 或本地 `pnpm --filter @dogear/server deploy`。
+#
+# 首次准备（一次性，见 docs/modules/20260910_Cloudflare部署.md）：
+#   1. wrangler d1 create dogear_prod        # 建库，把输出的 database_id 填到下面
+#   2. pnpm --filter @dogear/server db:migrate:remote   # 建表与默认数据
+#   3. wrangler secret put DOGEAR_PASSWORD   # 工作台登录口令
+#   4. wrangler secret put DOGEAR_SKILL_TOKEN  # 可选，Agent(Skill) Bearer Token
+
+name = "dogear"
+main = "src/worker.ts"
+compatibility_date = "2025-09-01"
+
+# app.ts 使用 node:crypto（会话 HMAC、timingSafeEqual、randomUUID）
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+# 本地与线上统一的真源库绑定，名称必须与 worker.ts 的 Env.DB 一致
+[[d1_databases]]
+binding = "DB"
+database_name = "dogear_prod"
+# 占位：执行 `wrangler d1 create dogear_prod` 后替换为真实 id
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "../../packages/db/drizzle"
+
+# 非敏感的普通变量放这里；口令与 Token 用 `wrangler secret put`，不要写进本文件
+[vars]
+# 工作台来源（工作台与 API 不同域时填写，例如 https://dogear.pages.dev）；
+# 留空则按请求 Origin 回显，适合同域部署
+# DOGEAR_CORS_ORIGIN = "https://your-workbench.pages.dev"

@@ -8,3 +8,13 @@ dist
 docs/modules/.bench-t1/
 apps/server/data/
 apps/server/backups/
+
+# Cloudflare Workers / D1 本地状态与本地密钥
+# .dev.vars 存本地开发用口令，等同 .env，禁止入库
+apps/server/.dev.vars
+apps/server/.wrangler/
+apps/server/dist-worker/
+.wrangler/
+
+# schema 一致性校验脚本生成的临时库（每次运行重建，不入库）
+apps/server/scripts/.schema-check/

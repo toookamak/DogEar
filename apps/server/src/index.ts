@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { createBookmarkRepository, initializeSqliteSchema } from '@dogear/db'
 import { createApp } from './app.js'
+import { createBackupRoutes } from './backup/backup-routes.js'
 
 const dbPath = process.env.DOGEAR_DB_PATH ?? './data/dogear.sqlite'
 mkdirSync(dirname(dbPath), { recursive: true })
@@ -14,7 +15,8 @@ const pw = process.env.DOGEAR_PASSWORD || 'admin123'
 const repository = createBookmarkRepository(drizzle(sqlite))
 const app = createApp(repository, {
   password: pw,
-  dbPath,
+  // 自托管（Bun/Docker）有本地文件系统，注入本地文件备份实现
+  backupRoutes: (repo) => createBackupRoutes(repo, dbPath),
 })
 
 // Background sync queue worker: process pending items every 60 seconds

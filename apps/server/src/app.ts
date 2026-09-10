@@ -24,7 +24,6 @@ import { cors } from 'hono/cors'
 import type { BookmarkRepository } from '@dogear/db'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createArchiveRoutes } from './archive/archive-routes.js'
-import { createBackupRoutes } from './backup/backup-routes.js'
 import { createChannelRoutes } from './channels-routes.js'
 import { createMetadataRoutes } from './archive/metadata-routes.js'
 import { createNavRoutes } from './nav/nav-routes.js'
@@ -39,8 +38,15 @@ type AppOptions = {
   sessionTtlSeconds?: number
   now?: () => number
   rateLimits?: { read?: number; write?: number; batch?: number }
-  /** 真源库文件路径，供重档备份整库复制使用 */
-  dbPath?: string
+  /**
+   * 备份路由工厂。备份要写本地文件（node:fs），Cloudflare Workers 不支持，
+   * 因此不在此静态导入，而由各运行时入口注入：
+   * Bun/Docker 入口注入本地文件实现；Workers 入口不注入，落到「不支持」回执。
+   * 这样 node:fs 不会进入 Workers 的模块图。
+   */
+  backupRoutes?: (repository: BookmarkRepository) => Hono
+  /** 允许携带 Cookie 的工作台来源；默认本地开发地址，生产由入口按环境注入 */
+  corsOrigin?: string
 }
 
 type SkillLimit = 'read' | 'write' | 'batch'
@@ -61,6 +67,27 @@ function unauthorized(c: { json: (body: unknown, status: 401) => Response }) {
 
 function invalidRequest(c: { json: (body: unknown, status: 400) => Response }, details?: unknown) {
   return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid request', ...(details ? { details } : {}) } }, 400)
+}
+
+/**
+ * 无本地文件存储的运行时（Cloudflare Workers）上的备份回执。
+ * 返回 501 而非 404：让「本运行时无此能力」与「路径写错」可区分，
+ * 工作台据此提示，而不是静默失败。
+ */
+function createUnsupportedBackupRoutes() {
+  const app = new Hono()
+  const unsupported = (c: any) =>
+    c.json({
+      error: {
+        code: 'NOT_SUPPORTED',
+        message: 'File-based backup is unavailable on this runtime. Use the Docker (Track B) deployment to create and download backup files.',
+      },
+    }, 501)
+  app.get('/', unsupported)
+  app.post('/', unsupported)
+  app.get('/:id', unsupported)
+  app.get('/:id/download', unsupported)
+  return app
 }
 
 function skillError(c: { json: (body: unknown, status: number) => Response }, code: string, status: number, message: string) {
@@ -118,7 +145,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   const now = options.now ?? Date.now
   const revokedSessions = new Set<string>()
   const app = new Hono()
-  app.use('/api/*', cors({ origin: 'http://localhost:5173', credentials: true }))
+  app.use('/api/*', cors({ origin: options.corsOrigin ?? 'http://localhost:5173', credentials: true }))
 
   app.get('/health', (c) => c.json({ ok: true }))
 
@@ -450,7 +477,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
 
   app.route('/api/channels', createChannelRoutes(repository))
   app.route('/api/archive', createArchiveRoutes(repository))
-  app.route('/api/backup', createBackupRoutes(repository, options.dbPath))
+  app.route('/api/backup', options.backupRoutes ? options.backupRoutes(repository) : createUnsupportedBackupRoutes())
   app.route('/api/metadata', createMetadataRoutes())
   app.route('/api/nav', createNavRoutes(repository))
 
