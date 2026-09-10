@@ -2,6 +2,10 @@ name: Deploy to Cloudflare
 
 # 推送到 main 即自动部署（轨 A：Cloudflare Workers + D1）。
 # 也可在 Actions 页手动触发。
+#
+# 关于「未配置凭据」：若仓库未配置 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID，
+# 本工作流**只跑校验并明确跳过部署**（在 Summary 里给出提示），不会报红——
+# 避免把「缺凭据」误读成「代码有问题」。配置凭据后推送即自动部署。
 on:
   push:
     branches: [main]
@@ -30,6 +34,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      # db:verify-schema 用 bun:sqlite 跑，故需要 bun
       - uses: oven-sh/setup-bun@v2
       - run: pnpm install --frozen-lockfile
       - name: Typecheck
@@ -39,9 +44,49 @@ jobs:
       - name: D1 迁移链与运行时 schema 一致性
         run: pnpm --filter @dogear/server db:verify-schema
 
+  # 判断是否具备部署凭据并给出可读结论。
+  # 说明：job 级 if 无法读取 secrets，故用一个输出布尔值的步骤来门控后续任务。
+  preflight:
+    name: Check deploy prerequisites
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        name: 检查 Cloudflare 凭据
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # 注意：GitHub 的 run 默认是 bash -e。不要写成 `[ -z "$X" ] && missing=...`：
+          # 当判断为假时该行返回非零，会直接终止脚本，反而在「凭据齐备」时失败。
+          missing=""
+          if [ -z "$CF_API_TOKEN" ]; then missing="$missing CLOUDFLARE_API_TOKEN"; fi
+          if [ -z "$CF_ACCOUNT_ID" ]; then missing="$missing CLOUDFLARE_ACCOUNT_ID"; fi
+          if [ -n "$missing" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## ⏭️ 跳过 Cloudflare 部署"
+              echo ""
+              echo "缺少仓库 Secrets：\`$missing\`"
+              echo ""
+              echo "本次仅执行校验（typecheck / test / schema 一致性），未部署。"
+              echo ""
+              echo "配置后推送即自动部署，步骤见 \`docs/modules/20260910_Cloudflare部署.md\`："
+              echo "1. \`npx wrangler d1 create dogear_prod\`，把 database_id 回填到 \`apps/server/wrangler.toml\`"
+              echo "2. 配置仓库 Secrets：\`CLOUDFLARE_API_TOKEN\`（需 Workers Scripts:Edit、D1:Edit）与 \`CLOUDFLARE_ACCOUNT_ID\`"
+              echo "3. 设置 Worker 密钥：\`npx wrangler secret put DOGEAR_PASSWORD\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=跳过 Cloudflare 部署::缺少 Secrets：$missing。本次只做校验。"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "凭据齐备，继续部署。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   deploy-worker:
     name: Deploy Worker + D1 migrations
-    needs: verify
+    needs: [verify, preflight]
+    if: needs.preflight.outputs.ready == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -71,12 +116,12 @@ jobs:
           workingDirectory: apps/server
           command: deploy
 
-  # 工作台前端：设置了仓库变量 CLOUDFLARE_PAGES_PROJECT 才执行，
-  # 以免未建 Pages 项目的用户在这一步失败。
+  # 工作台前端：需凭据齐备且设置了仓库变量 CLOUDFLARE_PAGES_PROJECT，
+  # 以免未建 Pages 项目时这一步失败。
   deploy-web:
     name: Deploy Workbench (Pages)
-    needs: deploy-worker
-    if: ${{ vars.CLOUDFLARE_PAGES_PROJECT != '' }}
+    needs: [preflight, deploy-worker]
+    if: ${{ needs.preflight.outputs.ready == 'true' && vars.CLOUDFLARE_PAGES_PROJECT != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

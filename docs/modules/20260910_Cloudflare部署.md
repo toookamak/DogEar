@@ -53,7 +53,13 @@ pnpm --filter @dogear/server dev:workers
 | `CLOUDFLARE_ACCOUNT_ID` | Secret | 是 | Cloudflare 账号 ID |
 | `CLOUDFLARE_PAGES_PROJECT` | Variable | 否 | 工作台 Pages 项目名；**不设则跳过前端发布步骤**，只部署 Worker |
 
-配好后 **push 到 main 即自动部署**（也可在 Actions 页手动 `workflow_dispatch`）。流程为三个阶段：`verify`（typecheck + test + schema 一致性）→ `deploy-worker`（先迁移后部署）→ `deploy-web`（可选）。
+配好后 **push 到 main 即自动部署**（也可在 Actions 页手动 `workflow_dispatch`）。流程为四个阶段：
+
+`verify`（typecheck + test + schema 一致性） → `preflight`（判断凭据是否齐备） → `deploy-worker`（先迁移后部署） → `deploy-web`（可选）。
+
+**未配凭据时的行为**：`preflight` 检测到缺少 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ACCOUNT_ID` 时，会把 `ready=false` 传给后续任务，**仅执行校验并跳过部署**，同时在 Actions 的 Summary 里列出缺少哪一项与配置步骤。因此「忘了配 Secrets」不会让工作流报红——避免把缺凭据误读成代码有问题。
+
+实现注意：job 级 `if` **无法读取 `secrets` 上下文**，故用一个 `preflight` 任务把凭据存在性转成 `outputs.ready` 再门控部署任务。该任务的 shell 用 `if [ -z ... ]; then` 而非 `[ -z ... ] && ...`：后者在判断为假时返回非零，会被 `bash -e` 直接终止脚本，反而在凭据齐备时失败。
 
 ## 4. 为什么需要 0004 迁移
 
