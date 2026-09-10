@@ -45,6 +45,7 @@ PRD v1.0.7（wiki） → 技术总纲 v1.0_DeepSeek（docs/，现行，方向性
 ## 5. 变更
 
 - 新增/修改文档需同步更新本索引与根目录 `CHANGELOG.md`
+- 2026-09-02：`docs/Draft/sync-card-showcase.html`（同步状态卡展示页，随 `4126c53` 加入）归位 `dev/dogear-workbench/public/`（`514a2d6`）——Draft 恢复为仅存本索引；该页与 `public/` 下 card-layout-explorer.html、tab-card-explorer.html 同类
 - 2026-09-02：现行 PRD 更名——需求说明书 v1.0.7 → 需求总纲 v1.0.7（`wiki/DogEar_折耳书签_需求总纲_v1.0.7.md`），索引同步；归档 v1.0.5 保留旧称
 - 2026-09-02：`docs/Draft/` 落地细化初稿全部移入 `docs/归档/`（旧口径不再指导开发）；Draft 仅存本索引
 - 2026-09-02：`docs/网页收藏与内容归档子系统设计.md` 移入 `docs/Draft/`（D1：主体已被 PRD/总纲承接，整体转草稿）→ 同日随批归档
