@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-10 / v0.7.1 — 修复两处既有缺陷：`apps/web/index.html` 补齐 doctype / html lang / head（charset、viewport、title），页面由 quirks 模式（`BackCompat`）回到标准模式，标签页有标题，手机端 `max-width:767px` 媒体查询恢复生效（此前无 viewport meta，布局视口按 980px 计算导致 ☰ 侧栏开关在手机上不显示）；胶囊按钮文字色由非法 CSS `oklab(0.263 / 0.6)` 改为 `rgba(38, 37, 30, 0.6)`（原写法缺 a/b 分量被浏览器丢弃，文字渲染成纯黑），与 DESIGN.md §9 的 rgba 回退规则一致。
+
 - 2026-09-10 / v0.7.0 / c414074 — 正式工作台应用外壳按 DESIGN.md 重做：建立 class-based 样式层（`styles/tokens.css` + `styles/app.css`，`styles.css` 改为入口），新增应用级 TopBar（品牌/搜索/保存/退出）并把原页内标题栏下沉为 `PageHeader`，重写 Sidebar（主区导航 + Scene/文件夹/标签三段含空状态 + 底部设置）与 StatusBar（待同步数 + 撤销，改局部刷新），并修补 `.btn-secondary` 未定义与 6 个无 fallback 变量；外壳 4 个文件内联样式归零。屏稿与确认结论见 `docs/modules/20260910_工作台外壳屏稿.md`。
 
 - 2026-09-10 / v0.6.3 / ab8b8a3 — 修复本地端口不一致：`apps/web/vite.config.ts` 代理目标由 8789 改回 8787，与服务端默认端口及 `apps/server/Dockerfile`、`docker-compose.yml`、`apps/web/nginx.conf` 的口径统一，`pnpm dev` 无需另设 `PORT` 即可登录；README 补充端口对照表与改端口须知。
