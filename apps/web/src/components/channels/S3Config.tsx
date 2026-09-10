@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ChannelConfigItem } from '../../api/channels.js'
 import { channelsApi } from '../../api/channels.js'
+import { errorMessage } from '../../toast.js'
 
 interface S3ConfigProps {
   channel: ChannelConfigItem | null
@@ -8,234 +9,184 @@ interface S3ConfigProps {
   onCancel: () => void
 }
 
-function maskSecretKey(key: string): string {
-  if (!key) return ''
-  if (key.length <= 6) return '*'.repeat(key.length)
-  return `${key.slice(0, 3)}${'*'.repeat(key.length - 6)}${key.slice(-3)}`
+/** 已保存的密钥做遮罩展示：保留首尾各 3 位，中间打星 */
+function mask(value: unknown): string {
+  const text = String(value || '')
+  if (!text) return ''
+  if (text.length <= 6) return '*'.repeat(text.length)
+  return `${text.slice(0, 3)}${'*'.repeat(text.length - 6)}${text.slice(-3)}`
 }
 
+/**
+ * S3（S3 兼容对象存储，含 MinIO / Backblaze B2）通道配置。
+ * Secret Access Key 一律「留空表示保留原值」：输入框只承载用户新输入的内容，
+ * 已保存值只出现在 placeholder 里，避免看起来像「字段里已有明文」。
+ * 「测试连接」测的是**已保存**的配置（服务端行为），不是当前表单里未保存的改动。
+ */
 export function S3Config({ channel, onSaved, onCancel }: S3ConfigProps) {
   const isNew = !channel
 
-  const [endpoint, setEndpoint] = useState(
-    channel ? String(channel.config.endpoint || '') : ''
-  )
-  const [region, setRegion] = useState(
-    channel ? String(channel.config.region || '') : ''
-  )
-  const [accessKeyId, setAccessKeyId] = useState(
-    channel ? String(channel.config.accessKeyId || '') : ''
-  )
-  const [secretAccessKey, setSecretAccessKey] = useState('')
-  const [bucket, setBucket] = useState(
-    channel ? String(channel.config.bucket || '') : ''
-  )
   const [label, setLabel] = useState(channel?.label || '')
+  const [endpoint, setEndpoint] = useState(String(channel?.config.endpoint || ''))
+  const [region, setRegion] = useState(String(channel?.config.region || ''))
+  const [accessKeyId, setAccessKeyId] = useState(String(channel?.config.accessKeyId || ''))
+  const [bucket, setBucket] = useState(String(channel?.config.bucket || ''))
+  const [secretAccessKey, setSecretAccessKey] = useState('')
+
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [notice, setNotice] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const fail = (message: string) => setNotice({ ok: false, message })
+  const savedSecret = mask(channel?.config.secretAccessKey)
 
   const handleTest = async () => {
-    if (!endpoint || !region || !accessKeyId || !bucket) {
-      setTestResult({ ok: false, message: '请先填写所有必填字段（secretAccessKey 除外）' })
+    if (!channel) {
+      setNotice({ ok: true, message: '保存后即可测试连接。' })
       return
     }
-
-    if (channel) {
-      setTesting(true)
-      setTestResult(null)
-      try {
-        const res = await channelsApi.test(channel.id)
-        setTestResult({ ok: res.ok, message: res.message || (res.ok ? '连接成功' : '连接失败') })
-      } catch (e) {
-        setTestResult({ ok: false, message: e instanceof Error ? e.message : '测试失败' })
-      }
-      setTesting(false)
-    } else {
-      // For new configs, test is available after saving
-      setTestResult({ ok: true, message: '保存后可测试连接' })
+    setTesting(true)
+    setNotice(null)
+    try {
+      const res = await channelsApi.test(channel.id)
+      setNotice({ ok: res.ok, message: res.message || (res.ok ? '连接成功' : '连接失败') })
+    } catch (e) {
+      setNotice({ ok: false, message: errorMessage(e, '测试失败') })
     }
+    setTesting(false)
   }
 
   const handleSave = async () => {
-    // Validate required fields
-    if (!label.trim()) {
-      setTestResult({ ok: false, message: '请输入配置名称' })
-      return
-    }
-    if (!endpoint.trim()) {
-      setTestResult({ ok: false, message: '请输入 Endpoint' })
-      return
-    }
-    if (!region.trim()) {
-      setTestResult({ ok: false, message: '请输入 Region' })
-      return
-    }
-    if (!accessKeyId.trim()) {
-      setTestResult({ ok: false, message: '请输入 Access Key ID' })
-      return
-    }
-    if (!bucket.trim()) {
-      setTestResult({ ok: false, message: '请输入 Bucket' })
-      return
-    }
-    if (isNew && !secretAccessKey.trim()) {
-      setTestResult({ ok: false, message: '请输入 Secret Access Key' })
-      return
-    }
+    if (!label.trim()) return fail('请输入配置名称')
+    if (!endpoint.trim()) return fail('请输入 Endpoint')
+    if (!region.trim()) return fail('请输入 Region')
+    if (!accessKeyId.trim()) return fail('请输入 Access Key ID')
+    if (!bucket.trim()) return fail('请输入 Bucket')
+    if (isNew && !secretAccessKey.trim()) return fail('请输入 Secret Access Key')
 
-    // Build config payload
-    // For existing configs, if secretAccessKey is empty, keep the original
-    const configPayload: Record<string, string> = {
+    const config: Record<string, string> = {
       endpoint: endpoint.trim(),
       region: region.trim(),
       accessKeyId: accessKeyId.trim(),
       bucket: bucket.trim(),
     }
-    if (secretAccessKey.trim()) {
-      configPayload.secretAccessKey = secretAccessKey.trim()
-    }
+    // 留空则不提交该字段，服务端保留原值
+    if (secretAccessKey.trim()) config.secretAccessKey = secretAccessKey.trim()
 
     setSaving(true)
+    setNotice(null)
     try {
       await channelsApi.save({
         channel: 's3',
         label: label.trim(),
-        config: JSON.stringify(configPayload),
+        config: JSON.stringify(config),
         enabled: true,
       }, channel?.id)
       setSaving(false)
       onSaved()
     } catch (e) {
-      setTestResult({ ok: false, message: e instanceof Error ? e.message : '保存失败' })
+      fail(errorMessage(e, '保存失败'))
       setSaving(false)
     }
   }
 
   return (
-    <div className="card" style={{ padding: 'var(--spacing-16)' }}>
-      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 500, margin: '0 0 var(--spacing-16)' }}>
-        {isNew ? '添加 S3 通道' : '编辑 S3 通道'}
-      </h3>
+    <div className="channel-form">
+      <h3 className="section-title" style={{ margin: 0 }}>{isNew ? '添加 S3 通道' : '编辑 S3 通道'}</h3>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-12)' }}>
-        <div>
-          <label style={{ display: 'block', fontFamily: 'var(--font-ui)', fontSize: '14px', marginBottom: 'var(--spacing-4)', color: 'var(--color-text-secondary)' }}>
-            配置名称
-          </label>
+      <label className="channel-field">
+        <span className="channel-field-label">配置名称</span>
+        <input
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="例如：我的 S3"
+          className="input"
+        />
+      </label>
+
+      <label className="channel-field">
+        <span className="channel-field-label">Endpoint <span className="required">*</span></span>
+        <input
+          type="text"
+          value={endpoint}
+          onChange={(e) => setEndpoint(e.target.value)}
+          placeholder="https://s3.amazonaws.com"
+          className="input"
+        />
+        <span className="channel-field-hint">S3 兼容的存储服务端点 URL（支持 MinIO、Backblaze B2 等）</span>
+      </label>
+
+      <div className="channel-form-grid">
+        <label className="channel-field">
+          <span className="channel-field-label">Region <span className="required">*</span></span>
           <input
             type="text"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="例如: 我的 S3"
+            value={region}
+            onChange={(e) => setRegion(e.target.value)}
+            placeholder="us-east-1"
             className="input"
-            style={{ width: '300px' }}
           />
-        </div>
+        </label>
 
-        <div>
-          <label style={{ display: 'block', fontFamily: 'var(--font-ui)', fontSize: '14px', marginBottom: 'var(--spacing-4)', color: 'var(--color-text-secondary)' }}>
-            Endpoint <span style={{ color: 'var(--color-error)' }}>*</span>
-          </label>
+        <label className="channel-field">
+          <span className="channel-field-label">Bucket <span className="required">*</span></span>
           <input
             type="text"
-            value={endpoint}
-            onChange={(e) => setEndpoint(e.target.value)}
-            placeholder="https://s3.amazonaws.com"
+            value={bucket}
+            onChange={(e) => setBucket(e.target.value)}
+            placeholder="my-bucket"
             className="input"
-            style={{ width: '400px' }}
           />
-          <p style={{ fontFamily: 'var(--font-ui)', fontSize: '12px', color: 'var(--color-text-muted)', margin: 'var(--spacing-4) 0 0 0' }}>
-            S3 兼容的存储服务端点 URL（支持 MinIO、Backblaze B2 等）
-          </p>
+        </label>
+      </div>
+
+      <label className="channel-field">
+        <span className="channel-field-label">Access Key ID <span className="required">*</span></span>
+        <input
+          type="text"
+          value={accessKeyId}
+          onChange={(e) => setAccessKeyId(e.target.value)}
+          placeholder="AKIAIOSFODNN7EXAMPLE"
+          className="input"
+        />
+      </label>
+
+      <label className="channel-field">
+        <span className="channel-field-label">
+          Secret Access Key <span className="required">*</span>
+          {!isNew && '（留空则保留原值）'}
+        </span>
+        <input
+          type="password"
+          value={secretAccessKey}
+          onChange={(e) => setSecretAccessKey(e.target.value)}
+          placeholder={isNew ? '输入 Secret Access Key' : `已保存 ${savedSecret}，留空则保留`}
+          className="input"
+        />
+      </label>
+
+      {notice && (
+        <div className={`channel-test-result channel-test-result--${notice.ok ? 'ok' : 'fail'}`} role="status">
+          {notice.message}
         </div>
+      )}
 
-        <div style={{ display: 'flex', gap: 'var(--spacing-12)' }}>
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--font-ui)', fontSize: '14px', marginBottom: 'var(--spacing-4)', color: 'var(--color-text-secondary)' }}>
-              Region <span style={{ color: 'var(--color-error)' }}>*</span>
-            </label>
-            <input
-              type="text"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              placeholder="us-east-1"
-              className="input"
-              style={{ width: '180px' }}
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontFamily: 'var(--font-ui)', fontSize: '14px', marginBottom: 'var(--spacing-4)', color: 'var(--color-text-secondary)' }}>
-              Bucket <span style={{ color: 'var(--color-error)' }}>*</span>
-            </label>
-            <input
-              type="text"
-              value={bucket}
-              onChange={(e) => setBucket(e.target.value)}
-              placeholder="my-bucket"
-              className="input"
-              style={{ width: '200px' }}
-            />
-          </div>
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontFamily: 'var(--font-ui)', fontSize: '14px', marginBottom: 'var(--spacing-4)', color: 'var(--color-text-secondary)' }}>
-            Access Key ID <span style={{ color: 'var(--color-error)' }}>*</span>
-          </label>
-          <input
-            type="text"
-            value={accessKeyId}
-            onChange={(e) => setAccessKeyId(e.target.value)}
-            placeholder="AKIAIOSFODNN7EXAMPLE"
-            className="input"
-            style={{ width: '400px' }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', fontFamily: 'var(--font-ui)', fontSize: '14px', marginBottom: 'var(--spacing-4)', color: 'var(--color-text-secondary)' }}>
-            Secret Access Key
-            {!isNew && ' (留空则保留原值)'}
-            <span style={{ color: 'var(--color-error)' }}>*</span>
-          </label>
-          <input
-            type="password"
-            value={isNew ? secretAccessKey : (secretAccessKey || maskSecretKey(String(channel?.config.secretAccessKey || '')))}
-            onChange={(e) => setSecretAccessKey(e.target.value)}
-            placeholder={isNew ? '输入 Secret Access Key' : '输入新 Secret Access Key 或留空'}
-            className="input"
-            style={{ width: '400px' }}
-          />
-        </div>
-
-        {testResult && (
-          <div style={{
-            padding: 'var(--spacing-8) var(--spacing-12)',
-            borderRadius: '4px',
-            backgroundColor: testResult.ok ? 'var(--color-success-bg)' : 'var(--color-error-bg)',
-            color: testResult.ok ? 'var(--color-success-text)' : 'var(--color-error-text)',
-            fontFamily: 'var(--font-ui)',
-            fontSize: '14px',
-          }}>
-            {testResult.message}
-          </div>
-        )}
-
-        <div style={{ display: 'flex', gap: 'var(--spacing-8)', marginTop: 'var(--spacing-8)' }}>
-          {channel && (
-            <button onClick={handleTest} disabled={testing} className="btn-secondary">
-              {testing ? '测试中...' : '测试连接'}
+      <div className="channel-form-actions">
+        {channel && (
+          <>
+            <button type="button" onClick={handleTest} disabled={testing} className="btn btn--ghost">
+              {testing ? '测试中…' : '测试连接'}
             </button>
-          )}
-          <div style={{ marginLeft: 'auto' }} />
-          <button onClick={onCancel} className="btn-secondary">
-            取消
-          </button>
-          <button onClick={handleSave} disabled={saving} className="btn-primary">
-            {saving ? '保存中...' : '保存'}
-          </button>
-        </div>
+            <span className="channel-field-hint">测试的是已保存的配置</span>
+          </>
+        )}
+        <button type="button" onClick={onCancel} className="btn btn--ghost" style={{ marginLeft: 'auto' }}>
+          取消
+        </button>
+        <button type="button" onClick={handleSave} disabled={saving} className="btn btn--primary">
+          {saving ? '保存中…' : '保存'}
+        </button>
       </div>
     </div>
   )

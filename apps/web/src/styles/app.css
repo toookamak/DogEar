@@ -1888,3 +1888,73 @@ body {
   display: flex;
   gap: var(--spacing-6);
 }
+
+/* ---------------------------------------------------------------- 数据通道 */
+
+.channel-manager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-12);
+}
+
+.channel-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-12);
+  padding: var(--spacing-16);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-comfortable);
+  background-color: var(--color-bg-surface-400);
+}
+
+.channel-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--spacing-12);
+}
+
+.channel-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.channel-field-label {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.channel-field-hint {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.channel-form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.channel-test-result {
+  padding: var(--spacing-6) var(--spacing-10);
+  border-radius: var(--radius-standard);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.channel-test-result--ok {
+  background-color: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.channel-test-result--fail {
+  background-color: var(--color-error-bg);
+  color: var(--color-error-text);
+}
+
+/* 必填标记 */
+.required {
+  color: var(--color-error);
+}
