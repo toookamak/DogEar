@@ -83,11 +83,13 @@ body {
   color: var(--color-error);
 }
 
-/* Pill（DESIGN.md §4 Secondary Pill：胶囊形，用于标签与次级操作） */
+/* Pill（DESIGN.md §4 Secondary Pill：胶囊形，用于标签与次级操作）
+ * 文字色用 rgba 而非 DESIGN.md §4 写的 `oklab(0.263 / 0.6)`——后者缺 a/b 两个分量，
+ * 是非法 CSS，浏览器会丢弃声明导致文字渲染成纯黑。DESIGN.md §9 亦规定以 rgba 作回退。 */
 .btn--pill,
 .btn-secondary-pill {
   background-color: var(--color-bg-surface-400);
-  color: oklab(0.263 / 0.6);
+  color: rgba(38, 37, 30, 0.6);
   padding: var(--spacing-3) var(--spacing-8);
   border-radius: var(--radius-full-pill);
   line-height: 1;
