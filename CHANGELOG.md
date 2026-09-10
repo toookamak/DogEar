@@ -1,6 +1,8 @@
 # Changelog
 
-- 2026-09-10 / v0.7.9 / a0d2441 — 修查询串读取缺陷并完成其余页面对齐。**关键修复**：wouter 的 `useLocation()` 只返回 pathname、不含查询串，而 `OAuthCallbackPage` 与 `ImportResultPage` 都用 `location.split('?')[1]` 取参数——永远取不到，导致 Raindrop OAuth 回调固定报「缺少授权参数」（即 OAuth 登录从未成功过）、导入结果页从不显示数据；改用 `useSearch()` 后两者均正常。其余：登录页/首启向导/导入结果页/导航页/命令面板改 class-based；命令面板补键盘导航（↑↓/Enter/Esc 与 option/combobox 语义，此前只能鼠标点选）；`EmptyState` 补可选操作，`ErrorMessage` 去掉硬编码 oklab 颜色并支持重试。TSX 内硬编码颜色清零，内联样式由 307 处降至 56 处。
+- 2026-09-10 / v0.7.10 / a183963 — 修单条导出字段错配：导出 HTML/Markdown 的「来源」标签实际填的是 `domain`，且 `domain` 为空时渲染成「来源: 」空条目；改为「收集方式」取 `source` 的中文标签、「域名」单独一行，空值一律不输出；两种格式补齐此前完全丢失的摘要、场景与标签。
+
+- 2026-09-10 / v0.7.9 / a0d2441 — 修查询串读取缺陷并完成其余页面对齐。**关键修复**：wouter 的 `useLocation()` 只返回 pathname、不含查询串，而 `OAuthCallbackPage` 与 `ImportResultPage` 都用 `location.split('?')[1]` 取参数——永远取不到，导致 Raindrop OAuth 回调固定报「缺少授权参数」（即 OAuth 登录从未成功过）、导入结果页从不显示数据；改用 `useSearch()` 后两者均正常。其余：登录页/首启向导/导入结果页/导航页/命令面板改 class-based；命令面板补键盘导航（↑↓/Enter/Esc 与 option/combobox 语义，此前只能鼠标点选）；`EmptyState` 补可选操作，`ErrorMessage` 去掉硬编码 oklab 颜色并支持重试；新增 404 兜底页（此前只渲染裸文本「404」）。TSX 内硬编码颜色清零，内联样式由 307 处降至 56 处。
 
 - 2026-09-10 / v0.7.8 / 001bf39 — 数据通道表单改 class-based，并修三处通道缺陷：删除通道补二次确认（此前点「删除」立即抹掉配置与凭据且无撤销）；导出失败不再静默（原只显示 exported/failed 两个 0，失败原因无处可看）；`ChannelConfig` 修编辑态 WebDAV 地址与用户名「改不动」（原把 `channel.config` 直接当 value 用，输入不回显）；移除下拉里的 S3 选项（该分支只产出空 config，会存下无配置的 S3 通道，S3 由独立表单处理）；`S3Config` 不再把已保存的遮罩值当输入框内容显示。
 
