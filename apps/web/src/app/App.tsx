@@ -9,6 +9,7 @@ import { SettingsPage } from '../pages/SettingsPage.js'
 import { ImportResultPage } from '../pages/ImportResultPage.js'
 import { OAuthCallbackPage } from '../pages/OAuthCallbackPage.js'
 import { NavPage } from '../pages/NavPage.js'
+import { NotFoundPage } from '../pages/NotFoundPage.js'
 import { useSession } from '../hooks/useSession.js'
 
 export function App() {
@@ -46,7 +47,7 @@ export function App() {
         <Route path="/settings/oauth/callback" component={OAuthCallbackPage} />
         <Route path="/import-result" component={ImportResultPage} />
         <Route path="/nav" component={NavPage} />
-        <Route>404</Route>
+        <Route component={NotFoundPage} />
       </Switch>
     </AppShell>
   )
