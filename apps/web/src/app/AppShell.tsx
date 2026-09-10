@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { TopBar } from '../components/layout/TopBar.js'
 import { Sidebar } from '../components/layout/Sidebar.js'
 import { StatusBar } from '../components/layout/StatusBar.js'
+import { ToastRegion } from '../components/feedback/ToastRegion.js'
 import { FirstRunWizard, WIZARD_STORAGE_KEY } from '../components/onboarding/FirstRunWizard.js'
 
 interface AppShellProps {
@@ -47,6 +48,9 @@ export function AppShell({ children, onLogout }: AppShellProps) {
       </div>
 
       <StatusBar />
+
+      {/* 提示区挂在外壳，任何页面都能用 showToast / toast.* 弹提示 */}
+      <ToastRegion />
 
       {showWizard && <FirstRunWizard onDone={() => setShowWizard(false)} />}
     </div>

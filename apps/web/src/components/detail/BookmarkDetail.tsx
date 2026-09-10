@@ -6,7 +6,10 @@ import { SnapshotButton } from '../bookmarks/SnapshotButton.js'
 import { SceneSelector } from '../organization/SceneSelector.js'
 import { FolderSelector } from '../organization/FolderSelector.js'
 import { TagSelector } from '../organization/TagSelector.js'
+import { ConfirmDialog } from '../feedback/ConfirmDialog.js'
 import { offerUndo } from '../../undo.js'
+import { toast, errorMessage } from '../../toast.js'
+import { STATUS_LABELS, SOURCE_LABELS, SYNC_STATUS_LABELS, formatDateTime, label } from '../../utils/format.js'
 
 interface BookmarkDetailProps {
   bookmark: BookmarkResponse
@@ -18,7 +21,20 @@ interface BookmarkDetailProps {
   onDeleted?: (id: string) => void
 }
 
-export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onClose, onDeleted }: BookmarkDetailProps) {
+/**
+ * 书签详情：覆盖式右侧浮层（遮罩 / Escape 均可收起，与原型 DetailPanel 一致）。
+ * 结构与字段对齐原型：状态与来源徽标、标题、域名、摘要、主操作、整理维度、来源信息。
+ * 写入统一走「保存」，避免逐项改动各自发请求导致版本冲突。
+ */
+export function BookmarkDetail({
+  bookmark,
+  scenes,
+  folders,
+  tags,
+  onUpdate,
+  onClose,
+  onDeleted,
+}: BookmarkDetailProps) {
   const [note, setNote] = useState(bookmark.note || '')
   const [status, setStatus] = useState(bookmark.status)
   const [important, setImportant] = useState(bookmark.important)
@@ -27,7 +43,7 @@ export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onCl
   const [tagIds, setTagIds] = useState<string[]>((bookmark.tags || []).map((tag) => tag.id))
   const [folderId, setFolderId] = useState<string | null>(bookmark.folder?.id ?? null)
   const [saving, setSaving] = useState(false)
-  const [viewing, setViewing] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
     setNote(bookmark.note || '')
@@ -38,6 +54,15 @@ export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onCl
     setTagIds((bookmark.tags || []).map((tag) => tag.id))
     setFolderId(bookmark.folder?.id ?? null)
   }, [bookmark])
+
+  // Escape 收起详情（与遮罩点击等价）
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const handleSave = async () => {
     setSaving(true)
@@ -52,102 +77,97 @@ export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onCl
         tagIds,
       })
       onUpdate(updated)
+      toast.success('已保存')
     } catch (e) {
-      console.error('Failed to update bookmark', e)
+      // 版本冲突可识别，给出可行动提示而不是笼统失败
+      const message = errorMessage(e, '保存失败')
+      toast.error(/CONFLICT|Version conflict/i.test(message) ? '保存失败：该书签已被他处修改，请关闭详情后重新打开' : message)
     } finally {
       setSaving(false)
     }
   }
 
   const handleDelete = async () => {
-    if (!window.confirm('移入回收站？')) return
+    setConfirmDelete(false)
     try {
       const result = await bookmarksApi.delete(bookmark.id)
       if (result.undoId) offerUndo({ undoId: result.undoId, message: '删除' })
       onDeleted?.(bookmark.id)
       onClose()
+      toast.success('已移入回收站')
     } catch (e) {
-      console.error('Failed to delete bookmark', e)
+      toast.error(errorMessage(e, '删除失败'))
     }
   }
 
   const handleOpenUrl = async () => {
-    setViewing(true)
     try {
       await bookmarksApi.createAccessRecord(bookmark.id)
-    } catch { /* ignore */ }
+    } catch { /* 访问记录失败不阻塞打开原文 */ }
     window.open(bookmark.url, '_blank', 'noopener')
-    setTimeout(() => setViewing(false), 500)
   }
 
   return (
-    <div style={{
-      background: 'var(--color-bg-surface-400)',
-      border: '1px solid var(--border-primary)',
-      borderRadius: 'var(--radius-comfortable)',
-      padding: 'var(--spacing-16)',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-12)' }}>
-        <h3 style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '22px',
-          letterSpacing: '-0.11px',
-          margin: 0,
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}>
-          {bookmark.title || bookmark.url}
-        </h3>
-        <button onClick={onClose} style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          fontFamily: 'var(--font-ui)', fontSize: '20px', color: 'var(--color-text-secondary)',
-          padding: 'var(--spacing-4)',
-        }}>x</button>
+    <>
+      <div className="detail-aside-head">
+        <span className="detail-aside-label">书签详情</span>
+        <button type="button" className="icon-btn" aria-label="关闭详情" onClick={onClose}>×</button>
       </div>
 
-      {bookmark.domain && (
-        <p style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-muted)', margin: '0 0 var(--spacing-8)' }}>
-          {bookmark.url}
-        </p>
-      )}
+      <div className="detail-badges">
+        <span className={`pill pill--status pill--${bookmark.status}`}>{label(STATUS_LABELS, bookmark.status)}</span>
+        <span className="pill">{label(SOURCE_LABELS, bookmark.source)}</span>
+        {bookmark.important && <span className="pill pill--important">重要</span>}
+        {bookmark.private && <span className="pill">私密</span>}
+        {bookmark.syncStatus === 'pending' && (
+          <span className="pill pill--pending">{label(SYNC_STATUS_LABELS, bookmark.syncStatus)}</span>
+        )}
+      </div>
 
-      <div style={{ display: 'flex', gap: 'var(--spacing-8)', marginBottom: 'var(--spacing-12)' }}>
-        <button onClick={handleOpenUrl} disabled={viewing} className="btn-primary" style={{ fontSize: '12px', padding: 'var(--spacing-6) var(--spacing-10)' }}>
-          {viewing ? '打开中...' : '打开原文'}
-        </button>
-        <button onClick={() => exportApi.downloadHtml(bookmark.id, bookmark.title || bookmark.url)} className="btn-secondary" style={{ fontSize: '12px', padding: 'var(--spacing-6) var(--spacing-10)' }}>
+      <h2 className="detail-title">{bookmark.title || bookmark.url}</h2>
+      {bookmark.domain && <p className="detail-domain">{bookmark.url}</p>}
+      {bookmark.excerpt && <p className="detail-excerpt">{bookmark.excerpt}</p>}
+
+      <div className="detail-actions-row">
+        <button type="button" className="btn btn--primary" onClick={handleOpenUrl}>打开原文 ↗</button>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={() => exportApi.downloadHtml(bookmark.id, bookmark.title || bookmark.url)}
+        >
           下载 HTML
         </button>
-        <button onClick={() => exportApi.downloadMarkdown(bookmark.id, bookmark.title || bookmark.url)} className="btn-secondary" style={{ fontSize: '12px', padding: 'var(--spacing-6) var(--spacing-10)' }}>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={() => exportApi.downloadMarkdown(bookmark.id, bookmark.title || bookmark.url)}
+        >
           下载 Markdown
         </button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-12)' }}>
-        <div>
-          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>备注</label>
+      <div className="detail-section">
+        <label className="detail-field">
+          <span className="detail-field-label">备注</span>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="input"
-            style={{ width: '100%', minHeight: '60px', resize: 'vertical' }}
+            style={{ minHeight: '64px', resize: 'vertical' }}
           />
-        </div>
+        </label>
 
-        <SnapshotButton bookmarkId={bookmark.id} url={bookmark.url} />
-
-        <div>
-          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>状态</label>
-          <select value={status} onChange={(e) => setStatus(e.target.value as any)} className="input" style={{ width: '100%' }}>
+        <label className="detail-field">
+          <span className="detail-field-label">状态</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="input">
             <option value="unread">待处理</option>
             <option value="saved">已确认</option>
             <option value="archived">搁置</option>
           </select>
-        </div>
+        </label>
 
-        <div>
-          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>场景</label>
+        <div className="detail-field">
+          <span className="detail-field-label">场景</span>
           <SceneSelector
             scenes={scenes.filter((scene) => scene.enabled !== false || sceneIds.includes(scene.id))}
             selectedIds={sceneIds}
@@ -155,34 +175,73 @@ export function BookmarkDetail({ bookmark, scenes, folders, tags, onUpdate, onCl
           />
         </div>
 
-        <div>
-          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>文件夹</label>
+        <div className="detail-field">
+          <span className="detail-field-label">文件夹</span>
           <FolderSelector folders={folders} selectedId={folderId} onChange={setFolderId} />
         </div>
 
-        <div>
-          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '13px', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 'var(--spacing-4)' }}>标签</label>
+        <div className="detail-field">
+          <span className="detail-field-label">标签</span>
           <TagSelector tags={tags} selectedIds={tagIds} onChange={setTagIds} />
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--spacing-16)' }}>
-          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: 'var(--spacing-4)', cursor: 'pointer' }}>
+        <div className="detail-actions-row">
+          <label className="save-form-check">
             <input type="checkbox" checked={important} onChange={(e) => setImportant(e.target.checked)} />
             重要
           </label>
-          <label style={{ fontFamily: 'var(--font-ui)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: 'var(--spacing-4)', cursor: 'pointer' }}>
+          <label className="save-form-check">
             <input type="checkbox" checked={private_} onChange={(e) => setPrivate_(e.target.checked)} />
             私密
           </label>
         </div>
+      </div>
 
-        <button onClick={handleSave} disabled={saving} className="btn-primary" style={{ width: '100%' }}>
-          {saving ? '保存中...' : '保存'}
+      <div className="detail-section">
+        <SnapshotButton bookmarkId={bookmark.id} url={bookmark.url} />
+        <button type="button" className="btn btn--primary" disabled={saving} onClick={handleSave}>
+          {saving ? '保存中…' : '保存'}
         </button>
-        <button onClick={handleDelete} className="btn-secondary" style={{ width: '100%', color: 'var(--color-error)' }}>
+        <button
+          type="button"
+          className="btn btn--ghost"
+          style={{ color: 'var(--color-error)' }}
+          onClick={() => setConfirmDelete(true)}
+        >
           移入回收站
         </button>
       </div>
-    </div>
+
+      <div className="detail-section detail-facts">
+        <h3 className="section-title" style={{ fontSize: '14px' }}>来源信息</h3>
+        <div className="detail-fact-row"><span>收集方式</span><strong>{label(SOURCE_LABELS, bookmark.source)}</strong></div>
+        <div className="detail-fact-row">
+          <span>场景</span>
+          <strong>{(bookmark.scenes || []).length > 0 ? bookmark.scenes.map((s) => s.name).join('、') : '未挂载'}</strong>
+        </div>
+        <div className="detail-fact-row">
+          <span>文件夹</span>
+          <strong>{bookmark.folder?.name ?? '未设置'}</strong>
+        </div>
+        <div className="detail-fact-row"><span>加入时间</span><strong>{formatDateTime(bookmark.createdAt)}</strong></div>
+        <div className="detail-fact-row">
+          <span>同步状态</span>
+          <strong>{label(SYNC_STATUS_LABELS, bookmark.syncStatus)}</strong>
+        </div>
+        <div className="detail-fact-row"><span>版本</span><strong>v{bookmark.version}</strong></div>
+        {bookmark.raindropId && (
+          <div className="detail-fact-row"><span>Raindrop ID</span><strong>{bookmark.raindropId}</strong></div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="移入回收站"
+        message="该书签将移入回收站，可在保留期内恢复。确定继续？"
+        confirmLabel="移入回收站"
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </>
   )
 }

@@ -11,15 +11,24 @@ import { SaveBookmarkForm } from '../components/detail/SaveBookmarkForm.js'
 import { CommandPalette } from '../components/command/CommandPalette.js'
 import { SuggestionPanel } from '../components/suggestions/SuggestionPanel.js'
 import { EmptyState } from '../components/feedback/EmptyState.js'
-import { Loading } from '../components/feedback/Loading.js'
+import { Skeleton } from '../components/feedback/Skeleton.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import { bookmarksApi } from '../api/bookmarks.js'
 import { organizationApi } from '../api/organization.js'
 import type { BookmarkListParams } from '../api/bookmarks.js'
 import type { BookmarkResponse, SceneResponse, FolderResponse, TagResponse } from '../types/api.js'
 import { offerUndo, onDataChanged } from '../undo.js'
+import { toast, errorMessage } from '../toast.js'
 
 const VIEW_STORAGE_KEY = 'dogear.workbench.view'
+
+/** 视图 → 骨架屏形态：标签视图的形状与图标卡一致，列表视图即表格行 */
+const SKELETON_VARIANT: Record<ViewMode, 'grid' | 'tiles' | 'table' | 'board'> = {
+  grid: 'grid',
+  tags: 'tiles',
+  list: 'table',
+  board: 'board',
+}
 
 /** 各导航位置的标题与说明；说明取自 PRD 对三种处理状态的定位 */
 const NAV_META: Record<string, { title: string; description: string }> = {
@@ -163,8 +172,9 @@ export function WorkbenchPage() {
       await bookmarksApi.create(data)
       setShowSaveForm(false)
       loadBookmarks()
+      toast.success('已保存到 Inbox')
     } catch (e) {
-      alert(e instanceof Error ? e.message : '保存失败')
+      toast.error(errorMessage(e, '保存失败'))
     }
   }
 
@@ -172,6 +182,20 @@ export function WorkbenchPage() {
     setBookmarks((prev) => prev.map((b) => b.id === updated.id ? updated : b))
     setSelectedBookmark(updated)
   }
+
+  /**
+   * 重新取回当前详情（采纳 AI 建议会改变书签的 Scene/标签，本地副本会过期）。
+   * 详情已关闭则跳过，避免无谓请求。
+   */
+  const refreshSelected = useCallback(async () => {
+    const id = selectedBookmark?.id
+    if (!id) return
+    try {
+      const fresh = await bookmarksApi.get(id)
+      setBookmarks((prev) => prev.map((b) => b.id === id ? fresh : b))
+      setSelectedBookmark((current) => current?.id === id ? fresh : current)
+    } catch { /* 取回失败保留现有内容，不打断操作 */ }
+  }, [selectedBookmark?.id])
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -188,8 +212,12 @@ export function WorkbenchPage() {
       setSelectedIds(new Set())
       if (result.undoId) offerUndo({ undoId: result.undoId, message: data.deleted ? '删除' : '批量修改' })
       await loadBookmarks()
+      // 被跳过的条目要如实告知，避免「点了没反应」的误解
+      const skipped = result.skipped?.length ?? 0
+      if (skipped > 0) toast.info(`已处理，${skipped} 条被跳过（可能已被删除）`)
+      else toast.success(data.deleted ? '已移入回收站' : '已更新')
     } catch (e) {
-      alert(e instanceof Error ? e.message : '批量操作失败')
+      toast.error(errorMessage(e, '批量操作失败'))
     }
   }
 
@@ -204,7 +232,7 @@ export function WorkbenchPage() {
       if (selectedBookmark?.id === id) setSelectedBookmark(updated)
     } catch (e) {
       setBookmarks((prev) => prev.map((b) => b.id === id ? { ...b, status: current.status } : b))
-      alert(e instanceof Error ? e.message : '状态更新失败')
+      toast.error(errorMessage(e, '状态更新失败'))
     }
   }
 
@@ -333,7 +361,7 @@ export function WorkbenchPage() {
           )}
         </div>
 
-        {loading && <Loading />}
+        {loading && <Skeleton variant={SKELETON_VARIANT[viewMode]} />}
         {error && <ErrorMessage message={error} />}
         {!loading && !error && bookmarks.length === 0 && (
           <EmptyState message={isInbox ? 'Inbox 为空' : '暂无书签'} />
@@ -350,27 +378,39 @@ export function WorkbenchPage() {
       </section>
 
       {selectedBookmark && (
-        <aside className="detail-aside">
-          <BookmarkDetail
-            bookmark={selectedBookmark}
-            scenes={scenes}
-            folders={folders}
-            tags={tags}
-            onUpdate={handleUpdate}
-            onClose={() => setSelectedBookmark(null)}
-            onDeleted={(id) => {
-              setBookmarks((prev) => prev.filter((item) => item.id !== id))
-              setSelectedIds((prev) => {
-                const next = new Set(prev)
-                next.delete(id)
-                return next
-              })
-            }}
+        <>
+          {/* 遮罩：点击任意处收起详情，与原型一致 */}
+          <button
+            type="button"
+            className="detail-backdrop"
+            aria-label="收起详情"
+            onClick={() => setSelectedBookmark(null)}
           />
-          <div className="detail-aside-suggestions">
-            <SuggestionPanel bookmarkId={selectedBookmark.id} onUpdate={() => loadBookmarks()} />
-          </div>
-        </aside>
+          <aside className="detail-aside">
+            <BookmarkDetail
+              bookmark={selectedBookmark}
+              scenes={scenes}
+              folders={folders}
+              tags={tags}
+              onUpdate={handleUpdate}
+              onClose={() => setSelectedBookmark(null)}
+              onDeleted={(id) => {
+                setBookmarks((prev) => prev.filter((item) => item.id !== id))
+                setSelectedIds((prev) => {
+                  const next = new Set(prev)
+                  next.delete(id)
+                  return next
+                })
+              }}
+            />
+            <div className="detail-aside-suggestions">
+              <SuggestionPanel
+                bookmarkId={selectedBookmark.id}
+                onUpdate={() => { void loadBookmarks(); void refreshSelected() }}
+              />
+            </div>
+          </aside>
+        </>
       )}
 
       <CommandPalette
