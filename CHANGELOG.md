@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-10 / v0.7.12 / df39af1 — Scene AERR 呈现落地（PRD §2.0.3 / 技术总纲 §5.2.2）：新增 `utils/scene-presentation.ts`（aerr → 默认排序 / 信息密度 / 主操作文案，与原型口径一致，未知取值回退默认），进入 Scene 时标题与主操作随该 Scene 变化、`data-density` 落到容器；排序调整收敛为纯函数 `nextSortOnSceneChange`（进入/切换用该 Scene 默认排序，离开回到默认排序，停留同 Scene 不覆盖用户手动选择）。**同时修一处既有缺陷**：侧栏顶部导航（Inbox / 书签）原先只跳路径不带参数，而已按场景筛过后筛选状态是页内局部 state，导致场景筛选与场景带来的排序一直黏住、点「书签」回不到全部列表；现由侧栏显式下达 `clear=1` 意图、工作台清空筛选并复位排序。另删除两处死代码：`hooks/useBookmarks.ts`（全仓无 import，且 `filters` 进了依赖却未使用）、`types/view.ts`（`ViewMode` 与 `WorkspaceToolbar` 重复且已过期）。全仓测试 88 项通过。
+
 - 2026-09-10 / v0.7.11 / d5b40d4 — 补前端纯函数层测试：`apps/web` 此前无任何测试文件（`vitest run` 恒为 passWithNoTests），现为 `utils/format.ts`（17 项：标签映射、单位分界、时间格式兼容、相对时间分档，以及标签映射必须覆盖契约枚举）与 `toast.ts`（7 项：`errorMessage` 对 Error/字符串/空值/非 Error 对象的处理、失败提示停留时长最长）补测试。全仓测试 72 项通过。
 
 - 2026-09-10 / v0.7.10 / a183963 — 修单条导出字段错配：导出 HTML/Markdown 的「来源」标签实际填的是 `domain`，且 `domain` 为空时渲染成「来源: 」空条目；改为「收集方式」取 `source` 的中文标签、「域名」单独一行，空值一律不输出；两种格式补齐此前完全丢失的摘要、场景与标签。
