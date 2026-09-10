@@ -1,5 +1,13 @@
 # Changelog
 
+- 2026-09-10 / v0.7.5 / f38d9bf — Cloudflare Workers（轨 A）一键部署：新增 `apps/server/src/worker.ts`（与自托管入口共用 `createApp`，仅运行时装配不同）、`wrangler.toml`、`.github/workflows/deploy-cloudflare.yml`（推送 main 即校验→迁移 D1→部署 Worker→可选发布 Pages）；备份路由改为按运行时装注入，避免 `node:fs` 污染 Workers 模块图（Workers 上返回 501 `NOT_SUPPORTED`）。修两处必修缺陷：**D1 不支持 SQL 级事务**（drizzle d1 session 发 `BEGIN TRANSACTION` 被拒，导致 PATCH/批量/回收站清理等写路径在 D1 上全部 500），改为按运行时关闭驱动事务；**迁移链缺 5 张表与 1 个索引**（`archives`/`backups`/`channel_config`/`nav_rules`/`sync_queue` 此前仅由 `initializeSqliteSchema()` 启动时补建，D1 只跑迁移链会缺表），新增 `0004_m5_m7_tables.sql` 并加 `scripts/verify-schema-parity.ts` 持续校验。详见 `docs/modules/20260910_Cloudflare部署.md`。
+
+- 2026-09-10 / v0.7.4 / d2363aa — 组织管理接 `useOrganization` 单一数据源：三个 Manager 原先各持列表副本并直接调 API，导致该 hook 的增删改无调用方、且侧栏与组织页互不同步；新增 `org-events.ts` 广播组织变更，侧栏据此重取（新建场景无需刷新页面即出现）；失败不再吞掉，改为页内提示；`ConfirmDialog` 补 `role="dialog"` 与 class-based 样式。
+
+- 2026-09-10 / v0.7.3 / d9e0dc8 — 工作台对齐原型：新增内容头与工具栏（搜索、来源筛选、排序、四视图切换），落地四视图（卡片网格 / 站点图标 / 六列表格含行内确认搁置 / 三列看板含 Pointer Events 拖拽改状态）；排序接服务端 `sort`，视图选择持久化；移除被取代的 `BookmarkListView`。
+
+- 2026-09-10 / v0.7.2 / 3348fde — 书签列表支持 `sort`（`recent`/`title`/`domain`）：游标改为按排序键编码（`<sort>~<value>~<id>`）以避免改排序后翻页漏项，跨排序复用游标安全回退首页；title/domain 由数据库层排序（不读全量再内存排序）；`packages/db` 测试桩补 `innerJoin`（`repository.test.ts` 此前在 main 上长期失败）。
+
 - 2026-09-10 / v0.7.2 / e0ea3b5 — 设置页对齐原型六分区（状态信息 / 输入源·导出 / 备份与恢复 / Agent 接入 / 日志 / 回收站），新增 `tabs/` 六个分区组件与 `utils/format.ts`，状态分区含同步队列、后台任务与 Skill 用量并 30 秒自刷新，日志分区可撤销操作与重试/取消归档任务；移除被取代的 `SettingsSection.tsx`。同时修两处后端缺陷：`POST/PATCH /api/nav/rules` 的 `createdAt/updatedAt` 由 number 改 Date（`nav_rules` 为 drizzle `timestamp_ms` 列，传数字会抛 `value.getTime is not a function` 致 500）；重档备份改由 `createApp` 注入真源库路径（原仅读 `DOGEAR_DB_PATH`，而 `index.ts` 未设置该变量，重档备份必然失败）。`packages/db` 的 `navRules.create` 入参类型同步改为 `Date`。
 
 - 2026-09-10 / v0.7.1 — 修复两处既有缺陷：`apps/web/index.html` 补齐 doctype / html lang / head（charset、viewport、title），页面由 quirks 模式（`BackCompat`）回到标准模式，标签页有标题，手机端 `max-width:767px` 媒体查询恢复生效（此前无 viewport meta，布局视口按 980px 计算导致 ☰ 侧栏开关在手机上不显示）；胶囊按钮文字色由非法 CSS `oklab(0.263 / 0.6)` 改为 `rgba(38, 37, 30, 0.6)`（原写法缺 a/b 分量被浏览器丢弃，文字渲染成纯黑），与 DESIGN.md §9 的 rgba 回退规则一致。
