@@ -5,7 +5,7 @@ export function RecycleBinPage() {
   return (
     <div>
       <PageHeader title="回收站" />
-      <div style={{ padding: 'var(--spacing-16)' }}>
+      <div className="org-content" style={{ padding: 'var(--spacing-16)' }}>
         <RecycleBinList />
       </div>
     </div>

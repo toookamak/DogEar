@@ -1825,3 +1825,66 @@ body {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* ---------------------------------------------------------------- AI 建议 */
+
+.suggestion-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+  padding: var(--spacing-12);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-comfortable);
+  background-color: var(--color-bg-surface-400);
+}
+
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+}
+
+.suggestion-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+  padding: var(--spacing-8);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-standard);
+  background-color: var(--color-bg-surface-100);
+}
+
+.suggestion-head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-6);
+  flex-wrap: wrap;
+}
+
+.suggestion-kind {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.048px;
+  color: var(--color-text-muted);
+}
+
+.suggestion-target {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.suggestion-rationale {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: var(--spacing-6);
+}
