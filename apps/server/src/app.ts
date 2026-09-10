@@ -139,6 +139,13 @@ function escapeHtml(text: string) {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;')
 }
 
+/** 收集方式的中文标签，导出文件给人看，不直接暴露枚举值 */
+const sourceLabels: Record<string, string> = {
+  page: '工作台',
+  agent: 'Agent',
+  extension: '插件',
+}
+
 export function createApp(repository: BookmarkRepository, options: AppOptions = {}) {
   const password = options.password ?? process.env.DOGEAR_PASSWORD ?? ''
   const sessionTtlSeconds = options.sessionTtlSeconds ?? 60 * 60 * 24 * 7
@@ -547,6 +554,11 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     const note = anyRecord.note || ''
     const url = anyRecord.url || ''
     const excerpt = anyRecord.excerpt || ''
+    const sourceLabel = sourceLabels[String(anyRecord.source ?? '')] ?? anyRecord.source ?? ''
+    const scenes = (anyRecord.scenes ?? []).map((s: any) => s?.name).filter(Boolean) as string[]
+    const tags = (anyRecord.tags ?? []).map((t: any) => t?.name).filter(Boolean) as string[]
+    // 空值不再渲染成「标签: 」这样的空行——导出文件是给人看的，空字段直接省略
+    const metaRow = (label: string, value: string) => (value ? `    <p>${label}: ${escapeHtml(value)}</p>\n` : '')
     const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -563,12 +575,8 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
 <body>
   <h1><a href="${escapeHtml(url)}">${escapeHtml(title)}</a></h1>
   <div class="meta">
-    <p>来源: ${escapeHtml(domain)}</p>
-    <p>保存时间: ${escapeHtml(createdAt)}</p>
-    ${author ? `<p>作者: ${escapeHtml(author)}</p>` : ''}
-    ${note ? `<div><h2>备注</h2><p>${escapeHtml(note)}</p></div>` : ''}
-  </div>
-</body>
+${metaRow('收集方式', sourceLabel)}${metaRow('域名', domain)}${metaRow('保存时间', createdAt)}${metaRow('作者', author)}${metaRow('场景', scenes.join('、'))}${metaRow('标签', tags.join('、'))}  </div>
+${excerpt ? `  <p>${escapeHtml(excerpt)}</p>\n` : ''}${note ? `  <div><h2>备注</h2><p>${escapeHtml(note)}</p></div>\n` : ''}</body>
 </html>`
     return c.newResponse(html, 200, { 'Content-Type': 'text/html; charset=utf-8' })
   })
@@ -583,13 +591,15 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     const createdAt = anyRecord.createdAt ? new Date(anyRecord.createdAt instanceof Date ? anyRecord.createdAt.getTime() : Number(anyRecord.createdAt)).toISOString() : ''
     const author = anyRecord.author || ''
     const note = anyRecord.note || ''
+    const excerpt = anyRecord.excerpt || ''
+    const sourceLabel = sourceLabels[String(anyRecord.source ?? '')] ?? anyRecord.source ?? ''
+    const scenes = (anyRecord.scenes ?? []).map((s: any) => s?.name).filter(Boolean) as string[]
+    const tags = (anyRecord.tags ?? []).map((t: any) => t?.name).filter(Boolean) as string[]
+    // 空值不渲染成空条目
+    const bullet = (label: string, value: string) => (value ? `- ${label}: ${value}\n` : '')
     const md = `# [${title}](${url})
 
-- 来源: ${domain}
-- 保存时间: ${createdAt}
-${author ? `- 作者: ${author}` : ''}
-${note ? `\n## 备注\n\n${note}` : ''}
-`
+${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保存时间', createdAt)}${bullet('作者', author)}${bullet('场景', scenes.join('、'))}${bullet('标签', tags.join('、'))}${excerpt ? `\n${excerpt}\n` : ''}${note ? `\n## 备注\n\n${note}\n` : ''}`
     return c.newResponse(md, 200, { 'Content-Type': 'text/markdown; charset=utf-8' })
   })
 
