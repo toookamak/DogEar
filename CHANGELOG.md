@@ -2,7 +2,9 @@
 
 文档与仓库的修改记录。**倒序（最新在上）**：新变更追加在最上方，读取前若干条即得近期状态。已提交条目标 `commit`；未进 git 标「未提交」。不用表格，用无序列表（免去每次增条改序号）。
 
-- **2026-09-02 · 文档收口：原型组件展示页归位 + Draft 索引同步**（本次提交）：`4126c53` 新增的自定义组件展示页（同步状态卡）由 `docs/Draft/sync-card-showcase.html` 归位至 `dev/dogear-workbench/public/sync-card-showcase.html` `514a2d6`——该页自包含（唯一外链为 Google Fonts）、全仓库无任何文件引用，与 `public/` 下 card-layout-explorer.html、tab-card-explorer.html 同类，按 AGENTS §3 归入 `dev/` 原型资源；`docs/Draft/` 恢复「仅存本索引」，索引 §5 变更同步记录。**补注**：以下 2026-09-02 各条目所标「未提交 / 待提交」现已由 `d3bc994`、`e7ba437` 等提交落库（仅补注，不改写历史条目）
+- **2026-09-02 · 新增现行原型组件注册表 v2.0**（本次提交）：`docs/COMPONENTS-原型版.md` —— 覆盖 `dev/dogear-workbench/src/components/` 全部 27 个 `.tsx` 与入口 `App.tsx`，按 Atoms/Molecules/Organisms/Templates-Pages 落点分表登记（组件 / 路径 / 职责 / 真实 props / 复用·扩展·新建判定），另设「设置域登记表」（settings/atoms 4 个、settings/sections 6 个）与「已知职责重叠（仅陈述事实）」13 条。**重写版，不承接** `docs/归档/COMPONENTS-原型版.md` v1.0 旧 PRD 口径；恢复 AGENTS §4「新建组件前必搜注册表、新建后必登记」闭环。索引（`docs/Draft/README.md` §1/§4/§5）同步。事实抽验通过：27 个 `.tsx`、`THEME_OPTIONS` 仅 light/dark、`StatusSection`/`TrashSection` 的 `onUpdateSettings` 仅声明未解构、`AppShell` 的 `FOLDER_TITLES` 独立于 `mock.ts` 的 `FOLDER_SECTIONS`、`DetailPanel` 同步文案硬编码
+
+- **2026-09-02 · 文档收口：原型组件展示页归位 + Draft 索引同步** `b2e7855`：`4126c53` 新增的自定义组件展示页（同步状态卡）由 `docs/Draft/sync-card-showcase.html` 归位至 `dev/dogear-workbench/public/sync-card-showcase.html` `514a2d6`——该页自包含（唯一外链为 Google Fonts）、全仓库无任何文件引用，与 `public/` 下 card-layout-explorer.html、tab-card-explorer.html 同类，按 AGENTS §3 归入 `dev/` 原型资源；`docs/Draft/` 恢复「仅存本索引」，索引 §5 变更同步记录。**补注**：以下 2026-09-02 各条目所标「未提交 / 待提交」现已由 `d3bc994`、`e7ba437` 等提交落库（仅补注，不改写历史条目）
 
 - **2026-09-02 · 文档治理：Draft 清空归档＋AGENTS 规范新增**（未提交）：`docs/Draft/` 中 10 份落地细化初稿（API / DATA_MODEL / DESIGN / MVP验收清单 / Skill API合约 / 同步引擎细化 / 技术方案路线 / 网页收藏与内容归档子系统设计 / 落地拆解 / 部署方案）全部移入 `docs/归档/`（旧口径不再指导开发，仅追溯）；Draft 仅存索引 README（已同步更新）；AGENTS.md 新增两条规范——①「环节闭环」：环节完成即提交 git，待用户确认的疑问不算完整环节；②「阅读范围」：读取相关内容不考虑 `docs/归档/`，优先参考 `wiki/`，并查看 `docs/Draft/` 是否有正在讨论的文件
 
