@@ -1,123 +1,107 @@
-import { useState, useEffect } from 'react'
-import { useLocation } from 'wouter'
+import { useEffect, useState } from 'react'
+import { useLocation, useSearch } from 'wouter'
 import { PageHeader } from '../components/layout/PageHeader.js'
-import { Loading } from '../components/feedback/Loading.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import type { ImportResponse } from '../api/channels.js'
 
+/**
+ * 导入结果页：条目多、错误需要逐条看，故独立成页而非弹窗。
+ * 数据经 URL 查询串传递（导入方跳转时序列化结果）。
+ *
+ * 注意：wouter 的 useLocation() 只返回 pathname，不含查询串，
+ * 必须用 useSearch() 读参数——此前用 `location.split('?')[1]` 永远取不到。
+ */
 export function ImportResultPage() {
-  const [location] = useLocation()
+  const [, setLocation] = useLocation()
+  const search = useSearch()
   const [result, setResult] = useState<ImportResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error] = useState<string | null>(null)
+  const [parseError, setParseError] = useState<string | null>(null)
 
   useEffect(() => {
     try {
-      const params = new URLSearchParams(location.split('?')[1] ?? '')
-      const data = params.get('result')
-      if (data) {
-        setResult(JSON.parse(decodeURIComponent(data)))
+      const raw = new URLSearchParams(search).get('result')
+      if (!raw) {
+        setParseError('未收到导入结果数据，请回到设置页重新导入')
+        return
       }
-    } catch { /* ignore */ }
-    setLoading(false)
-  }, [location])
+      const parsed = JSON.parse(decodeURIComponent(raw)) as ImportResponse
+      setResult({
+        imported: Number(parsed.imported ?? 0),
+        skipped: Number(parsed.skipped ?? 0),
+        errors: Array.isArray(parsed.errors) ? parsed.errors : [],
+      })
+      setParseError(null)
+    } catch {
+      setParseError('导入结果无法解析，请回到设置页重新导入')
+    }
+  }, [search])
 
-  if (loading) return <Loading />
-  if (error) return <ErrorMessage message={error} />
-  if (!result) return <ErrorMessage message="未找到导入结果" />
+  if (parseError) {
+    return (
+      <div>
+        <PageHeader title="导入结果" />
+        <div className="org-content" style={{ padding: 'var(--spacing-16)' }}>
+          <ErrorMessage message={parseError} />
+          <button type="button" className="btn btn--primary" onClick={() => setLocation('/settings')}>
+            返回设置
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!result) return null
+
+  const failed = result.errors.length > 0
 
   return (
     <div>
       <PageHeader title="导入结果" />
-      <div style={{ padding: 'var(--spacing-16)', maxWidth: '600px', margin: '0 auto' }}>
-        <div
-          className="card"
-          style={{
-            padding: 'var(--spacing-16)',
-            marginBottom: 'var(--spacing-16)',
-            background: 'var(--color-bg-card, #e6e5e0)',
-            border: '1px solid rgba(38, 37, 30, 0.1)',
-            borderRadius: '8px',
-          }}
-        >
-          <h3
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '22px',
-              letterSpacing: '-0.11px',
-              margin: '0 0 var(--spacing-12)',
-              color: 'var(--color-text-primary)',
-            }}
-          >
-            导入完成
-          </h3>
-          <div style={{
-            display: 'flex',
-            gap: 'var(--spacing-16)',
-            fontFamily: 'var(--font-ui)',
-            fontSize: '14px',
-          }}>
-            <div>成功: <strong>{result.imported}</strong></div>
-            <div>跳过: <strong>{result.skipped}</strong></div>
-            <div>错误: <strong>{result.errors.length}</strong></div>
+      <div className="org-content import-result">
+        <section className="settings-section">
+          <h3 className="section-title">{failed ? '导入完成（含错误）' : '导入完成'}</h3>
+          <div className="stat-grid">
+            <div className="stat-item">
+              <span className="stat-value">{result.imported}</span>
+              <span className="stat-label">已导入</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">{result.skipped}</span>
+              <span className="stat-label">已跳过</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">{result.errors.length}</span>
+              <span className="stat-label">错误</span>
+            </div>
           </div>
-        </div>
+          <p className="muted" style={{ marginTop: 'var(--spacing-12)' }}>
+            跳过通常是同一条书签已存在（按 Raindrop ID 去重），不需要处理。
+          </p>
+        </section>
 
-        {result.errors.length > 0 && (
-          <div
-            className="card"
-            style={{
-              padding: 'var(--spacing-16)',
-              marginBottom: 'var(--spacing-16)',
-              background: 'var(--color-bg-card, #e6e5e0)',
-              border: '1px solid rgba(38, 37, 30, 0.1)',
-              borderRadius: '8px',
-            }}
-          >
-            <h3
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: '16px',
-                fontWeight: 500,
-                margin: '0 0 var(--spacing-8)',
-                color: 'var(--color-text-primary)',
-              }}
-            >
-              错误详情 ({result.errors.length})
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
-              {result.errors.map((err, i) => (
-                <div
-                  key={i}
-                  style={{
-                    fontFamily: 'var(--font-ui)',
-                    fontSize: '13px',
-                    color: 'var(--color-error)',
-                  }}
-                >
-                  {err}
+        {failed && (
+          <section className="settings-section">
+            <h3 className="section-title">错误详情（{result.errors.length}）</h3>
+            <div className="list-stack">
+              {result.errors.map((err, index) => (
+                <div key={index} className="list-row">
+                  <div className="list-row-main">
+                    <div className="list-row-meta" style={{ color: 'var(--color-error-text)' }}>{err}</div>
+                  </div>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        <button
-          onClick={() => window.history.back()}
-          className="btn-primary"
-          style={{
-            background: '#ebeae5',
-            color: '#26251e',
-            border: 'none',
-            padding: '10px 14px',
-            borderRadius: '8px',
-            fontFamily: 'var(--font-ui)',
-            fontSize: '14px',
-            cursor: 'pointer',
-          }}
-        >
-          返回
-        </button>
+        <div className="channel-form-actions">
+          <button type="button" className="btn btn--primary" onClick={() => setLocation('/bookmarks')}>
+            去看书签
+          </button>
+          <button type="button" className="btn btn--ghost" onClick={() => setLocation('/settings')}>
+            返回设置
+          </button>
+        </div>
       </div>
     </div>
   )

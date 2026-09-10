@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PageHeader } from '../components/layout/PageHeader.js'
 import { BookmarkGridView } from '../components/bookmarks/BookmarkGridView.js'
-import { Loading } from '../components/feedback/Loading.js'
+import { Skeleton } from '../components/feedback/Skeleton.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import { EmptyState } from '../components/feedback/EmptyState.js'
 import { navApi } from '../api/nav.js'
 import { bookmarksApi } from '../api/bookmarks.js'
+import { toast, errorMessage } from '../toast.js'
 import type { BookmarkResponse } from '../types/api.js'
 
 type NavItem = Pick<BookmarkResponse, 'id' | 'url'> & {
@@ -17,52 +18,55 @@ type NavItem = Pick<BookmarkResponse, 'id' | 'url'> & {
 /** 导航页不做多选，传空集合即可 */
 const EMPTY_SELECTION: Set<string> = new Set()
 
+/**
+ * 导航页：以收藏作为浏览起点。
+ * 列表由服务端投影（只返回标题/图标/URL，排除 Inbox 与私密），点开时记一次访问。
+ */
 export function NavPage() {
   const [bookmarks, setBookmarks] = useState<NavItem[]>([])
+  const [recentBookmarks, setRecentBookmarks] = useState<NavItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [recentBookmarks, setRecentBookmarks] = useState<NavItem[]>([])
 
   const openBookmark = async (bookmark: NavItem) => {
     try {
       await bookmarksApi.createAccessRecord(bookmark.id, { source: 'original', client: 'navigation' })
-    } catch { /* ignore */ }
+    } catch { /* 访问记录失败不阻塞打开原文 */ }
     window.open(bookmark.url, '_blank', 'noopener')
   }
 
-  const loadBookmarks = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
-    try {
-      const result = await navApi.bookmarks(50)
-      setBookmarks(result.items)
-      setNextCursor(result.nextCursor)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '加载失败')
+    const [listRes, recentRes] = await Promise.allSettled([
+      navApi.bookmarks(50),
+      navApi.recent(10),
+    ])
+    if (listRes.status === 'fulfilled') {
+      setBookmarks(listRes.value.items ?? [])
+      setNextCursor(listRes.value.nextCursor ?? null)
+    } else {
+      setError(errorMessage(listRes.reason, '加载失败'))
     }
+    if (recentRes.status === 'fulfilled') setRecentBookmarks(recentRes.value.items ?? [])
     setLoading(false)
-  }
-
-  const loadRecent = async () => {
-    try {
-      const result = await navApi.recent(10)
-      setRecentBookmarks(result.items)
-    } catch { /* ignore */ }
-  }
-
-  useEffect(() => {
-    loadBookmarks()
-    loadRecent()
   }, [])
 
+  useEffect(() => { void load() }, [load])
+
   const loadMore = async () => {
-    if (!nextCursor) return
+    if (!nextCursor || loadingMore) return
+    setLoadingMore(true)
     try {
       const result = await navApi.bookmarks(50, nextCursor)
       setBookmarks((prev) => [...prev, ...result.items])
       setNextCursor(result.nextCursor)
-    } catch { /* ignore */ }
+    } catch (e) {
+      toast.error(errorMessage(e, '加载更多失败'))
+    }
+    setLoadingMore(false)
   }
 
   return (
@@ -70,46 +74,44 @@ export function NavPage() {
       <PageHeader title="导航页" />
 
       {recentBookmarks.length > 0 && (
-        <div style={{ padding: 'var(--spacing-16)', borderBottom: '1px solid var(--border-primary)' }}>
-          <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 500, margin: '0 0 var(--spacing-8)' }}>
-            最近访问
-          </h3>
+        <section className="nav-section">
+          <h3 className="section-title">最近访问</h3>
           <BookmarkGridView
             bookmarks={recentBookmarks as BookmarkResponse[]}
             activeId={null}
             selectedIds={EMPTY_SELECTION}
-            onOpen={(bookmark) => openBookmark(bookmark)}
+            onOpen={(bookmark) => { void openBookmark(bookmark) }}
             onToggleSelect={() => {}}
           />
-        </div>
+        </section>
       )}
 
-      <div style={{ padding: 'var(--spacing-16)' }}>
-        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 500, margin: '0 0 var(--spacing-8)' }}>
-          全部书签
-        </h3>
+      <section className="nav-section">
+        <h3 className="section-title">全部书签</h3>
 
-        {loading && <Loading />}
+        {loading && <Skeleton variant="grid" count={8} />}
         {error && <ErrorMessage message={error} />}
-        {!loading && !error && bookmarks.length === 0 && <EmptyState message="导航页暂无书签" />}
+        {!loading && !error && bookmarks.length === 0 && (
+          <EmptyState message="导航页暂无书签（只展示已确认且非私密的收藏）" />
+        )}
         {!loading && !error && bookmarks.length > 0 && (
           <BookmarkGridView
             bookmarks={bookmarks as BookmarkResponse[]}
             activeId={null}
             selectedIds={EMPTY_SELECTION}
-            onOpen={(bookmark) => openBookmark(bookmark)}
+            onOpen={(bookmark) => { void openBookmark(bookmark) }}
             onToggleSelect={() => {}}
           />
         )}
 
         {nextCursor && (
-          <div style={{ textAlign: 'center', padding: 'var(--spacing-16)' }}>
-            <button onClick={loadMore} className="btn-secondary-pill">
-              加载更多
+          <div className="load-more">
+            <button type="button" className="btn btn--pill" disabled={loadingMore} onClick={loadMore}>
+              {loadingMore ? '加载中…' : '加载更多'}
             </button>
           </div>
         )}
-      </div>
+      </section>
     </div>
   )
 }
