@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'wouter'
-import { TopBar } from '../components/layout/TopBar.js'
+import { PageHeader } from '../components/layout/PageHeader.js'
 import { Loading } from '../components/feedback/Loading.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import type { ImportResponse } from '../api/channels.js'
@@ -28,7 +28,7 @@ export function ImportResultPage() {
 
   return (
     <div>
-      <TopBar title="导入结果" />
+      <PageHeader title="导入结果" />
       <div style={{ padding: 'var(--spacing-16)', maxWidth: '600px', margin: '0 auto' }}>
         <div
           className="card"

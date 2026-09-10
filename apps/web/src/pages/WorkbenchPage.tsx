@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useLocation } from 'wouter'
-import { TopBar } from '../components/layout/TopBar.js'
+import { useLocation, useSearchParams } from 'wouter'
+import { PageHeader } from '../components/layout/PageHeader.js'
 import { BookmarkListView } from '../components/bookmarks/BookmarkListView.js'
 import { BookmarkDetail } from '../components/detail/BookmarkDetail.js'
 import { SaveBookmarkForm } from '../components/detail/SaveBookmarkForm.js'
@@ -13,7 +13,7 @@ import { bookmarksApi } from '../api/bookmarks.js'
 import { organizationApi } from '../api/organization.js'
 import type { BookmarkListParams } from '../api/bookmarks.js'
 import type { BookmarkResponse, SceneResponse, FolderResponse, TagResponse } from '../types/api.js'
-import { offerUndo } from '../undo.js'
+import { offerUndo, onDataChanged } from '../undo.js'
 
 export function WorkbenchPage() {
   const [location] = useLocation()
@@ -33,6 +33,34 @@ export function WorkbenchPage() {
   const [folders, setFolders] = useState<FolderResponse[]>([])
   const [tags, setTags] = useState<TagResponse[]>([])
   const [filters, setFilters] = useState({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // 外壳（顶栏 / 侧栏）通过 URL 参数下达意图：palette、save 为一次性动作，
+  // sceneId / folderId / tagId 为组织维度筛选。处理完即从 URL 清除这些参数，
+  // 以免与页面内的筛选下拉互相覆盖（下拉改的是本地状态，不回写 URL）。
+  useEffect(() => {
+    const palette = searchParams.get('palette')
+    const save = searchParams.get('save')
+    const sceneId = searchParams.get('sceneId')
+    const folderId = searchParams.get('folderId')
+    const tagId = searchParams.get('tagId')
+    if (!palette && !save && !sceneId && !folderId && !tagId) return
+
+    if (palette === '1') setShowCommand(true)
+    if (save === '1') setShowSaveForm(true)
+    if (sceneId || folderId || tagId) {
+      setFilters((f) => ({
+        ...f,
+        sceneId: sceneId ?? f.sceneId,
+        folderId: folderId ?? f.folderId,
+        tagId: tagId ?? f.tagId,
+      }))
+    }
+
+    const next = new URLSearchParams(searchParams)
+    for (const key of ['palette', 'save', 'sceneId', 'folderId', 'tagId']) next.delete(key)
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
 
   const queryParams = useCallback((): BookmarkListParams => {
     const params: BookmarkListParams = {}
@@ -64,6 +92,9 @@ export function WorkbenchPage() {
     }
     setLoading(false)
   }, [isInbox, queryParams, filters.q])
+
+  // 外壳中的撤销成功后通知刷新列表（替代先前的整页 reload）
+  useEffect(() => onDataChanged(() => { void loadBookmarks() }), [loadBookmarks])
 
   const loadOrganization = useCallback(async () => {
     try {
@@ -128,7 +159,7 @@ export function WorkbenchPage() {
 
   return (
     <div>
-      <TopBar
+      <PageHeader
         title={title}
         actions={
           <>

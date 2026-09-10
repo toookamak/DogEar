@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
 import { syncApi } from '../../api/sync.js'
 import { bookmarksApi } from '../../api/bookmarks.js'
-import { onUndoOffered, type UndoNotice } from '../../undo.js'
+import { onUndoOffered, notifyDataChanged, type UndoNotice } from '../../undo.js'
 
+/**
+ * 状态栏：同步状态与撤销入口。
+ * 「待同步 N」取自 /api/sync/pending-count（sync_queue 的 pending 计数）——正式后端里
+ * 「未推送数」与「队列长度」是同一数据源，故合并为一项，不重复展示。
+ * 条/秒、时延、成功率、429 等指标后端暂无接口，本轮不展示
+ * （见 docs/modules/20260910_工作台外壳屏稿.md §4）。
+ */
 export function StatusBar() {
   const [pendingCount, setPendingCount] = useState(0)
   const [undo, setUndo] = useState<UndoNotice | null>(null)
@@ -13,7 +20,7 @@ export function StatusBar() {
       try {
         const { pendingCount: count } = await syncApi.pendingCount()
         if (!cancelled) setPendingCount(count)
-      } catch { /* ignore */ }
+      } catch { /* 状态栏不因取数失败而中断 */ }
     }
     load()
     const interval = setInterval(load, 30000)
@@ -30,35 +37,28 @@ export function StatusBar() {
     try {
       await bookmarksApi.revert(undo.undoId)
       setUndo(null)
-      window.location.reload()
+      notifyDataChanged()
     } catch {
       setUndo(null)
     }
   }
 
   return (
-    <footer style={{
-      height: '24px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '0 var(--spacing-12)',
-      borderTop: '1px solid var(--border-primary)',
-      background: 'var(--color-bg-page)',
-      fontFamily: 'var(--font-ui)',
-      fontSize: '11px',
-      color: 'var(--color-text-muted)',
-    }}>
-      <span>未推送 {pendingCount}</span>
+    <footer className="statusbar">
+      <div className="statusbar-group">
+        <span className="statusbar-item">待同步 {pendingCount}</span>
+      </div>
+
       {undo && (
-        <button
-          type="button"
-          onClick={handleUndo}
-          className="btn-secondary-pill"
-          style={{ height: '18px', fontSize: '11px', padding: '0 var(--spacing-8)' }}
-        >
-          撤销：{undo.message}
-        </button>
+        <div className="statusbar-group statusbar-spacer">
+          <button
+            type="button"
+            className="btn btn--pill statusbar-undo"
+            onClick={handleUndo}
+          >
+            撤销：{undo.message}
+          </button>
+        </div>
       )}
     </footer>
   )

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TopBar } from '../components/layout/TopBar.js'
+import { PageHeader } from '../components/layout/PageHeader.js'
 import { SceneManager } from '../components/organization/SceneManager.js'
 import { FolderManager } from '../components/organization/FolderManager.js'
 import { TagManager } from '../components/organization/TagManager.js'
@@ -13,7 +13,7 @@ export function OrganizationPage() {
 
   return (
     <div>
-      <TopBar title="组织管理" />
+      <PageHeader title="组织管理" />
       <div style={{ padding: 'var(--spacing-16)' }}>
         <div style={{ display: 'flex', gap: 'var(--spacing-8)', marginBottom: 'var(--spacing-16)', borderBottom: '1px solid var(--border-primary)' }}>
           {(['scenes', 'folders', 'tags'] as const).map((t) => (

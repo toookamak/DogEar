@@ -36,7 +36,7 @@ export function App() {
   }
 
   return (
-    <AppShell>
+    <AppShell onLogout={session.logout}>
       <Switch>
         <Route path="/" component={WorkbenchPage} />
         <Route path="/bookmarks" component={WorkbenchPage} />

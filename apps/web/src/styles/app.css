@@ -1,0 +1,458 @@
+/* DogEar · 布局与组件类
+ * 取值一律用 tokens.css 的变量（源自 DESIGN.md），不写自造色值。
+ * 命名：块用连字符（.app-shell），状态用属性（aria-current）/修饰符（.btn--pill）。
+ */
+
+/* ---------------------------------------------------------------- 基础 */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-ui);
+}
+
+/* ---------------------------------------------------------------- 按钮
+ * .btn 为统一基类；.btn--primary / .btn--ghost / .btn--pill 为修饰符。
+ * 下列 .btn-primary / .btn-secondary / .btn-secondary-pill 为既有页面的兼容别名，
+ * 其中 .btn-secondary 此前被引用却从未定义（导致按钮无样式），本次补齐。
+ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-4);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  transition: var(--transition-color);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+/* Primary（DESIGN.md §4 主按钮：暖面 + 8px 圆角） */
+.btn--primary,
+.btn-primary {
+  background-color: var(--color-bg-surface-300);
+  color: var(--color-text-primary);
+  padding: var(--spacing-10) var(--spacing-12) var(--spacing-10) var(--spacing-14);
+  border-radius: var(--radius-comfortable);
+  line-height: 1;
+}
+
+.btn--primary:hover:not(:disabled),
+.btn-primary:hover:not(:disabled) {
+  color: var(--color-error);
+}
+
+/* Secondary（DESIGN.md §4 Ghost：6% 暖棕底、55% 文字） */
+.btn--ghost,
+.btn-secondary {
+  background-color: rgba(38, 37, 30, 0.06);
+  color: rgba(38, 37, 30, 0.55);
+  padding: var(--spacing-6) var(--spacing-12);
+  border-radius: var(--radius-comfortable);
+}
+
+.btn--ghost:hover:not(:disabled),
+.btn-secondary:hover:not(:disabled) {
+  color: var(--color-error);
+}
+
+/* Pill（DESIGN.md §4 Secondary Pill：胶囊形，用于标签与次级操作） */
+.btn--pill,
+.btn-secondary-pill {
+  background-color: var(--color-bg-surface-400);
+  color: oklab(0.263 / 0.6);
+  padding: var(--spacing-3) var(--spacing-8);
+  border-radius: var(--radius-full-pill);
+  line-height: 1;
+}
+
+.btn--pill:hover:not(:disabled),
+.btn-secondary-pill:hover:not(:disabled) {
+  color: var(--color-error);
+}
+
+/* ---------------------------------------------------------------- 卡片与表单 */
+
+.card {
+  background-color: var(--color-bg-surface-400);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-comfortable);
+  padding: var(--spacing-16);
+}
+
+.card-elevated {
+  background-color: var(--color-bg-surface-400);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-comfortable);
+  padding: var(--spacing-16);
+  box-shadow: var(--shadow-card);
+}
+
+.input {
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-standard);
+  padding: var(--spacing-8) var(--spacing-8) var(--spacing-6);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  transition: var(--transition-color);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--border-medium);
+  box-shadow: var(--shadow-focus);
+}
+
+/* ---------------------------------------------------------------- 外壳 */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--color-bg-page);
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.app-content {
+  flex: 1;
+  overflow: auto;
+}
+
+/* ---------------------------------------------------------------- 顶栏 */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-12);
+  height: var(--topbar-h);
+  min-height: var(--topbar-h);
+  padding: 0 var(--spacing-16);
+  border-bottom: 1px solid var(--border-primary);
+  background-color: var(--color-bg-page);
+}
+
+.topbar-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+.topbar-brand {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: -0.11px;
+  color: var(--color-text-primary);
+}
+
+.topbar-search {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  flex: 1;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: var(--spacing-6) var(--spacing-10);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-comfortable);
+  background-color: var(--color-bg-surface-100);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  text-align: left;
+}
+
+.topbar-search:hover {
+  border-color: var(--border-medium);
+}
+
+.topbar-kbd {
+  margin-left: auto;
+  font-family: var(--font-code);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  margin-left: auto;
+}
+
+/* 图标按钮（☰ 等） */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-standard);
+  background: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  transition: var(--transition-color);
+}
+
+.icon-btn:hover {
+  background-color: rgba(38, 37, 30, 0.06);
+  color: var(--color-text-primary);
+}
+
+/* 侧栏开关仅在窄屏出现 */
+.topbar-toggle {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .topbar-toggle {
+    display: inline-flex;
+  }
+
+  .topbar-search {
+    max-width: none;
+  }
+
+  .topbar-search-label {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- 页头（页面级标题与操作） */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-12);
+  padding: var(--spacing-16);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.page-header-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: -0.11px;
+  color: var(--color-text-primary);
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+}
+
+/* ---------------------------------------------------------------- 侧栏 */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--spacing-sidebar, 240px);
+  min-width: var(--spacing-sidebar, 240px);
+  height: 100%;
+  padding: var(--spacing-12) 0;
+  border-right: 1px solid var(--border-primary);
+  background-color: var(--color-bg-surface-200);
+  overflow-y: auto;
+}
+
+.sidebar-group {
+  padding: 0 var(--spacing-8);
+  margin-bottom: var(--spacing-16);
+}
+
+.sidebar-group-title {
+  padding: 0 var(--spacing-8);
+  margin: 0 0 var(--spacing-4);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.048px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  width: 100%;
+  padding: var(--spacing-6) var(--spacing-8);
+  border: none;
+  border-radius: var(--radius-standard);
+  background: none;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color 150ms ease;
+}
+
+.nav-item:hover {
+  background-color: var(--color-bg-surface-300);
+}
+
+.nav-item[aria-current="page"] {
+  background-color: var(--color-bg-surface-400);
+  font-weight: 600;
+}
+
+.sidebar-empty {
+  padding: var(--spacing-6) var(--spacing-8);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.sidebar-empty-link {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.sidebar-empty-link:hover {
+  text-decoration: underline;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: var(--spacing-8);
+  border-top: 1px solid var(--border-primary);
+}
+
+/* 窄屏：侧栏转为覆盖式抽屉 */
+@media (max-width: 767px) {
+  .sidebar {
+    position: fixed;
+    top: var(--topbar-h);
+    bottom: var(--statusbar-h);
+    left: 0;
+    z-index: 40;
+    width: 240px;
+    min-width: 240px;
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
+    box-shadow: var(--shadow-card);
+  }
+
+  .sidebar--open {
+    transform: translateX(0);
+  }
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: var(--topbar-h) 0 var(--statusbar-h) 0;
+    z-index: 39;
+    border: none;
+    padding: 0;
+    background-color: rgba(38, 37, 30, 0.28);
+    cursor: pointer;
+  }
+}
+
+/* ---------------------------------------------------------------- 状态栏 */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-16);
+  height: var(--statusbar-h);
+  min-height: var(--statusbar-h);
+  padding: 0 var(--spacing-12);
+  border-top: 1px solid var(--border-primary);
+  background-color: var(--color-bg-page);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.statusbar-group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-12);
+}
+
+.statusbar-spacer {
+  margin-left: auto;
+}
+
+.statusbar-item {
+  white-space: nowrap;
+}
+
+.statusbar-undo {
+  height: 18px;
+  padding: 0 var(--spacing-8);
+  font-size: 11px;
+}

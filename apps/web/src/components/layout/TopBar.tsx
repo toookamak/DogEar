@@ -1,56 +1,69 @@
-import { useEffect, useState } from 'react'
-import { syncApi } from '../../api/sync.js'
+import { useLocation } from 'wouter'
 
-export function TopBar({ title, actions }: { title: string; actions?: React.ReactNode }) {
-  const [pendingCount, setPendingCount] = useState(0)
+interface TopBarProps {
+  sidebarOpen: boolean
+  onToggleSidebar: () => void
+  onLogout: () => void | Promise<void>
+}
 
-  useEffect(() => {
-    let cancelled = false
-    const fetch = async () => {
-      try {
-        const { pendingCount: count } = await syncApi.pendingCount()
-        if (!cancelled) setPendingCount(count)
-      } catch {
-        // Ignore fetch errors
-      }
-    }
-    fetch()
-    const interval = setInterval(fetch, 30000)
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [])
+/**
+ * 应用级顶栏（外壳的一部分，所有页面共用）。
+ * 品牌、全局搜索入口、保存入口与登出；页面级标题与操作见 PageHeader。
+ * 搜索与保存通过 URL 参数交给工作台页执行，避免跨层调用全局状态。
+ */
+export function TopBar({ sidebarOpen, onToggleSidebar, onLogout }: TopBarProps) {
+  const [location, setLocation] = useLocation()
+  const isWorkbench = location === '/' || location.startsWith('/bookmarks')
+
+  /** 到工作台并请求打开指定面板；已在工作台时直接改参数 */
+  const openOnWorkbench = (panel: 'palette' | 'save') => {
+    setLocation(`/bookmarks?${panel}=1`)
+  }
 
   return (
-    <header style={{
-      height: '52px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '0 var(--spacing-16)',
-      borderBottom: '1px solid var(--border-primary)',
-      background: 'var(--color-bg-page)',
-    }}>
-      <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '20px', letterSpacing: '-0.11px', margin: 0 }}>{title}</h2>
-      <div style={{ display: 'flex', gap: 'var(--spacing-8)', alignItems: 'center' }}>
-        {pendingCount > 0 && (
-          <span
-            title={`${pendingCount} 个待同步操作`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: 'var(--color-text-warning, #b8860b)',
-              padding: '2px 8px',
-              borderRadius: 'var(--radius-standard, 6px)',
-              background: 'var(--color-bg-warning-subtle, #fff8e1)',
-            }}
-          >
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--color-text-warning, #b8860b)', display: 'inline-block' }} />
-            {pendingCount}
-          </span>
-        )}
-        {actions}
+    <header className="topbar">
+      <div className="topbar-lead">
+        <button
+          type="button"
+          className="icon-btn topbar-toggle"
+          aria-label={sidebarOpen ? '收起导航' : '展开导航'}
+          aria-expanded={sidebarOpen}
+          onClick={onToggleSidebar}
+        >
+          ☰
+        </button>
+        <button
+          type="button"
+          className="topbar-brand"
+          onClick={() => setLocation('/')}
+        >
+          DogEar
+        </button>
+      </div>
+
+      <button
+        type="button"
+        className="topbar-search"
+        onClick={() => openOnWorkbench('palette')}
+        aria-label="搜索书签"
+      >
+        <span aria-hidden="true">⌕</span>
+        <span className="topbar-search-label">搜索书签…</span>
+        <span className="topbar-kbd">⌘K</span>
+      </button>
+
+      <div className="topbar-actions">
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => openOnWorkbench('save')}
+          title={isWorkbench ? '保存书签' : '到工作台保存书签'}
+        >
+          + 保存
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={onLogout}>
+          退出
+        </button>
       </div>
     </header>
   )

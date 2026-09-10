@@ -1,47 +1,148 @@
+import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
-import { navItems, isActive } from '../../app/navigation.js'
+import { navItems, settingsNavItem, isActive } from '../../app/navigation.js'
+import { organizationApi } from '../../api/organization.js'
+import type { SceneResponse, FolderResponse, TagResponse } from '../../types/api.js'
 
-export function Sidebar() {
+interface SidebarProps {
+  open: boolean
+  onNavigate?: () => void
+}
+
+/**
+ * 侧栏：主区固定导航 + 三个组织维度（Scene / 文件夹 / 标签）+ 底部设置。
+ * 维度列表点击后带 query 参数跳到工作台筛选；本轮不显示各维度计数
+ * （无对应接口，见 docs/modules/20260910_工作台外壳屏稿.md §4）。
+ */
+export function Sidebar({ open, onNavigate }: SidebarProps) {
   const [location, setLocation] = useLocation()
+  const [scenes, setScenes] = useState<SceneResponse[]>([])
+  const [folders, setFolders] = useState<FolderResponse[]>([])
+  const [tags, setTags] = useState<TagResponse[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const [sceneRes, folderRes, tagRes] = await Promise.allSettled([
+        organizationApi.scenes.list(),
+        organizationApi.folders.list(),
+        organizationApi.tags.list(),
+      ])
+      if (cancelled) return
+      if (sceneRes.status === 'fulfilled') setScenes(sceneRes.value.items ?? [])
+      if (folderRes.status === 'fulfilled') setFolders(folderRes.value.items ?? [])
+      if (tagRes.status === 'fulfilled') setTags(tagRes.value.items ?? [])
+      setLoaded(true)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  const go = (path: string) => {
+    setLocation(path)
+    onNavigate?.()
+  }
+
+  /** 按组织维度筛选：交给工作台的 query 参数，避免跨层共享状态 */
+  const goFiltered = (param: 'sceneId' | 'folderId' | 'tagId', id: string) => {
+    go(`/bookmarks?${param}=${encodeURIComponent(id)}`)
+  }
+
   return (
-    <aside style={{
-      width: 'var(--spacing-sidebar, 240px)',
-      minWidth: 'var(--spacing-sidebar, 240px)',
-      height: '100vh',
-      background: 'var(--color-bg-surface-200)',
-      borderRight: '1px solid var(--border-primary)',
-      display: 'flex',
-      flexDirection: 'column',
-      padding: 'var(--spacing-16) 0',
-    }}>
-      <div style={{ padding: 'var(--spacing-8) var(--spacing-16)', marginBottom: 'var(--spacing-16)' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '22px', letterSpacing: '-0.11px', margin: 0, color: 'var(--color-text-primary)' }}>
-          DogEar
-        </h1>
-      </div>
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
-        {navItems.map((item) => (
-          <button
-            key={item.path}
-            onClick={() => setLocation(item.path)}
-            style={{
-              background: isActive(location, item.path) ? 'var(--color-bg-surface-400)' : 'transparent',
-              border: 'none',
-              borderRadius: 'var(--radius-standard)',
-              padding: 'var(--spacing-8) var(--spacing-16)',
-              fontFamily: 'var(--font-ui)',
-              fontSize: '14px',
-              fontWeight: isActive(location, item.path) ? 600 : 400,
-              color: 'var(--color-text-primary)',
-              textAlign: 'left',
-              cursor: 'pointer',
-              transition: 'background 150ms ease',
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
+    <aside className={`sidebar${open ? ' sidebar--open' : ''}`}>
+      <nav className="sidebar-group">
+        <div className="sidebar-nav">
+          {navItems.map((item) => (
+            <button
+              key={item.path}
+              type="button"
+              className="nav-item"
+              aria-current={isActive(location, item.path) ? 'page' : undefined}
+              onClick={() => go(item.path)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </nav>
+
+      <div className="sidebar-group">
+        <h3 className="sidebar-group-title">场景</h3>
+        {scenes.length === 0 ? (
+          <p className="sidebar-empty">
+            {loaded ? <>还没有场景 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
+          </p>
+        ) : (
+          <div className="sidebar-nav">
+            {scenes.map((scene) => (
+              <button
+                key={scene.id}
+                type="button"
+                className="nav-item"
+                onClick={() => goFiltered('sceneId', scene.id)}
+              >
+                {scene.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="sidebar-group">
+        <h3 className="sidebar-group-title">文件夹</h3>
+        {folders.length === 0 ? (
+          <p className="sidebar-empty">
+            {loaded ? <>还没有文件夹 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
+          </p>
+        ) : (
+          <div className="sidebar-nav">
+            {folders.map((folder) => (
+              <button
+                key={folder.id}
+                type="button"
+                className="nav-item"
+                onClick={() => goFiltered('folderId', folder.id)}
+              >
+                {folder.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="sidebar-group">
+        <h3 className="sidebar-group-title">标签</h3>
+        {tags.length === 0 ? (
+          <p className="sidebar-empty">
+            {loaded ? <>还没有标签 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
+          </p>
+        ) : (
+          <div className="sidebar-nav">
+            {tags.map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                className="nav-item"
+                onClick={() => goFiltered('tagId', tag.id)}
+              >
+                {tag.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className="nav-item"
+          aria-current={isActive(location, settingsNavItem.path) ? 'page' : undefined}
+          onClick={() => go(settingsNavItem.path)}
+        >
+          {settingsNavItem.label}
+        </button>
+      </div>
     </aside>
   )
 }

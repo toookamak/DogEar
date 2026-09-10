@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TopBar } from '../components/layout/TopBar.js'
+import { PageHeader } from '../components/layout/PageHeader.js'
 import { BookmarkListView } from '../components/bookmarks/BookmarkListView.js'
 import { Loading } from '../components/feedback/Loading.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
@@ -64,7 +64,7 @@ export function NavPage() {
 
   return (
     <div>
-      <TopBar title="导航页" />
+      <PageHeader title="导航页" />
 
       {recentBookmarks.length > 0 && (
         <div style={{ padding: 'var(--spacing-16)', borderBottom: '1px solid var(--border-primary)' }}>
