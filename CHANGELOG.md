@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-10 / v0.7.11 / d5b40d4 — 补前端纯函数层测试：`apps/web` 此前无任何测试文件（`vitest run` 恒为 passWithNoTests），现为 `utils/format.ts`（17 项：标签映射、单位分界、时间格式兼容、相对时间分档，以及标签映射必须覆盖契约枚举）与 `toast.ts`（7 项：`errorMessage` 对 Error/字符串/空值/非 Error 对象的处理、失败提示停留时长最长）补测试。全仓测试 72 项通过。
+
 - 2026-09-10 / v0.7.10 / a183963 — 修单条导出字段错配：导出 HTML/Markdown 的「来源」标签实际填的是 `domain`，且 `domain` 为空时渲染成「来源: 」空条目；改为「收集方式」取 `source` 的中文标签、「域名」单独一行，空值一律不输出；两种格式补齐此前完全丢失的摘要、场景与标签。
 
 - 2026-09-10 / v0.7.9 / a0d2441 — 修查询串读取缺陷并完成其余页面对齐。**关键修复**：wouter 的 `useLocation()` 只返回 pathname、不含查询串，而 `OAuthCallbackPage` 与 `ImportResultPage` 都用 `location.split('?')[1]` 取参数——永远取不到，导致 Raindrop OAuth 回调固定报「缺少授权参数」（即 OAuth 登录从未成功过）、导入结果页从不显示数据；改用 `useSearch()` 后两者均正常。其余：登录页/首启向导/导入结果页/导航页/命令面板改 class-based；命令面板补键盘导航（↑↓/Enter/Esc 与 option/combobox 语义，此前只能鼠标点选）；`EmptyState` 补可选操作，`ErrorMessage` 去掉硬编码 oklab 颜色并支持重试；新增 404 兜底页（此前只渲染裸文本「404」）。TSX 内硬编码颜色清零，内联样式由 307 处降至 56 处。
