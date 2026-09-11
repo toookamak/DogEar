@@ -21,6 +21,7 @@ import { offerUndo, onDataChanged } from '../undo.js'
 import { toast, errorMessage } from '../toast.js'
 import { presentationForAerr, nextSortOnSceneChange, DEFAULT_PRESENTATION } from '../utils/scene-presentation.js'
 import { scenesForPicker } from '../utils/scene-filtering.js'
+import { onOrgChanged } from '../org-events.js'
 
 const VIEW_STORAGE_KEY = 'dogear.workbench.view'
 
@@ -170,6 +171,11 @@ export function WorkbenchPage() {
   }, [])
 
   useEffect(() => { loadBookmarks(); loadOrganization() }, [loadBookmarks, loadOrganization])
+
+  // 组织维度被改动后重载列表。详情里「就地新建标签」会新建库级标签并广播；
+  // 若不重载，新建的标签不在本页列表里，chip 不会渲染——那就会出现
+  // 「看不到也摘不掉」的问题（与 Scene 停用同类的坑）。
+  useEffect(() => onOrgChanged(() => { void loadOrganization() }), [loadOrganization])
 
   // ⌘K 打开命令面板（与顶栏搜索入口的键帽提示一致）。
   // 工具栏内的输入框是「就地筛选当前列表」，不占用该快捷键，避免一个键两种行为。

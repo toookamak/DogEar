@@ -397,6 +397,24 @@ body {
   color: var(--color-text-muted);
 }
 
+/* 标签挑选器（含就地新建） */
+.tag-selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+}
+
+.tag-create {
+  display: flex;
+  gap: var(--spacing-6);
+  align-items: center;
+}
+
+.tag-create-input {
+  flex: 1;
+  min-width: 0;
+}
+
 .sidebar-empty {
   padding: var(--spacing-6) var(--spacing-8);
   font-family: var(--font-ui);
