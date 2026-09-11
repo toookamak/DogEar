@@ -53,7 +53,7 @@ function readStoredView(): ViewMode {
 }
 
 export function WorkbenchPage() {
-  const [location] = useLocation()
+  const [location, setLocation] = useLocation()
   const isInbox = location === '/'
   const meta = NAV_META[location] ?? { title: '工作台', description: '' }
 
@@ -191,9 +191,25 @@ export function WorkbenchPage() {
 
   const handleSave = async (data: { url: string; note?: string; intent?: string; important?: boolean; private?: boolean }) => {
     try {
-      await bookmarksApi.create(data)
+      const created = await bookmarksApi.create(data)
       setShowSaveForm(false)
-      loadBookmarks()
+      void loadBookmarks()
+
+      // AI 建议落点①「输入时」：保存成功后取回该条，若服务端已预备建议就顺手打开详情，
+      // 让用户能立刻确认。建议由服务端异步生成，故此处可能取到 0——那就只提示已保存，
+      // 不假装有建议（PRD §2.0.2：建议先行，须用户确认后才写入）。
+      const id = (created as { id?: string })?.id
+      if (id) {
+        try {
+          const fresh = await bookmarksApi.get(id)
+          const pending = fresh.pendingSuggestionCount || 0
+          if (pending > 0) {
+            setSelectedBookmark(fresh)
+            toast.info(`已保存，有 ${pending} 条 AI 整理建议待你确认`)
+            return
+          }
+        } catch { /* 取回失败不影响「已保存」这一事实 */ }
+      }
       toast.success('已保存到 Inbox')
     } catch (e) {
       toast.error(errorMessage(e, '保存失败'))
@@ -271,6 +287,30 @@ export function WorkbenchPage() {
 
   const openBookmark = (bookmark: BookmarkResponse) => setSelectedBookmark(bookmark)
 
+  /** 当前已加载书签中待确认的 AI 建议合计（用于工具栏「整理建议」计数） */
+  const pendingSuggestionTotal = bookmarks.reduce((sum, b) => sum + (b.pendingSuggestionCount || 0), 0)
+
+  /** 选中项中待确认建议的合计（用于整理时的提示） */
+  const selectedSuggestionCount = bookmarks
+    .filter((b) => selectedIds.has(b.id))
+    .reduce((sum, b) => sum + (b.pendingSuggestionCount || 0), 0)
+
+  /**
+   * AI 建议落点②「整理时」：汇总入口。
+   * 先切到 Inbox（建议多产生于未整理条目），再直接打开第一条有建议的书签，
+   * 让用户能立刻确认；没有建议时如实说明而不假装有。
+   */
+  const reviewSuggestions = () => {
+    const target = bookmarks.find((b) => (b.pendingSuggestionCount || 0) > 0)
+    if (!target) {
+      toast.info(isInbox ? '当前列表没有待确认的 AI 建议' : '当前列表没有待确认的 AI 建议，可到 Inbox 看看')
+      return
+    }
+    if (!isInbox) void setLocation('/')
+    setSelectedBookmark(target)
+    toast.info(`已打开「${(target.title || target.url).slice(0, 20)}」，请在详情里确认建议`)
+  }
+
   const renderView = () => {
     const shared = {
       bookmarks,
@@ -323,10 +363,12 @@ export function WorkbenchPage() {
         source={filters.source}
         sort={sort}
         view={viewMode}
+        suggestionCount={pendingSuggestionTotal}
         onQuery={(q) => setFilters((f) => ({ ...f, q }))}
         onSource={(source) => setFilters((f) => ({ ...f, source }))}
         onSort={setSort}
         onView={changeView}
+        onReviewSuggestions={reviewSuggestions}
       />
 
       {!isInbox && (
@@ -367,6 +409,17 @@ export function WorkbenchPage() {
       {selectedIds.size > 0 && (
         <div className="selection-bar">
           <span className="selection-bar-count">已选 {selectedIds.size}</span>
+          {/* AI 建议落点②「整理时」：整理过程中就告知选中项里有多少条有建议待确认 */}
+          {selectedSuggestionCount > 0 && (
+            <button
+              type="button"
+              className="btn btn--pill"
+              style={{ color: 'var(--color-accent)' }}
+              onClick={reviewSuggestions}
+            >
+              其中 {selectedSuggestionCount} 条有 AI 建议
+            </button>
+          )}
           <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'saved' })}>标为已确认</button>
           <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'archived' })}>标为搁置</button>
           <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'unread' })}>退回待处理</button>

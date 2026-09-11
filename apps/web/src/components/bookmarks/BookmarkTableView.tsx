@@ -55,7 +55,15 @@ export function BookmarkTableView({
 
             <span className="bm-col-main">
               <span className="bm-table-row-title">{bookmark.title || bookmark.url}</span>
-              <span className="bm-table-row-domain">{bookmark.domain ?? ''}</span>
+              <span className="bm-table-row-domain">
+                {bookmark.domain ?? ''}
+                {/* AI 建议落点③「Inbox 内」：表格视图同样在行内提示有建议待确认 */}
+                {bookmark.pendingSuggestionCount > 0 && (
+                  <span className="pill pill--ai" style={{ marginLeft: 'var(--spacing-6)' }}>
+                    AI 建议 {bookmark.pendingSuggestionCount}
+                  </span>
+                )}
+              </span>
             </span>
 
             <span className="bm-col-status">

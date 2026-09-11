@@ -63,6 +63,16 @@ export function BookmarkCard({
         {bookmark.syncStatus === 'pending' && (
           <span className="pill pill--pending">{label(SYNC_STATUS_LABELS, bookmark.syncStatus)}</span>
         )}
+        {/* AI 建议落点③「Inbox 内」：列表层就能看出哪条有建议待确认，
+            数据来自服务端的 pendingSuggestionCount，不是占位。 */}
+        {bookmark.pendingSuggestionCount > 0 && (
+          <span
+            className="pill pill--ai"
+            title={`有 ${bookmark.pendingSuggestionCount} 条 AI 整理建议待确认（建议先行，须你确认后才写入）`}
+          >
+            AI 建议 {bookmark.pendingSuggestionCount}
+          </span>
+        )}
         <span className="bm-card-domain">{bookmark.domain ?? ''}</span>
       </footer>
     </article>

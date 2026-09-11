@@ -894,6 +894,24 @@ body {
   font-size: 13px;
 }
 
+.toolbar-organize {
+  font-size: 13px;
+}
+
+.toolbar-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: var(--spacing-4);
+  padding: 0 var(--spacing-4);
+  border-radius: var(--radius-full-pill);
+  background-color: var(--color-accent);
+  color: var(--color-bg-page);
+  font-size: 10px;
+}
+
 /* 筛选 chip：选中态用 aria-pressed，避免额外类名 */
 .chip {
   border: 1px solid transparent;
@@ -975,6 +993,13 @@ body {
 .pill--archived { background-color: var(--color-bg-surface-500); }
 .pill--important { background-color: var(--color-bg-warning-subtle); color: var(--color-text-warning); }
 .pill--pending { background-color: var(--color-error-bg); color: var(--color-error-text); }
+
+/* AI 建议待确认（建议先行，须用户点了才写入） */
+.pill--ai {
+  background-color: var(--color-bg-surface-200);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+}
 
 .mini-btn {
   border: none;

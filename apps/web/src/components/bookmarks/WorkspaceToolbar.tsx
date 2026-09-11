@@ -9,10 +9,13 @@ interface Props {
   source: string
   sort: SortKey
   view: ViewMode
+  /** 当前已加载书签中待确认的 AI 建议总数（AI 建议落点②「整理时」） */
+  suggestionCount: number
   onQuery: (value: string) => void
   onSource: (value: string) => void
   onSort: (value: SortKey) => void
   onView: (value: ViewMode) => void
+  onReviewSuggestions: () => void
 }
 
 const VIEW_META: Record<ViewMode, { label: string; glyph: string }> = {
@@ -36,10 +39,12 @@ export function WorkspaceToolbar({
   source,
   sort,
   view,
+  suggestionCount,
   onQuery,
   onSource,
   onSort,
   onView,
+  onReviewSuggestions,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -109,6 +114,17 @@ export function WorkspaceToolbar({
             </button>
           ))}
         </div>
+
+        {/* AI 建议落点②「整理时」：把待确认建议汇总成一个入口，计数为已加载书签中的合计 */}
+        <button
+          type="button"
+          className="btn btn--ghost toolbar-organize"
+          onClick={onReviewSuggestions}
+          title="查看待确认的 AI 整理建议（建议先行，须你确认后才写入）"
+        >
+          整理建议
+          {suggestionCount > 0 && <span className="toolbar-count">{suggestionCount}</span>}
+        </button>
       </div>
     </div>
   )
