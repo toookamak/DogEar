@@ -168,8 +168,10 @@ export function BookmarkDetail({
 
         <div className="detail-field">
           <span className="detail-field-label">场景</span>
+          {/* 停用场景的取舍由 SceneSelector 内部经 scenesForPicker 处理：
+              隐藏停用项，但保留本页书签已挂的停用场景（否则摘不掉） */}
           <SceneSelector
-            scenes={scenes.filter((scene) => scene.enabled !== false || sceneIds.includes(scene.id))}
+            scenes={scenes}
             selectedIds={sceneIds}
             onChange={setSceneIds}
           />

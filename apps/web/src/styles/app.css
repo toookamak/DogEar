@@ -364,6 +364,31 @@ body {
   font-weight: 600;
 }
 
+/* 停用场景：仍在侧栏可点（否则「已挂书签仍能按它筛到」就落空了），但明显弱化 */
+.nav-item--muted {
+  color: var(--color-text-muted);
+}
+
+.nav-item--muted::after {
+  content: '停用';
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+/* chip 组（场景挑选器等） */
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+
+.chip-note {
+  margin-left: var(--spacing-4);
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
 .sidebar-empty {
   padding: var(--spacing-6) var(--spacing-8);
   font-family: var(--font-ui);
@@ -600,6 +625,16 @@ body {
 
 .list-row:last-child {
   border-bottom: none;
+}
+
+/* 停用项：弱化但不隐藏——停用不删历史挂载，仍要能按它筛到已有书签 */
+.list-row--muted {
+  opacity: 0.62;
+}
+
+.list-row--muted .list-row-title {
+  font-weight: 400;
+  color: var(--color-text-secondary);
 }
 
 .list-row-main {

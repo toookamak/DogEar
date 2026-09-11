@@ -20,6 +20,7 @@ import type { BookmarkResponse, SceneResponse, FolderResponse, TagResponse } fro
 import { offerUndo, onDataChanged } from '../undo.js'
 import { toast, errorMessage } from '../toast.js'
 import { presentationForAerr, nextSortOnSceneChange, DEFAULT_PRESENTATION } from '../utils/scene-presentation.js'
+import { scenesForPicker } from '../utils/scene-filtering.js'
 
 const VIEW_STORAGE_KEY = 'dogear.workbench.view'
 
@@ -338,7 +339,12 @@ export function WorkbenchPage() {
           </select>
           <select className="input" value={filters.sceneId} onChange={(e) => setFilters((f) => ({ ...f, sceneId: e.target.value }))}>
             <option value="">全部场景</option>
-            {scenes.map((scene) => <option key={scene.id} value={scene.id}>{scene.name}</option>)}
+            {/* 停用场景保留在筛选里并加标注：停用不删历史挂载，仍要能筛到已挂的书签 */}
+            {scenes.map((scene) => (
+              <option key={scene.id} value={scene.id}>
+                {scene.enabled === false ? `${scene.name}（已停用）` : scene.name}
+              </option>
+            ))}
           </select>
           <select className="input" value={filters.folderId} onChange={(e) => setFilters((f) => ({ ...f, folderId: e.target.value }))}>
             <option value="">全部文件夹</option>
@@ -373,7 +379,8 @@ export function WorkbenchPage() {
             }}
           >
             <option value="">添加场景…</option>
-            {scenes.filter((scene) => scene.enabled !== false).map((scene) => (
+            {/* 批量挂场景属挑选器：停用项不可选，故用 scenesForPicker */}
+            {scenesForPicker(scenes).map((scene) => (
               <option key={scene.id} value={scene.id}>{scene.name}</option>
             ))}
           </select>

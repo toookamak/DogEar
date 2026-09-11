@@ -88,11 +88,14 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
           </p>
         ) : (
           <div className="sidebar-nav">
+            {/* 停用场景保留入口：停用只是从挑选器消失，已挂上的书签仍要能按它筛到
+                （docs/modules/20260904_数据库设计.md）。故弱化显示而非隐藏。 */}
             {scenes.map((scene) => (
               <button
                 key={scene.id}
                 type="button"
-                className="nav-item"
+                className={`nav-item${scene.enabled === false ? ' nav-item--muted' : ''}`}
+                title={scene.enabled === false ? '该场景已停用；仍可筛出已挂在它下面的书签' : undefined}
                 onClick={() => goFiltered('sceneId', scene.id)}
               >
                 {scene.name}
