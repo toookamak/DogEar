@@ -16,7 +16,9 @@
 - [ ] 剩余内联样式（约 50 处）继续下沉到 `styles/app.css`（多为单值调整，收益有限，低优先）
 - [ ] 场景**合并**（PRD §2.0.1 允许「合并」；停用与删除已完成，合并尚无工作流，细部文档亦标为待设计）
 - [ ] 审计列为「可选补」的剩余项（按需）：表格行/看板卡键盘导航、备份恢复入口、日志类型筛选与搜索、Toast 内撤销（与状态栏撤销重复，需先定口径）
-- [ ] **开发注意**：dev server 会出现「磁盘文件正确、服务产物缺 import」的 Vite 转换缓存不一致，导致整页白屏（本轮在 `WorkbenchPage` 上实际踩到）。改完代码后若页面异常，先 `curl /src/<file>` 核对 served 模块是否新鲜，再判断是代码缺陷还是缓存问题
+- [ ] **开发注意（两类假性故障）**：改完代码后若页面异常，先排除环境问题再怀疑代码——
+  1. **Vite 转换缓存不一致**：磁盘文件正确、服务产物缺 import，导致整页白屏（本轮在 `WorkbenchPage` 上实际踩到）。用 `curl /src/<file>` 核对 served 模块是否新鲜，必要时重启 dev server。
+  2. **长期运行的 headless 浏览器会假性卡死**：日志页一度持续显示「加载中…」20 秒不恢复，看着像 loading 写坏了；逐层排查（后端 1.6ms → 模块新鲜 → Vite 代理 3ms → 抓包发现请求发出但无响应）后确认是**复用了十几轮的 Edge 实例把连接池搞坏**，换全新实例即 11/11 通过。跑浏览器验证前重启浏览器实例。
 
 ### N2 AERR 细部定稿（本轮留的尾巴）
 
@@ -66,6 +68,8 @@
 
   参照：`settingsWhitelistSchema` 已加 `.strict()`，因其在 `docs/API结构表.md` 有明确约定（「未知 key 返回 `VALIDATION_ERROR`」）；其余 10 处文档无约定，故未擅自收紧。
 
+- [x] **写接口未知字段（2026-09-11，v0.7.21）**：按「工作台收紧 + Skill 宽松」实施，见下方 CHANGELOG v0.7.21
+- [ ] **备份恢复入口**（D 组剩余项，**需先确认**）：当前备份只有 create/list/download/get，**没有 restore 端点**，故此项**必然新增 API 路由**，属 AGENTS「先说明影响范围再动」的范畴。可行方案：`POST /api/backup/:id/restore`，但需先定语义——恢复是覆盖现有库还是合并？覆盖会丢当前数据，属高风险操作，须明确确认策略与保留回退手段
 - [ ] **Track A 真实部署未跑**：Workers 入口、`wrangler.toml`、Actions 均就绪且本地（wrangler 4.42 + 模拟 D1）全链路验证通过，但**从未在真实 Cloudflare 上部署过**。需：`wrangler d1 create dogear_prod` → 回填 `database_id` → `db:migrate:remote` → `secret put DOGEAR_PASSWORD` → 推 main（详见 `docs/modules/20260910_Cloudflare部署.md`）
 - [ ] **CI 是否跑通未经确认**：仓库为私有，未鉴权访问 repo 页 / `/actions` / `raw.githubusercontent.com` 均 404（账号页 200，可排除账号不存在），且 GitHub API 限流，故**无法在本环境核对 Actions 运行结果**。「推送后一键部署」目前只验证到「配置与脚本正确」这一层——workflow 的 preflight 三种情形已用 bash 实跑、结构与引用已静态校验，但**它是否在 GitHub 上真的执行过、是否绿，需仓库拥有者在 Actions 页确认**（尤其：workflow 语法若非法，GitHub 会直接标红而不执行）
 - [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）
