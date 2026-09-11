@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-10 / v0.7.19 / 3b0513b — **修筛选/搜索结果重复**：`repository.list` 在带 `sceneId` / `tagId` / `q` 过滤时 `LEFT JOIN` 了 `bookmark_scenes`、`bookmark_tags`、`tags` 三张多对多表且无 `DISTINCT`/`GROUP BY`，产生笛卡尔积。实测挂 2 场景 + 2 标签的书签：按场景/标签筛选时重复 2 次、按关键字搜索时重复 4 次——侧栏点场景、工作台筛选、搜索命中标签名都会看到重复卡片，分页也会因虚高行数错乱。改为 **EXISTS 子查询**表达关联过滤（结构上不可能重复、无需 `DISTINCT` 以免破坏 keyset 分页、且能用既有索引），`list` 只查 `bookmarks` 一张表。修复后 7 种查询全部「命中 1 次」，返回条数由虚高的 4 条降为真实的 1 条；筛选下的分页完整性复测通过（12 条探针 × 3 种筛选 × 2 种页大小，均无重复无漏项）；性能未回退（limit 1→100 中位 1.1/2.1/4.4/7.2/14.8ms）。新增结构性回归测试并**验证它会失败**（临时把 JOIN 加回后测试立刻失败）。全仓 97 项测试通过。
+
 - 2026-09-10 / v0.7.18 / 1acb1c4 — CI 部署前置检查补强：`preflight` 原先只查 Cloudflare 凭据，现增查 `apps/server/wrangler.toml` 的 `database_id` 是否仍是占位符 `REPLACE_WITH_YOUR_D1_DATABASE_ID`（凭据配齐却忘了替换时，`wrangler d1 migrations apply` 会抛出难懂报错，提前拦下并指明该改哪个文件）。三种情形用 `bash -eo pipefail` 实跑验证（缺凭据 / 占位符未替换 / 齐备），均 exit 0 且 `ready` 取值正确。**同时确认该仓库为私有仓库**：未鉴权访问 repo 页与 `/actions` 均 404、`raw.githubusercontent.com` 上的文件亦 404，而账号页返回 200——因此 Actions 运行结果与 badge 需登录才能查看，**「推送后一键部署」只验证到「配置与脚本正确」这一层，工作流是否真的跑过未经确认**，已记入部署文档待仓库拥有者核对。
 
 - 2026-09-10 / v0.7.17 / 83d7f7a — 表格行与看板卡补键盘可达与焦点样式：网格卡与图标卡早已支持 Enter/Space 打开详情，表格行与看板卡此前只能鼠标点，属一致性缺口。两者加 `tabIndex=0`、`aria-label`、Enter/Space 打开详情，并补 `:focus-visible` 轮廓。浏览器实测（真实 `Input.dispatchKeyEvent`）表格 50 行与看板 50 卡均可 Enter/空格打开详情、Esc 关闭，无异常。**未确认**：程控 `.focus()` 不触发 `:focus-visible`（浏览器按启发式判定键盘交互），故真实 Tab 导航下的轮廓需人工确认。
