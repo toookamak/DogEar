@@ -299,6 +299,13 @@ async function readRelations(db: Db, bookmarkId: string) {
   return { scenes: sceneRows, tags: tagRows, folder, pendingSuggestionCount: Number(suggestionRows[0]?.count ?? 0) }
 }
 
+/**
+ * 过滤条件。关联维度（Scene / Tag / 标签名搜索）一律用 **EXISTS 子查询**，
+ * 不用 JOIN：Bookmark↔Scene、Bookmark↔Tag 都是多对多，JOIN 会产生笛卡尔积，
+ * 一条挂 2 场景 + 2 标签的书签在按场景/标签筛选或搜索时会重复出现 2~4 次
+ * （已实测复现）。EXISTS 结构上不可能产生重复行，且无需 DISTINCT
+ * （DISTINCT 会破坏 keyset 分页的边界值），也能用上 bookmark_scenes/tags 的既有索引。
+ */
 function filterCondition(filters: BookmarkFilters = {}) {
   const conditions: any[] = []
   if (!filters.includeDeleted) conditions.push(isNull(bookmarks.deletedAt))
@@ -309,11 +316,21 @@ function filterCondition(filters: BookmarkFilters = {}) {
   if (filters.source) conditions.push(eq(bookmarks.source, filters.source))
   if (filters.private !== undefined) conditions.push(eq(bookmarks.private, filters.private))
   if (filters.excludeStatus) conditions.push(ne(bookmarks.status, filters.excludeStatus))
-  if (filters.sceneId) conditions.push(eq(bookmarkScenes.sceneId, filters.sceneId))
-  if (filters.tagId) conditions.push(eq(bookmarkTags.tagId, filters.tagId))
+  if (filters.sceneId) {
+    conditions.push(sql`exists (select 1 from ${bookmarkScenes} where ${bookmarkScenes.bookmarkId} = ${bookmarks.id} and ${bookmarkScenes.sceneId} = ${filters.sceneId})`)
+  }
+  if (filters.tagId) {
+    conditions.push(sql`exists (select 1 from ${bookmarkTags} where ${bookmarkTags.bookmarkId} = ${bookmarks.id} and ${bookmarkTags.tagId} = ${filters.tagId})`)
+  }
   if (filters.q) {
     const q = `%${filters.q}%`
-    conditions.push(or(like(bookmarks.title, q), like(bookmarks.url, q), like(bookmarks.note, q), like(tags.name, q)))
+    // 标签名命中也走 EXISTS，避免 JOIN tags 带来的重复
+    conditions.push(or(
+      like(bookmarks.title, q),
+      like(bookmarks.url, q),
+      like(bookmarks.note, q),
+      sql`exists (select 1 from ${bookmarkTags} inner join ${tags} on ${bookmarkTags.tagId} = ${tags.id} where ${bookmarkTags.bookmarkId} = ${bookmarks.id} and ${tags.name} like ${q})`,
+    ))
   }
   return conditions.length ? and(...conditions) : undefined
 }
@@ -349,7 +366,9 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
       if (decoded && decoded.sort === sort) conditions.push(keysetCondition(decoded))
     }
     const whereClause = conditions.length > 1 ? and(...conditions.filter(Boolean)) : conditions[0]
-    const query = filters.sceneId || filters.tagId || filters.q ? db.select().from(bookmarks).leftJoin(bookmarkScenes, eq(bookmarks.id, bookmarkScenes.bookmarkId)).leftJoin(bookmarkTags, eq(bookmarks.id, bookmarkTags.bookmarkId)).leftJoin(tags, eq(bookmarkTags.tagId, tags.id)) : db.select().from(bookmarks)
+    // 只查 bookmarks 一张表：关联维度的过滤已由 filterCondition 用 EXISTS 表达，
+    // 不再 JOIN 多对多表，因此结果里不会有重复行，也无需 DISTINCT。
+    const query = db.select().from(bookmarks)
     const orderBy = opts?.orderBy === 'lastOpenedAt'
       ? desc(bookmarks.lastOpenedAt)
       : sort === 'recent'

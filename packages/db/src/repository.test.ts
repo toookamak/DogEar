@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { accessRecords, bookmarks } from './schema.js'
+import { accessRecords, bookmarks, bookmarkScenes, bookmarkTags } from './schema.js'
 import { createBookmarkRepository } from './repository.js'
 
+/**
+ * 记录 list/search 查询里出现过的 leftJoin。
+ *
+ * 背景：Bookmark↔Scene、Bookmark↔Tag 都是多对多，一旦在筛选/搜索时 JOIN 这两张表，
+ * 结果会按「场景数 × 标签数」重复（实测：挂 2 场景 + 2 标签的书签按场景筛选时重复 2 次、
+ * 按关键字搜索时重复 4 次）。正确做法是用 EXISTS 子查询做过滤。
+ * 这里用结构性断言守住这个不变量——若有人把 JOIN 加回来，本测试立刻失败。
+ */
+const leftJoins: unknown[] = []
+
 function setup() {
+  leftJoins.length = 0
   const bookmarkRows: any[] = []
   const accessRows: any[] = []
   const db = {
@@ -35,6 +46,11 @@ function setup() {
           const joined = { where: () => ({ all: () => [] }) }
           return {
             innerJoin: () => joined,
+            // 记录并链式返回，让「误加 JOIN」表现为断言失败而不是运行时报错
+            leftJoin(table: unknown) {
+              leftJoins.push(table)
+              return this
+            },
             where(condition: any) {
               return {
                 all: () => [{ count: bookmarkRows.filter((record) => record.syncStatus === 'pending').length }],
@@ -120,5 +136,19 @@ describe('bookmark repository', () => {
     expect(repository.operationLog.append).toBeTypeOf('function')
     expect(repository.settings.set).toBeTypeOf('function')
     expect(repository.archiveJobs.create).toBeTypeOf('function')
+  })
+
+  it('筛选与搜索不 JOIN 多对多表（否则结果会按场景数×标签数重复）', async () => {
+    const repository = setup()
+
+    // 三种会触及关联维度的过滤路径：场景、标签、关键字（关键字含标签名匹配）
+    await repository.list({ sceneId: '11111111-1111-4111-8111-111111111111' })
+    await repository.list({ tagId: '22222222-2222-4222-8222-222222222222' })
+    await repository.list({ q: '关键字' })
+
+    const joinedManyToMany = leftJoins.filter(
+      (table) => table === bookmarkScenes || table === bookmarkTags,
+    )
+    expect(joinedManyToMany).toEqual([])
   })
 })
