@@ -329,6 +329,14 @@ body {
   color: var(--color-text-muted);
 }
 
+/* 维度条目数（取自已加载的列表） */
+.group-count {
+  margin-left: var(--spacing-4);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  opacity: 0.75;
+}
+
 .sidebar-nav {
   display: flex;
   flex-direction: column;
@@ -478,6 +486,10 @@ body {
   white-space: nowrap;
 }
 
+.statusbar-item--error {
+  color: var(--color-error-text);
+}
+
 .statusbar-undo {
   height: 18px;
   padding: 0 var(--spacing-8);
@@ -625,6 +637,14 @@ body {
 
 .list-row:last-child {
   border-bottom: none;
+}
+
+/* 列表内的表头行（如回收站全选行） */
+.list-row--head {
+  padding-bottom: var(--spacing-4);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-text-muted);
 }
 
 /* 停用项：弱化但不隐藏——停用不删历史挂载，仍要能按它筛到已有书签 */

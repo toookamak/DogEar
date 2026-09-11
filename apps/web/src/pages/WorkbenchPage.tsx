@@ -437,6 +437,23 @@ export function WorkbenchPage() {
               <option key={scene.id} value={scene.id}>{scene.name}</option>
             ))}
           </select>
+          {/* 批量加标签（对齐原型 SelectionToolbar 的批量加标签能力）。
+              取已有标签；新建标签在「组织管理 → 标签」里做。 */}
+          <select
+            className="input"
+            defaultValue=""
+            disabled={tags.length === 0}
+            title={tags.length === 0 ? '还没有标签，可到「组织管理 → 标签」新建' : undefined}
+            onChange={(e) => {
+              if (e.target.value) runBatch({ ids: [...selectedIds], addTagIds: [e.target.value] })
+              e.target.value = ''
+            }}
+          >
+            <option value="">{tags.length === 0 ? '暂无标签…' : '添加标签…'}</option>
+            {tags.map((tag) => (
+              <option key={tag.id} value={tag.id}>{tag.name}</option>
+            ))}
+          </select>
           <button
             type="button"
             className="btn btn--pill"
@@ -460,7 +477,20 @@ export function WorkbenchPage() {
         {loading && <Skeleton variant={SKELETON_VARIANT[viewMode]} />}
         {error && <ErrorMessage message={error} />}
         {!loading && !error && bookmarks.length === 0 && (
-          <EmptyState message={isInbox ? 'Inbox 为空' : '暂无书签'} />
+          <EmptyState
+            message={
+              hasActiveFilters
+                ? '当前筛选条件下没有书签'
+                : isInbox ? 'Inbox 为空' : '暂无书签'
+            }
+            // 有筛选时才给「清除筛选」——这才是死胡同的出口；
+            // 真正没数据时给「去保存第一条」，指向页面顶部的保存入口。
+            action={
+              hasActiveFilters
+                ? { label: '清除筛选', onClick: clearFilters }
+                : { label: '+ 保存第一条', onClick: () => setShowSaveForm(true) }
+            }
+          />
         )}
         {!loading && !error && bookmarks.length > 0 && renderView()}
 

@@ -81,7 +81,10 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
       </nav>
 
       <div className="sidebar-group">
-        <h3 className="sidebar-group-title">场景</h3>
+        {/* 计数取自已加载的列表，零额外请求。
+            各维度的「该维度下有多少书签」需要统计接口，本版 API 结构表不允许新增路由，
+            故只显示维度自身的条目数（见 docs/modules/20260910_工作台外壳屏稿.md §4）。 */}
+        <h3 className="sidebar-group-title">场景 <span className="group-count">{scenes.length}</span></h3>
         {scenes.length === 0 ? (
           <p className="sidebar-empty">
             {loaded ? <>还没有场景 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
@@ -106,7 +109,7 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
       </div>
 
       <div className="sidebar-group">
-        <h3 className="sidebar-group-title">文件夹</h3>
+        <h3 className="sidebar-group-title">文件夹 <span className="group-count">{folders.length}</span></h3>
         {folders.length === 0 ? (
           <p className="sidebar-empty">
             {loaded ? <>还没有文件夹 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
@@ -128,7 +131,7 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
       </div>
 
       <div className="sidebar-group">
-        <h3 className="sidebar-group-title">标签</h3>
+        <h3 className="sidebar-group-title">标签 <span className="group-count">{tags.length}</span></h3>
         {tags.length === 0 ? (
           <p className="sidebar-empty">
             {loaded ? <>还没有标签 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useLocation } from 'wouter'
 import { PageHeader } from '../components/layout/PageHeader.js'
 import { BookmarkGridView } from '../components/bookmarks/BookmarkGridView.js'
 import { Skeleton } from '../components/feedback/Skeleton.js'
@@ -23,6 +24,7 @@ const EMPTY_SELECTION: Set<string> = new Set()
  * 列表由服务端投影（只返回标题/图标/URL，排除 Inbox 与私密），点开时记一次访问。
  */
 export function NavPage() {
+  const [, setLocation] = useLocation()
   const [bookmarks, setBookmarks] = useState<NavItem[]>([])
   const [recentBookmarks, setRecentBookmarks] = useState<NavItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -92,7 +94,11 @@ export function NavPage() {
         {loading && <Skeleton variant="grid" count={8} />}
         {error && <ErrorMessage message={error} />}
         {!loading && !error && bookmarks.length === 0 && (
-          <EmptyState message="导航页暂无书签（只展示已确认且非私密的收藏）" />
+          <EmptyState
+            message="导航页暂无书签（只展示已确认且非私密的收藏）"
+            // 为空通常是「还没有已确认的收藏」，给出下一步而不是死胡同
+            action={{ label: '去看书签并确认', onClick: () => setLocation('/bookmarks') }}
+          />
         )}
         {!loading && !error && bookmarks.length > 0 && (
           <BookmarkGridView
