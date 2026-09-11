@@ -3,21 +3,26 @@ import {
   batchUpdateRequestSchema,
   bookmarkListQuerySchema,
   bookmarkVersionConflictErrorSchema,
-  createBookmarkInputSchema,
+  folderCreateInputSchema,
+  folderUpdateInputSchema,
   getStatsSkillInputSchema,
   listBookmarksSkillInputSchema,
   loginRequestSchema,
   paginationQuerySchema,
   recycleBinEmptyRequestSchema,
   saveBookmarkSkillInputSchema,
+  sceneCreateInputSchema,
+  sceneUpdateInputSchema,
   searchBookmarksSkillInputSchema,
   settingsWhitelistSchema,
   skillCapabilitiesBodySchema,
   skillUsageResponseSchema,
   suggestSceneSkillInputSchema,
+  tagCreateInputSchema,
   triggerArchiveSkillInputSchema,
   updateBookmarkSkillInputSchema,
-  updateBookmarkInputSchema,
+  workbenchCreateBookmarkInputSchema,
+  workbenchPatchBookmarkInputSchema,
 } from '@dogear/shared'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
@@ -219,7 +224,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.post('/api/bookmarks', async (c) => {
-    const input = createBookmarkInputSchema.safeParse(await c.req.json().catch(() => undefined))
+    const input = workbenchCreateBookmarkInputSchema.safeParse(await c.req.json().catch(() => undefined))
     if (!input.success) return invalidRequest(c)
     const idempotencyKey = c.req.header('Idempotency-Key')
     const actor = 'user'
@@ -356,7 +361,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.patch('/api/bookmarks/:bookmarkId', async (c) => {
-    const input = updateBookmarkInputSchema.safeParse(await c.req.json().catch(() => undefined))
+    const input = workbenchPatchBookmarkInputSchema.safeParse(await c.req.json().catch(() => undefined))
     if (!input.success) return invalidRequest(c, input.error.flatten())
     const existing = await repository.get(c.req.param('bookmarkId'), true)
     if (!existing) return skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
@@ -422,23 +427,47 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     return c.json({ ok: true, purged: count })
   })
 
+  /**
+   * 组织维度路由。此前这里没有任何 schema，直接把 `{ ...body }` 展开进 create()，
+   * 导致 `aer`（应为 `aerr`）、`enabld`（应为 `enabled`）、`parentid` 之类打字错误
+   * 被接受并静默丢弃，接口仍返回 201。现按 `docs/API结构表.md` §8.4 的白名单校验，
+   * 未知字段返回 VALIDATION_ERROR（strict）。
+   *
+   * 用结构化的最小接口声明 schema 类型，避免在联合类型上调用 safeParse 触发 TS 报错。
+   */
+  type InputSchema = {
+    safeParse: (value: unknown) => { success: true; data: unknown } | { success: false; error: unknown }
+  }
+  const orgInputSchemas: Record<string, { create: InputSchema; update: InputSchema | null }> = {
+    scenes: { create: sceneCreateInputSchema, update: sceneUpdateInputSchema },
+    folders: { create: folderCreateInputSchema, update: folderUpdateInputSchema },
+    tags: { create: tagCreateInputSchema, update: null },
+  }
+
   const resourceRoutes = [
     ['scenes', repository.scenes], ['folders', repository.folders], ['tags', repository.tags],
   ] as const
   for (const [name, resource] of resourceRoutes) {
+    const schemas = orgInputSchemas[name]
     app.get(`/api/${name}`, async (c) => c.json({ items: await resource.list() }))
     app.post(`/api/${name}`, async (c) => {
-      const body = await c.req.json().catch(() => undefined) as Record<string, unknown> | undefined
-      if (!body || typeof body.name !== 'string' || !body.name.trim()) return invalidRequest(c)
+      const parsed = schemas.create.safeParse(await c.req.json().catch(() => undefined))
+      if (!parsed.success) return invalidRequest(c)
+      const body = parsed.data as Record<string, unknown>
       const record = await resource.create({ ...body, id: body.id ?? randomUUID() })
       await repository.operationLog.append({ actor: 'user', action: 'create', targetType: name.slice(0, -1), targetId: String((record as any).id) })
       return c.json(record, 201)
     })
-    if (name !== 'tags') app.patch(`/api/${name}/:id`, async (c) => {
-      const body = await c.req.json().catch(() => undefined)
-      const record = await resource.update(c.req.param('id'), body ?? {})
-      return record ? c.json(record) : skillError(c, 'NOT_FOUND', 404, 'Resource not found')
-    })
+    // `name !== 'tags'` 同时承担类型收窄（tags 资源没有 update 方法）
+    if (name !== 'tags' && schemas.update) {
+      const updateSchema = schemas.update
+      app.patch(`/api/${name}/:id`, async (c) => {
+        const parsed = updateSchema.safeParse(await c.req.json().catch(() => undefined))
+        if (!parsed.success) return invalidRequest(c)
+        const record = await resource.update(c.req.param('id'), parsed.data as Record<string, unknown>)
+        return record ? c.json(record) : skillError(c, 'NOT_FOUND', 404, 'Resource not found')
+      })
+    }
     app.delete(`/api/${name}/:id`, async (c) => {
       const removed = await resource.remove(c.req.param('id'))
       if (!removed) return skillError(c, name === 'scenes' ? 'SCENE_IN_USE' : 'NOT_FOUND', 409, name === 'scenes' ? 'Scene is in use' : 'Resource not found')

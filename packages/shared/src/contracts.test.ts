@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import {
+  batchUpdateRequestSchema,
   capabilitiesResponseSchema,
+  channelConfigInputSchema,
+  folderCreateInputSchema,
+  folderUpdateInputSchema,
   paginationQuerySchema,
+  recycleBinEmptyRequestSchema,
   saveBookmarkSkillInputSchema,
+  sceneCreateInputSchema,
+  sceneUpdateInputSchema,
   settingsWhitelistSchema,
   snapshotReceiptSchema,
   suggestSceneSkillInputSchema,
   suggestionSchema,
+  tagCreateInputSchema,
   unifiedErrorSchema,
+  workbenchCreateBookmarkInputSchema,
+  workbenchPatchBookmarkInputSchema,
 } from './index.js'
 
 describe('M3/M4 shared schemas', () => {
@@ -98,6 +108,108 @@ describe('M3/M4 shared schemas', () => {
 
     it('空对象仍合法（不改动任何设置）', () => {
       expect(settingsWhitelistSchema.parse({})).toEqual({})
+    })
+  })
+
+  describe('工作台入参拒绝未知字段，Skill 入参保持宽松', () => {
+    // 这一组是**有意的不对称**，见 docs/TODO.md 记的取舍：
+    // - 工作台只有自己的前端调用，字段名打错应当报错（否则静默丢弃、看起来保存成功）
+    // - Skill 是对外接口，第三方 agent 可能回传含多余字段的完整对象，
+    //   收紧会导致它保存书签直接失败——破坏外部契约比漏检字段名严重。
+    // 若有人把 base schema 改成 strict（连带收紧 Skill），本组会失败。
+
+    it('工作台创建书签：拒绝错拼字段', () => {
+      expect(() => workbenchCreateBookmarkInputSchema.parse({
+        url: 'https://example.com',
+        notee: '错拼的备注',
+      })).toThrow()
+      expect(workbenchCreateBookmarkInputSchema.parse({ url: 'https://example.com' })).toBeTruthy()
+    })
+
+    it('工作台更新书签：拒绝错拼字段，但空对象也拒绝（至少给一个字段）', () => {
+      expect(() => workbenchPatchBookmarkInputSchema.parse({ titel: '错拼' })).toThrow()
+      expect(() => workbenchPatchBookmarkInputSchema.parse({})).toThrow()
+      expect(workbenchPatchBookmarkInputSchema.parse({ title: '正常' })).toBeTruthy()
+      // version 是工作台专属字段，需与 base 字段共存
+      expect(workbenchPatchBookmarkInputSchema.parse({ title: '正常', version: 2 })).toBeTruthy()
+    })
+
+    it('Skill 保存书签：仍接受多余字段（外部契约，不可收紧）', () => {
+      expect(saveBookmarkSkillInputSchema.parse({
+        url: 'https://example.com',
+        // agent 常回传完整对象，这些多余字段不应导致失败
+        extraFieldFromAgent: 1,
+        nested: { whatever: true },
+      })).toBeTruthy()
+    })
+
+    it('工作台批量与回收站清空：拒绝未知字段', () => {
+      const ids = ['11111111-1111-4111-8111-111111111111']
+      expect(() => batchUpdateRequestSchema.parse({ ids, statuss: 'saved' })).toThrow()
+      expect(batchUpdateRequestSchema.parse({ ids, status: 'saved' })).toBeTruthy()
+      expect(() => recycleBinEmptyRequestSchema.parse({ onlyExpiredd: true })).toThrow()
+      expect(recycleBinEmptyRequestSchema.parse({ onlyExpired: true })).toBeTruthy()
+    })
+
+    it('渠道配置：拒绝未知字段', () => {
+      expect(() => channelConfigInputSchema.parse({
+        channel: 'webdav', label: 'x', config: '{}', enable: true,
+      })).toThrow()
+      expect(channelConfigInputSchema.parse({
+        channel: 'webdav', label: 'x', config: '{}', enabled: true,
+      })).toBeTruthy()
+    })
+  })
+
+  describe('组织维度入参（此前完全没有 schema，字段名打错会被静默丢弃）', () => {
+    it('场景：接受文档列出的可编辑字段', () => {
+      expect(sceneCreateInputSchema.parse({
+        name: '工作研究', description: '说明', icon: 'i', sortOrder: 1, enabled: false, aerr: 'action',
+      })).toBeTruthy()
+      expect(sceneCreateInputSchema.parse({ name: '仅名称' })).toBeTruthy()
+    })
+
+    it('场景：拒绝错拼的 aerr', () => {
+      // 这是最典型的一例：aer 过去会被接受，aerr 回落到 reference，
+      // 进而改变工作台的排序/密度/主按钮，却毫无提示
+      expect(() => sceneCreateInputSchema.parse({ name: 'x', aer: 'action' })).toThrow()
+      expect(() => sceneCreateInputSchema.parse({ name: 'x', aerr: 'bogus' })).toThrow()
+    })
+
+    it('场景：拒绝空名与纯空白名', () => {
+      expect(() => sceneCreateInputSchema.parse({ name: '' })).toThrow()
+      expect(() => sceneCreateInputSchema.parse({ name: '   ' })).toThrow()
+    })
+
+    it('场景：不 trim（保持既有存储行为，只校验不变换）', () => {
+      expect(sceneCreateInputSchema.parse({ name: '  带空格  ' })).toEqual({ name: '  带空格  ' })
+    })
+
+    it('场景：更新至少给一个字段，且拒绝错拼', () => {
+      expect(() => sceneUpdateInputSchema.parse({})).toThrow()
+      expect(() => sceneUpdateInputSchema.parse({ enabld: false })).toThrow()
+      expect(sceneUpdateInputSchema.parse({ enabled: false })).toBeTruthy()
+      expect(sceneUpdateInputSchema.parse({ aerr: 'explore' })).toBeTruthy()
+    })
+
+    it('文件夹：拒绝错拼的 parentId', () => {
+      expect(() => folderCreateInputSchema.parse({ name: 'x', parentid: null })).toThrow()
+      expect(folderCreateInputSchema.parse({ name: 'x', parentId: null })).toBeTruthy()
+      expect(() => folderUpdateInputSchema.parse({ parentid: null })).toThrow()
+      expect(folderUpdateInputSchema.parse({ parentId: null })).toBeTruthy()
+    })
+
+    it('标签：只接受 name（含可选 id），拒绝其它字段', () => {
+      expect(tagCreateInputSchema.parse({ name: 'x' })).toBeTruthy()
+      expect(() => tagCreateInputSchema.parse({ name: 'x', nmae: 'y' })).toThrow()
+      expect(() => tagCreateInputSchema.parse({ name: 'x', nameKey: 'x' })).toThrow()
+    })
+
+    it('保留「客户端自带 id」的既有行为', () => {
+      expect(sceneCreateInputSchema.parse({
+        id: '11111111-1111-4111-8111-111111111111', name: 'x',
+      })).toBeTruthy()
+      expect(() => sceneCreateInputSchema.parse({ id: 'not-a-uuid', name: 'x' })).toThrow()
     })
   })
 })

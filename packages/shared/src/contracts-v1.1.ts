@@ -7,14 +7,26 @@ export const idempotencyQuerySchema = z.object({
   sessionKey: z.string().min(1).optional(),
 })
 
-export const workbenchCreateBookmarkInputSchema = createBookmarkInputSchema
+/**
+ * 工作台侧书签入参：在 base schema 之上加 `.strict()`，**不改 base**。
+ *
+ * 为什么必须在使用点处理：`createBookmarkInputSchema` 被工作台与 Skill 共用
+ * （`saveBookmarkSkillInputSchema = saveBookmarkInputSchema`，后者由 base `.extend()` 而来）。
+ * 若直接给 base 加 strict，Skill 会一并收紧——而 Skill 是对外接口，第三方 agent
+ * 可能回传含多余字段的完整对象，收紧会导致它保存失败，破坏外部契约。
+ *
+ * 加 strict 的目的：字段名打错（如 notee / statuss）时返回 400 而非静默丢弃，
+ * 避免「看起来保存成功、实际该字段没生效」。详见 docs/TODO.md 记的取舍。
+ */
+export const workbenchCreateBookmarkInputSchema = createBookmarkInputSchema.strict()
 export const workbenchBookmarkIdempotentResponseSchema = z.object({
   bookmark: bookmarkSchema,
   idempotent: z.boolean(),
   replay: z.boolean().default(false),
 })
 
-export const workbenchPatchBookmarkInputSchema = updateBookmarkFieldsSchema.extend({
+// 注意 `.strict()` 必须在 `.refine()` 之前：refine 返回 ZodEffects，其上没有 strict。
+export const workbenchPatchBookmarkInputSchema = updateBookmarkFieldsSchema.strict().extend({
   version: z.number().int().positive().optional(),
 }).refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' })
 
@@ -32,6 +44,7 @@ export const bookmarkVersionConflictErrorSchema = z.object({
   }),
 })
 
+// 工作台专属端点，无对外调用方，可安全加 strict（见 workbenchCreateBookmarkInputSchema 的说明）
 export const batchUpdateRequestSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(100),
   status: z.enum(['unread', 'saved', 'archived']).optional(),
@@ -41,7 +54,7 @@ export const batchUpdateRequestSchema = z.object({
   addTagIds: z.array(z.string().uuid()).optional(),
   removeTagIds: z.array(z.string().uuid()).optional(),
   deleted: z.boolean().optional(),
-})
+}).strict()
 
 export const batchUpdateResponseSchema = z.object({
   updated: z.array(bookmarkSchema),
@@ -61,7 +74,7 @@ export const recycleBinPurgeResponseSchema = z.object({
 })
 export const recycleBinEmptyRequestSchema = z.object({
   onlyExpired: z.boolean().optional(),
-})
+}).strict()
 export const recycleBinEmptyResponseSchema = z.object({
   ok: z.literal(true),
   purged: z.number().int().nonnegative(),
@@ -182,16 +195,77 @@ export const channelConfigSchema = z.object({
   updatedAt: z.number().int().nonnegative(),
 })
 
+// 工作台专属端点（渠道由工作台与自托管配置界面调用），加 strict 以拦截字段名打错
 export const channelConfigInputSchema = z.object({
   channel: channelNameSchema,
   label: z.string().min(1).max(100),
   config: z.union([z.string().min(1), z.record(z.unknown())]),
   enabled: z.boolean().optional(),
-})
+}).strict()
 
 export type SyncQueueItem = z.infer<typeof syncQueueItemSchema>
 export type ChannelConfig = z.infer<typeof channelConfigSchema>
 export type ChannelConfigInput = z.infer<typeof channelConfigInputSchema>
+
+/**
+ * 组织维度（Scene / Folder / Tag）入参。
+ *
+ * 此前这三条路由**没有任何 schema**——直接 `{ ...body }` 展开进 `resource.create()`，
+ * 于是 `aer`（应为 `aerr`）、`enabld`（应为 `enabled`）、`parentid` 这类打字错误
+ * 会被照常接受并静默丢弃，接口仍返回 201。字段白名单以
+ * `docs/API结构表.md` §8.4 为准（「PATCH 只允许上述可编辑字段」）。
+ *
+ * 命名用「非空白」而非 `.trim()` 变换：现有路由是用 `body.name.trim()` 判空，
+ * 但把原名原样入库。这里只做校验、不做变换，保持既有存储行为不变。
+ */
+const nonBlankName = z.string().refine((value) => value.trim().length > 0, { message: 'Name must not be blank' })
+/** 场景 AERR 行为原型（PRD §2.0.3；系统内部概念，不展示给用户） */
+export const aerrSchema = z.enum(['action', 'explore', 'read', 'reference'])
+
+/** 创建允许的字段。`id` 可选以保留「客户端自带 id」的既有行为。 */
+export const sceneCreateInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: nonBlankName,
+  description: z.string().nullable().optional(),
+  icon: z.string().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+  enabled: z.boolean().optional(),
+  aerr: aerrSchema.optional(),
+}).strict()
+
+/** 更新：字段全部可选，但至少要给一个（避免「什么都没改也返回 200」）。 */
+export const sceneUpdateInputSchema = z.object({
+  name: nonBlankName.optional(),
+  description: z.string().nullable().optional(),
+  icon: z.string().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+  enabled: z.boolean().optional(),
+  aerr: aerrSchema.optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' })
+
+export const folderCreateInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: nonBlankName,
+  parentId: z.string().uuid().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+}).strict()
+
+export const folderUpdateInputSchema = z.object({
+  name: nonBlankName.optional(),
+  parentId: z.string().uuid().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' })
+
+export const tagCreateInputSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: nonBlankName,
+}).strict()
+
+export type SceneCreateInput = z.infer<typeof sceneCreateInputSchema>
+export type SceneUpdateInput = z.infer<typeof sceneUpdateInputSchema>
+export type FolderCreateInput = z.infer<typeof folderCreateInputSchema>
+export type FolderUpdateInput = z.infer<typeof folderUpdateInputSchema>
+export type TagCreateInput = z.infer<typeof tagCreateInputSchema>
 
 export const archiveTierSchema = z.enum(['snapshot', 'reader', 'metadata'])
 export const archiveStatusSchema = z.enum(['pending', 'completed', 'failed'])
