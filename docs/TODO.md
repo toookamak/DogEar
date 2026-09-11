@@ -55,6 +55,7 @@
 ## 已知小缺口
 
 - [ ] **Track A 真实部署未跑**：Workers 入口、`wrangler.toml`、Actions 均就绪且本地（wrangler 4.42 + 模拟 D1）全链路验证通过，但**从未在真实 Cloudflare 上部署过**。需：`wrangler d1 create dogear_prod` → 回填 `database_id` → `db:migrate:remote` → `secret put DOGEAR_PASSWORD` → 推 main（详见 `docs/modules/20260910_Cloudflare部署.md`）
+- [ ] **CI 是否跑通未经确认**：仓库为私有，未鉴权访问 repo 页 / `/actions` / `raw.githubusercontent.com` 均 404（账号页 200，可排除账号不存在），且 GitHub API 限流，故**无法在本环境核对 Actions 运行结果**。「推送后一键部署」目前只验证到「配置与脚本正确」这一层——workflow 的 preflight 三种情形已用 bash 实跑、结构与引用已静态校验，但**它是否在 GitHub 上真的执行过、是否绿，需仓库拥有者在 Actions 页确认**（尤其：workflow 语法若非法，GitHub 会直接标红而不执行）
 - [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）
 - [ ] R2 未接入（快照内容存储）
 - [ ] **`docs/Draft/README.md` 是失效索引**：其 5 处核心引用全部指向不存在的路径（重命名前的旧文件），且现行 `AGENTS.md` 目录规范中已无 `docs/Draft/`。照它办事会走错方向，建议单独收口
