@@ -1,11 +1,11 @@
 # DogEar 待办清单
 
 > 文档状态：生效  
-> 最后更新：2026-09-10  
-> 用途：未完成项与下一轮待办。已完成的主线不列在这里。  
-> 对照：`docs/TODO/20260904_后续补齐计划.md`、结构表 / API 结构表 v1.2。
+> 最后更新：2026-09-11  
+> 用途：未完成项与下一轮待办。已完成的主线不列在这里；文末「已完成」区只保留**值得记住、否则会被误改**的条目（如有意为之的设计不对称）。  
+> 对照：`docs/TODO/20260904_后续补齐计划.md`、结构表 / API 结构表 v1.3。
 
-用 `- [ ]` / `- [x]` 勾选。做完一项就勾上，并在本文件或 CHANGELOG 记一句。
+用 `- [ ]` / `- [x]` 勾选。做完一项就勾上，并在本文件或 CHANGELOG 记一句。条目过时（尤其写成「待决策/勿改」但实际已完成）会误导后来者，发现即修。
 
 ## 下一轮（未完成）
 
@@ -15,7 +15,7 @@
 - [ ] 工作台窄屏细节：详情浮层在窄屏的表现、看板拖拽的触摸手感需人工确认
 - [ ] 剩余内联样式（约 50 处）继续下沉到 `styles/app.css`（多为单值调整，收益有限，低优先）
 - [ ] 场景**合并**（PRD §2.0.1 允许「合并」；停用与删除已完成，合并尚无工作流，细部文档亦标为待设计）
-- [ ] 审计列为「可选补」的剩余项（按需）：表格行/看板卡键盘导航、备份恢复入口、日志类型筛选与搜索、Toast 内撤销（与状态栏撤销重复，需先定口径）
+- [ ] 审计列为「可选补」的剩余项（按需）：Toast 内撤销（与状态栏撤销功能重复，**需先定口径**再决定是否做）。注：同批的「表格行/看板卡键盘导航」「备份恢复入口」「日志类型筛选与搜索」三项已于 2026-09-11 完成，见「已完成」
 - [ ] **开发注意（两类假性故障）**：改完代码后若页面异常，先排除环境问题再怀疑代码——
   1. **Vite 转换缓存不一致**：磁盘文件正确、服务产物缺 import，导致整页白屏（本轮在 `WorkbenchPage` 上实际踩到）。用 `curl /src/<file>` 核对 served 模块是否新鲜，必要时重启 dev server。
   2. **长期运行的 headless 浏览器会假性卡死**：日志页一度持续显示「加载中…」20 秒不恢复，看着像 loading 写坏了；逐层排查（后端 1.6ms → 模块新鲜 → Vite 代理 3ms → 抓包发现请求发出但无响应）后确认是**复用了十几轮的 Edge 实例把连接池搞坏**，换全新实例即 11/11 通过。跑浏览器验证前重启浏览器实例。
@@ -51,32 +51,18 @@
 ### L5 缓存与备份（本轮不做，仅登记）
 
 - [ ] Dexie 启动 hydrate，首屏可读缓存；保存成功仍以真源为准
-- [ ] 备份恢复、每目标独立频率、ZIP 导入
+- [ ] 备份恢复的**每目标独立频率**与 **ZIP 导入**（「从备份恢复」已于 2026-09-11 完成，见「已完成」与已知小缺口）
 - [ ] Raindrop 默认双向自动同步（开发计划明确不做，除非重新拍板）
 
 ## 已知小缺口
 
-- [ ] **写接口静默接受未知字段（待决策，勿擅自改）**：实测 12 个写接口中 10 个会静默吞掉不认识的字段并照常返回成功，字段名打错时**看起来保存成功、实际该字段被丢弃**。典型后果（已实测）：
-  - `POST /api/scenes` 发 `aer`（应为 `aerr`）→ 201，读回 `aerr="reference"`（想要的 `action` 丢了）。因 AERR 决定排序/密度/主按钮，用户会看到「按标题排序、排版紧凑、按钮写着检索资料」，且无任何提示
-  - `POST /api/nav/rules` 发 `mod`（应为 `mode`）→ 201，读回 `mode="all"`（想要的 `hide` 丢了）
-  - `POST /api/bookmarks` 发 `notee` → 201，读回 `note=null`
-  - 最隐蔽的是「写对一半、错一半」：`{ aerr:"explore", enabld:false }` → `aerr` 生效、`enabled` 意图丢失
-
-  **现状不影响用户**：网页前端（`apps/web/src/api/*.ts`）只发合法字段，已逐个核对，当前无任何界面操作会触发。属**开发者体验/未来风险**——尤其本项目由 AI 写代码，而 `update: (id, data: Record<string, unknown>)` 这类签名不做字段校验，打错不会报错。
-
-  **推荐方案（分而治之，待用户确认后实施）**：工作台侧接口加 `.strict()`（字段名打错即 400），**Skill API 保持宽松**——Skill 是对外接口，第三方 agent 可能回传含多余字段的完整对象，收紧会直接导致 agent 保存书签失败，破坏外部契约比漏检字段名严重。实现须在**使用点**分别处理：`createBookmarkInputSchema` 被工作台与 Skill 共用（`workbenchCreateBookmarkInputSchema` 与 `saveBookmarkSkillInputSchema` 都指向它），故应写 `workbenchCreateBookmarkInputSchema = createBookmarkInputSchema.strict()`，不可改 base schema。**改动属「API 返回结构和错误格式」范畴（原本 201 将变为 400），按 AGENTS 须先经用户确认。**
-
-  参照：`settingsWhitelistSchema` 已加 `.strict()`，因其在 `docs/API结构表.md` 有明确约定（「未知 key 返回 `VALIDATION_ERROR`」）；其余 10 处文档无约定，故未擅自收紧。
-
-- [x] **写接口未知字段（2026-09-11，v0.7.21）**：按「工作台收紧 + Skill 宽松」实施，见下方 CHANGELOG v0.7.21
-- [x] **备份恢复（2026-09-11，v0.7.23）**：已实现 `POST /api/backup/:id/restore`，语义按备份设计稿 §2.8（全量替换 + 强制回滚点 + 显式 confirm），`full` 档明确 501。见 CHANGELOG v0.7.23
 - [ ] **ZIP 导入 / 导出**（D 组剩余项）：备份设计稿 §3 要求「本地导出为 ZIP + 从 CSV/ZIP 导入」，与已实现的「备份恢复」是**两条不同的路径**（后者从服务端已有的备份恢复，前者处理用户手上的本地文件）。需先定：ZIP 解析用哪个库（引入生产依赖须先确认）、以及上传大小上限
 - [ ] **`full` 档在线恢复**：当前明确返回 501（服务运行中替换被持有的库文件不安全）。若要支持，需先解决「关闭并重建数据库连接」的架构问题——属技术选型，**须先讨论**
 - [ ] **Track A 真实部署未跑**：Workers 入口、`wrangler.toml`、Actions 均就绪且本地（wrangler 4.42 + 模拟 D1）全链路验证通过，但**从未在真实 Cloudflare 上部署过**。需：`wrangler d1 create dogear_prod` → 回填 `database_id` → `db:migrate:remote` → `secret put DOGEAR_PASSWORD` → 推 main（详见 `docs/modules/20260910_Cloudflare部署.md`）
 - [ ] **CI 是否跑通未经确认**：仓库为私有，未鉴权访问 repo 页 / `/actions` / `raw.githubusercontent.com` 均 404（账号页 200，可排除账号不存在），且 GitHub API 限流，故**无法在本环境核对 Actions 运行结果**。「推送后一键部署」目前只验证到「配置与脚本正确」这一层——workflow 的 preflight 三种情形已用 bash 实跑、结构与引用已静态校验，但**它是否在 GitHub 上真的执行过、是否绿，需仓库拥有者在 Actions 页确认**（尤其：workflow 语法若非法，GitHub 会直接标红而不执行）
 - [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）
 - [ ] R2 未接入（快照内容存储）
-- [ ] **`docs/Draft/README.md` 是失效索引**：其 5 处核心引用全部指向不存在的路径（重命名前的旧文件），且现行 `AGENTS.md` 目录规范中已无 `docs/Draft/`。照它办事会走错方向，建议单独收口
+- [ ] **`docs/Draft/README.md` 是失效索引**：其 8 个本地引用中**实测 7 个指向不存在的路径**（重命名前的旧文件，如 `../../wiki/DogEar_折耳书签_需求总纲_v1.0.7.md`、`../module/Scene-AI与待设计细部.md`、`../归档/*`；仅 `../技术总纲文档范例.md` 存在），且现行 `AGENTS.md` 目录规范中已无 `docs/Draft/`。照它办事会走错方向，建议单独收口
 - [ ] 浏览器插件（近期，不进本期 Mx）
 - [ ] 本地 `apps/server/backups/` 不入库（已加入 gitignore）
 
@@ -97,3 +83,11 @@
 - [x] **AI 建议四个落点（2026-09-10）**：输入时 / 整理时 / Inbox 内 / 未整理详情，均由 `pendingSuggestionCount` 真实数据驱动
 - [x] **查询串读取缺陷（2026-09-10）**：wouter `useLocation()` 不含查询串导致 OAuth 回调从未可用、导入结果页从不显示数据
 - [x] **CI 缺凭据时优雅跳过（2026-09-10）**：`preflight` 任务把凭据存在性转成 `outputs.ready` 门控部署，避免缺 Secrets 报红
+- [x] **写接口未知字段收紧（2026-09-11，v0.7.21 / `d991683`）**：此前 12 个写接口中 10 个会静默吞掉不认识的字段并照常返回成功，字段名打错（如 `aerr`→`aer`）会「看起来保存成功、实际该字段被丢弃」。按「工作台收紧 + Skill 宽松」实施。**这是一处有意的不对称，改前务必知情**：
+  - 工作台侧加 `.strict()`（字段名打错即 400）；Skill API **故意保持宽松**——它是对外接口，第三方 agent 可能回传含多余字段的完整对象，收紧会让 agent 保存书签直接失败，破坏外部契约比漏检字段名严重
+  - 故 strict 加在**使用点**而非 base：`createBookmarkInputSchema` 被两侧共用（`workbenchCreateBookmarkInputSchema` 与 `saveBookmarkSkillInputSchema` 都指向它），写成 `createBookmarkInputSchema.strict()` 即可，**不要改 base**
+  - 同时补上了 scenes/folders/tags 的入参 schema（此前完全没有，直接把 `{...body}` 展开进 `create()`）
+  - 该取舍由 `packages/shared/src/contracts.test.ts` 的一组测试锁住，若有人改 base 会失败；详细理由见 CHANGELOG v0.7.21
+- [x] **操作日志筛选/搜索/分页（2026-09-11，v0.7.22 / `8255612`）**：对齐原型 `LogSection`。类型筛选走服务端 `?action=`，搜索与分页在端侧（不为此新增接口）
+- [x] **备份恢复（2026-09-11，v0.7.23 / `ef20ae2`）**：`POST /api/backup/:id/restore`，语义按备份设计稿 §2.8（**全量替换** + 强制回滚点 + 显式 `confirm`）；`full` 档明确 501。**API 结构表因此升 v1.3**（原三处写着「备份恢复本版不做」）
+- [x] **表格行/看板卡键盘可达（2026-09-11，v0.7.17 / `83d7f7a`）**：补 `tabIndex`/`aria-label`/Enter·Space 打开详情与 `:focus-visible` 轮廓（网格与图标视图早已支持，此前仅此两处缺失）
