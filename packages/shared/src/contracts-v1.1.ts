@@ -87,6 +87,14 @@ export const settingsListResponseSchema = z.object({
   items: z.array(settingsItemSchema),
 })
 
+/**
+ * PUT /api/settings 的白名单。
+ *
+ * 必须用 `.strict()`：zod 默认会**静默剥离**未知键，那样客户端把键名打错
+ * （如 `recycle.retention_day` 少个 s）会拿到 200 + `{items:[]}`，
+ * 看起来保存成功、实际什么都没写。docs/API结构表.md 明确要求
+ * 「未知 key 返回 `VALIDATION_ERROR`」，strict 才能兑现该约定。
+ */
 export const settingsWhitelistSchema = z.object({
   'recycle.retention_days': z.union([z.string(), z.number()]).optional(),
   'skill.capabilities': z.object({
@@ -94,7 +102,7 @@ export const settingsWhitelistSchema = z.object({
     write_new: z.boolean(),
     update_existing: z.boolean(),
   }).optional(),
-})
+}).strict()
 
 export const skillCapabilitiesBodySchema = z.object({
   read: z.boolean(),

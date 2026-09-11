@@ -3,6 +3,7 @@ import {
   capabilitiesResponseSchema,
   paginationQuerySchema,
   saveBookmarkSkillInputSchema,
+  settingsWhitelistSchema,
   snapshotReceiptSchema,
   suggestSceneSkillInputSchema,
   suggestionSchema,
@@ -66,5 +67,37 @@ describe('M3/M4 shared schemas', () => {
       error: { code: 'CAPABILITY_DISABLED', message: 'Capability disabled', details: { skill: 'update_bookmark' } },
     }).error.code).toBe('CAPABILITY_DISABLED')
     expect(() => unifiedErrorSchema.parse({ error: { code: 'UNKNOWN', message: 'error' } })).toThrow()
+  })
+
+  describe('settingsWhitelistSchema 必须拒绝未知键', () => {
+    // docs/API结构表.md：「PUT /api/settings 只允许白名单…未知 key 返回 VALIDATION_ERROR」。
+    // zod 默认会静默剥离未知键，那样打字错误会返回 200 + {items:[]}，
+    // 客户端以为保存成功、实际什么都没写。这里锁住 .strict() 行为。
+    it('接受白名单内的键', () => {
+      expect(settingsWhitelistSchema.parse({ 'recycle.retention_days': '7' }))
+        .toEqual({ 'recycle.retention_days': '7' })
+      expect(settingsWhitelistSchema.parse({
+        'skill.capabilities': { read: true, write_new: false, update_existing: false },
+      })).toBeTruthy()
+    })
+
+    it('拒绝完全未知的键', () => {
+      expect(() => settingsWhitelistSchema.parse({ bogus: 1 })).toThrow()
+    })
+
+    it('拒绝键名打字错误（最容易被静默吞掉的情形）', () => {
+      expect(() => settingsWhitelistSchema.parse({ 'recycle.retention_day': '3' })).toThrow()
+    })
+
+    it('拒绝与白名单键混在一起的未知键', () => {
+      expect(() => settingsWhitelistSchema.parse({
+        'recycle.retention_days': '7',
+        'skill.token': 'leak',
+      })).toThrow()
+    })
+
+    it('空对象仍合法（不改动任何设置）', () => {
+      expect(settingsWhitelistSchema.parse({})).toEqual({})
+    })
   })
 })
