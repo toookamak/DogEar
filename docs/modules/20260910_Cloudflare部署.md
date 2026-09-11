@@ -55,11 +55,15 @@ pnpm --filter @dogear/server dev:workers
 
 配好后 **push 到 main 即自动部署**（也可在 Actions 页手动 `workflow_dispatch`）。流程为四个阶段：
 
-`verify`（typecheck + test + schema 一致性） → `preflight`（判断凭据是否齐备） → `deploy-worker`（先迁移后部署） → `deploy-web`（可选）。
+`verify`（typecheck + test + schema 一致性） → `preflight`（判断前置条件是否齐备） → `deploy-worker`（先迁移后部署） → `deploy-web`（可选）。
 
-**未配凭据时的行为**：`preflight` 检测到缺少 `CLOUDFLARE_API_TOKEN` 或 `CLOUDFLARE_ACCOUNT_ID` 时，会把 `ready=false` 传给后续任务，**仅执行校验并跳过部署**，同时在 Actions 的 Summary 里列出缺少哪一项与配置步骤。因此「忘了配 Secrets」不会让工作流报红——避免把缺凭据误读成代码有问题。
+**前置条件未满足时的行为**：`preflight` 会检查两件事——① 是否缺少 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`；② `apps/server/wrangler.toml` 的 `database_id` 是否仍是占位符 `REPLACE_WITH_YOUR_D1_DATABASE_ID`。任一未满足即把 `ready=false` 传给后续任务，**仅执行校验并跳过部署**，并在 Actions 的 Summary 里列出具体缺哪一项与配置步骤。
 
-实现注意：job 级 `if` **无法读取 `secrets` 上下文**，故用一个 `preflight` 任务把凭据存在性转成 `outputs.ready` 再门控部署任务。该任务的 shell 用 `if [ -z ... ]; then` 而非 `[ -z ... ] && ...`：后者在判断为假时返回非零，会被 `bash -e` 直接终止脚本，反而在凭据齐备时失败。
+加第 ② 项的原因：若凭据配齐却忘了替换占位符，`wrangler d1 migrations apply` 会抛出难懂的 wrangler 报错；提前拦下并直接指明该改哪个文件，比事后排查省事。
+
+实现注意：job 级 `if` **无法读取 `secrets` 上下文**，故用一个 `preflight` 任务把前置条件转成 `outputs.ready` 再门控部署任务。该任务的 shell 用 `if [ -z ... ]; then` 而非 `[ -z ... ] && ...`：后者在判断为假时返回非零，会被 `bash -e` 直接终止脚本，反而在条件满足时失败（本轮在测试脚本里实际踩到过一次，可作反证——工作流本身用的是 `if...fi`，未受影响）。
+
+**关于本仓库的可见性**：该仓库为**私有仓库**——未鉴权访问 `github.com/<owner>/<repo>` 与 `github.com/<owner>/<repo>/actions` 均返回 404，`raw.githubusercontent.com` 上的文件同样 404（而账号页 `github.com/toookamak` 返回 200，可排除「账号不存在」）。因此 **Actions 的运行结果与 workflow badge 都需要登录才能查看**，CI 是否跑通无法在无凭据环境下核对，需仓库拥有者自行在 Actions 页确认。
 
 ## 4. 为什么需要 0004 迁移
 

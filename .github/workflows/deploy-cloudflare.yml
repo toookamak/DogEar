@@ -53,7 +53,7 @@ jobs:
       ready: ${{ steps.check.outputs.ready }}
     steps:
       - id: check
-        name: 检查 Cloudflare 凭据
+        name: 检查部署前置条件（凭据 + D1 占位符）
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -63,21 +63,37 @@ jobs:
           missing=""
           if [ -z "$CF_API_TOKEN" ]; then missing="$missing CLOUDFLARE_API_TOKEN"; fi
           if [ -z "$CF_ACCOUNT_ID" ]; then missing="$missing CLOUDFLARE_ACCOUNT_ID"; fi
-          if [ -n "$missing" ]; then
+
+          # 凭据齐备时才检查 wrangler.toml 的 D1 占位符。
+          # 若忘了替换，`wrangler d1 migrations apply` 会抛出难懂的 wrangler 报错；
+          # 这里提前拦下并直接给出该替换哪个文件。
+          placeholder=""
+          if [ -z "$missing" ]; then
+            if grep -q 'REPLACE_WITH_YOUR_D1_DATABASE_ID' apps/server/wrangler.toml; then
+              placeholder="apps/server/wrangler.toml 的 database_id 仍是占位符 REPLACE_WITH_YOUR_D1_DATABASE_ID"
+            fi
+          fi
+
+          if [ -n "$missing" ] || [ -n "$placeholder" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             {
               echo "## ⏭️ 跳过 Cloudflare 部署"
               echo ""
-              echo "缺少仓库 Secrets：\`$missing\`"
+              if [ -n "$missing" ]; then
+                echo "- 缺少仓库 Secrets：\`$missing\`"
+              fi
+              if [ -n "$placeholder" ]; then
+                echo "- $placeholder"
+              fi
               echo ""
               echo "本次仅执行校验（typecheck / test / schema 一致性），未部署。"
               echo ""
               echo "配置后推送即自动部署，步骤见 \`docs/modules/20260910_Cloudflare部署.md\`："
-              echo "1. \`npx wrangler d1 create dogear_prod\`，把 database_id 回填到 \`apps/server/wrangler.toml\`"
+              echo "1. \`npx wrangler d1 create dogear_prod\`，把输出的 database_id 回填到 \`apps/server/wrangler.toml\`"
               echo "2. 配置仓库 Secrets：\`CLOUDFLARE_API_TOKEN\`（需 Workers Scripts:Edit、D1:Edit）与 \`CLOUDFLARE_ACCOUNT_ID\`"
               echo "3. 设置 Worker 密钥：\`npx wrangler secret put DOGEAR_PASSWORD\`"
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "::notice title=跳过 Cloudflare 部署::缺少 Secrets：$missing。本次只做校验。"
+            echo "::notice title=跳过 Cloudflare 部署::前置条件未满足，本次只做校验。"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
             echo "凭据齐备，继续部署。" >> "$GITHUB_STEP_SUMMARY"
