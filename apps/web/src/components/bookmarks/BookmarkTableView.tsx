@@ -40,8 +40,17 @@ export function BookmarkTableView({
           <div
             key={bookmark.id}
             role="row"
+            tabIndex={0}
             className={`bm-table-row${activeId === bookmark.id ? ' bm-table-row--active' : ''}${selected ? ' bm-table-row--selected' : ''}`}
+            aria-label={`${bookmark.title || bookmark.url}（打开详情）`}
             onClick={() => onOpen(bookmark)}
+            // 键盘可达：网格与图标视图已支持 Enter/Space，表格此前只能鼠标点
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onOpen(bookmark)
+              }
+            }}
           >
             <span className="bm-col-check">
               <input

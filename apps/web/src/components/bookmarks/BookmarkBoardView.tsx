@@ -89,16 +89,25 @@ export function BookmarkBoardView({ bookmarks, activeId, onOpen, onMoveStatus }:
               {items.map((bookmark) => (
                 <article
                   key={bookmark.id}
+                  tabIndex={0}
                   className={`bm-board-card${activeId === bookmark.id ? ' bm-board-card--active' : ''}${drag?.id === bookmark.id ? ' bm-board-card--dragging' : ''}`}
+                  aria-label={`${bookmark.title || bookmark.url}（打开详情）`}
                   onClick={() => {
                     if (draggedRef.current) { draggedRef.current = false; return }
                     onOpen(bookmark)
+                  }}
+                  // 键盘可达：拖拽是鼠标/触摸的快捷方式，键盘用户走 Enter 打开详情后改状态
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onOpen(bookmark)
+                    }
                   }}
                   onPointerDown={(event) => onPointerDown(event, bookmark)}
                   onPointerMove={onPointerMove}
                   onPointerUp={(event) => onPointerUp(event, bookmark)}
                   onPointerCancel={() => setDrag(null)}
-                  title={`${bookmark.title || bookmark.url} · 拖拽到其他分栏可改状态`}
+                  title={`${bookmark.title || bookmark.url} · 拖拽到其他分栏可改状态（键盘：Enter 打开详情后改）`}
                 >
                   <span className="bm-board-card-title">{bookmark.title || bookmark.url}</span>
                   <span className="bm-board-card-domain">{bookmark.domain ?? ''}</span>

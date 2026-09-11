@@ -1193,6 +1193,13 @@ body {
   background-color: var(--color-bg-surface-300);
 }
 
+/* 键盘焦点可见：没有焦点样式的话，键盘导航等于不可用 */
+.bm-table-row:focus-visible,
+.bm-board-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
 .bm-table-row--active {
   background-color: var(--color-bg-surface-300);
 }
