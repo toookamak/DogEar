@@ -69,7 +69,9 @@
   参照：`settingsWhitelistSchema` 已加 `.strict()`，因其在 `docs/API结构表.md` 有明确约定（「未知 key 返回 `VALIDATION_ERROR`」）；其余 10 处文档无约定，故未擅自收紧。
 
 - [x] **写接口未知字段（2026-09-11，v0.7.21）**：按「工作台收紧 + Skill 宽松」实施，见下方 CHANGELOG v0.7.21
-- [ ] **备份恢复入口**（D 组剩余项，**需先确认**）：当前备份只有 create/list/download/get，**没有 restore 端点**，故此项**必然新增 API 路由**，属 AGENTS「先说明影响范围再动」的范畴。可行方案：`POST /api/backup/:id/restore`，但需先定语义——恢复是覆盖现有库还是合并？覆盖会丢当前数据，属高风险操作，须明确确认策略与保留回退手段
+- [x] **备份恢复（2026-09-11，v0.7.23）**：已实现 `POST /api/backup/:id/restore`，语义按备份设计稿 §2.8（全量替换 + 强制回滚点 + 显式 confirm），`full` 档明确 501。见 CHANGELOG v0.7.23
+- [ ] **ZIP 导入 / 导出**（D 组剩余项）：备份设计稿 §3 要求「本地导出为 ZIP + 从 CSV/ZIP 导入」，与已实现的「备份恢复」是**两条不同的路径**（后者从服务端已有的备份恢复，前者处理用户手上的本地文件）。需先定：ZIP 解析用哪个库（引入生产依赖须先确认）、以及上传大小上限
+- [ ] **`full` 档在线恢复**：当前明确返回 501（服务运行中替换被持有的库文件不安全）。若要支持，需先解决「关闭并重建数据库连接」的架构问题——属技术选型，**须先讨论**
 - [ ] **Track A 真实部署未跑**：Workers 入口、`wrangler.toml`、Actions 均就绪且本地（wrangler 4.42 + 模拟 D1）全链路验证通过，但**从未在真实 Cloudflare 上部署过**。需：`wrangler d1 create dogear_prod` → 回填 `database_id` → `db:migrate:remote` → `secret put DOGEAR_PASSWORD` → 推 main（详见 `docs/modules/20260910_Cloudflare部署.md`）
 - [ ] **CI 是否跑通未经确认**：仓库为私有，未鉴权访问 repo 页 / `/actions` / `raw.githubusercontent.com` 均 404（账号页 200，可排除账号不存在），且 GitHub API 限流，故**无法在本环境核对 Actions 运行结果**。「推送后一键部署」目前只验证到「配置与脚本正确」这一层——workflow 的 preflight 三种情形已用 bash 实跑、结构与引用已静态校验，但**它是否在 GitHub 上真的执行过、是否绿，需仓库拥有者在 Actions 页确认**（尤其：workflow 语法若非法，GitHub 会直接标红而不执行）
 - [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）
