@@ -54,6 +54,18 @@
 
 ## 已知小缺口
 
+- [ ] **写接口静默接受未知字段（待决策，勿擅自改）**：实测 12 个写接口中 10 个会静默吞掉不认识的字段并照常返回成功，字段名打错时**看起来保存成功、实际该字段被丢弃**。典型后果（已实测）：
+  - `POST /api/scenes` 发 `aer`（应为 `aerr`）→ 201，读回 `aerr="reference"`（想要的 `action` 丢了）。因 AERR 决定排序/密度/主按钮，用户会看到「按标题排序、排版紧凑、按钮写着检索资料」，且无任何提示
+  - `POST /api/nav/rules` 发 `mod`（应为 `mode`）→ 201，读回 `mode="all"`（想要的 `hide` 丢了）
+  - `POST /api/bookmarks` 发 `notee` → 201，读回 `note=null`
+  - 最隐蔽的是「写对一半、错一半」：`{ aerr:"explore", enabld:false }` → `aerr` 生效、`enabled` 意图丢失
+
+  **现状不影响用户**：网页前端（`apps/web/src/api/*.ts`）只发合法字段，已逐个核对，当前无任何界面操作会触发。属**开发者体验/未来风险**——尤其本项目由 AI 写代码，而 `update: (id, data: Record<string, unknown>)` 这类签名不做字段校验，打错不会报错。
+
+  **推荐方案（分而治之，待用户确认后实施）**：工作台侧接口加 `.strict()`（字段名打错即 400），**Skill API 保持宽松**——Skill 是对外接口，第三方 agent 可能回传含多余字段的完整对象，收紧会直接导致 agent 保存书签失败，破坏外部契约比漏检字段名严重。实现须在**使用点**分别处理：`createBookmarkInputSchema` 被工作台与 Skill 共用（`workbenchCreateBookmarkInputSchema` 与 `saveBookmarkSkillInputSchema` 都指向它），故应写 `workbenchCreateBookmarkInputSchema = createBookmarkInputSchema.strict()`，不可改 base schema。**改动属「API 返回结构和错误格式」范畴（原本 201 将变为 400），按 AGENTS 须先经用户确认。**
+
+  参照：`settingsWhitelistSchema` 已加 `.strict()`，因其在 `docs/API结构表.md` 有明确约定（「未知 key 返回 `VALIDATION_ERROR`」）；其余 10 处文档无约定，故未擅自收紧。
+
 - [ ] **Track A 真实部署未跑**：Workers 入口、`wrangler.toml`、Actions 均就绪且本地（wrangler 4.42 + 模拟 D1）全链路验证通过，但**从未在真实 Cloudflare 上部署过**。需：`wrangler d1 create dogear_prod` → 回填 `database_id` → `db:migrate:remote` → `secret put DOGEAR_PASSWORD` → 推 main（详见 `docs/modules/20260910_Cloudflare部署.md`）
 - [ ] **CI 是否跑通未经确认**：仓库为私有，未鉴权访问 repo 页 / `/actions` / `raw.githubusercontent.com` 均 404（账号页 200，可排除账号不存在），且 GitHub API 限流，故**无法在本环境核对 Actions 运行结果**。「推送后一键部署」目前只验证到「配置与脚本正确」这一层——workflow 的 preflight 三种情形已用 bash 实跑、结构与引用已静态校验，但**它是否在 GitHub 上真的执行过、是否绿，需仓库拥有者在 Actions 页确认**（尤其：workflow 语法若非法，GitHub 会直接标红而不执行）
 - [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）
