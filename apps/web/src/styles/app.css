@@ -1627,6 +1627,21 @@ body {
   margin-bottom: var(--spacing-12);
 }
 
+/* 备份：创建按钮行与说明 */
+.backup-actions {
+  display: flex;
+  gap: var(--spacing-8);
+  flex-wrap: wrap;
+}
+
+.backup-tier-list {
+  margin-top: var(--spacing-12);
+}
+
+.backup-note {
+  margin-top: var(--spacing-12);
+}
+
 .log-filter-select {
   flex: 0 0 auto;
   min-width: 132px;

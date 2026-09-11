@@ -36,6 +36,12 @@ type BookmarkInput = {
   title?: string
   raindropId?: string | null
   raindropExtras?: string | null
+  /**
+   * 仅用于「从备份恢复」：保留原记录的创建时间。
+   * 不传时取当前时间（默认行为不变）。不加这个的话，恢复回来的书签全都变成
+   * 「今天创建」，与恢复语义不符（工作台按创建时间排序）。
+   */
+  createdAt?: Date
 }
 type AccessRecordInput = { id: string; bookmarkId: string; source?: 'original' | 'snapshot'; client?: string }
 type BookmarkFilters = {
@@ -352,7 +358,7 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   const repository = {} as BookmarkRepository
   repository.create = async (input) => {
     const timestamp = now()
-    const record = { ...input, source: input.source ?? 'page', note: input.note ?? null, intent: input.intent ?? null, important: input.important ?? false, private: input.private ?? false, syncStatus: input.syncStatus ?? 'pending', version: 1, deletedAt: null, createdAt: timestamp, updatedAt: timestamp }
+    const record = { ...input, source: input.source ?? 'page', note: input.note ?? null, intent: input.intent ?? null, important: input.important ?? false, private: input.private ?? false, syncStatus: input.syncStatus ?? 'pending', version: 1, deletedAt: null, createdAt: input.createdAt ?? timestamp, updatedAt: timestamp }
     await db.insert(bookmarks).values(record).run()
     return record
   }

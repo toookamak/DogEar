@@ -272,6 +272,35 @@ export const archiveStatusSchema = z.enum(['pending', 'completed', 'failed'])
 export const backupTierSchema = z.enum(['light', 'medium', 'full'])
 export const backupStatusSchema = z.enum(['pending', 'running', 'completed', 'failed'])
 
+/**
+ * 备份恢复（见 `docs/modules/20260904_备份功能设计.md` §2.8「恢复操作」）。
+ *
+ * 该设计稿定的语义是**覆盖**：「用备份中的书签 CSV 数据覆盖当前真源中的书签表
+ * （全量替换，非增量合并）」，并要求「恢复前自动创建一次全量备份作为回滚点」。
+ *
+ * 服务端额外要求显式 `confirm: true`：这是破坏性端点，少一个字段就清库的代价太大，
+ * 故把「明确确认」也做成契约的一部分（UI 侧另有二次确认对话框）。
+ */
+export const backupRestoreRequestSchema = z.object({
+  /** 恢复范围。快照文件当前不产出（见 TODO 的 L3），故只支持书签表。 */
+  bookmarks: z.boolean().optional(),
+  /** 必须显式确认，防止误触导致全量替换 */
+  confirm: z.literal(true),
+}).strict()
+
+export const backupRestoreResponseSchema = z.object({
+  ok: z.literal(true),
+  /** 本次恢复写入的书签数 */
+  restored: z.number().int().nonnegative(),
+  /** 被全量替换移除的原有书签数 */
+  removed: z.number().int().nonnegative(),
+  /** 为还原归属而新建的标签 / 场景数 */
+  createdTags: z.number().int().nonnegative(),
+  createdScenes: z.number().int().nonnegative(),
+  /** 恢复前自动创建的回滚点备份 id；全量不可用时为 null（此时恢复会被拒绝） */
+  rollbackBackupId: z.string().uuid().nullable(),
+})
+
 export const archiveSchema = z.object({
   id: z.string().uuid(),
   bookmarkId: z.string().uuid(),
@@ -308,6 +337,8 @@ export const backupConfigSchema = z.object({
 })
 
 export type Archive = z.infer<typeof archiveSchema>
+export type BackupRestoreRequest = z.infer<typeof backupRestoreRequestSchema>
+export type BackupRestoreResponse = z.infer<typeof backupRestoreResponseSchema>
 export type Backup = z.infer<typeof backupSchema>
 export type BackupConfig = z.infer<typeof backupConfigSchema>
 

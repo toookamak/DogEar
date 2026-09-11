@@ -2,7 +2,8 @@ import { Hono } from 'hono'
 import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type { BookmarkRepository } from '@dogear/db'
-import { BackupService } from './backup-service.js'
+import { backupRestoreRequestSchema } from '@dogear/shared'
+import { BackupRestoreError, BackupService } from './backup-service.js'
 
 export function createBackupRoutes(repository: BookmarkRepository, dbPath?: string) {
   const app = new Hono()
@@ -44,6 +45,33 @@ export function createBackupRoutes(repository: BookmarkRepository, dbPath?: stri
     const backup = await backupService.getBackup(c.req.param('id'))
     if (!backup) return c.json({ error: { code: 'NOT_FOUND', message: 'Backup not found' } }, 404)
     return c.json(backup)
+  })
+
+  /**
+   * 从备份恢复书签表（全量替换），见 docs/modules/20260904_备份功能设计.md §2.8。
+   * 破坏性操作：恢复前会自动做一次全量备份作为回滚点；`full` 档明确拒绝（见服务层说明）。
+   */
+  app.post('/:id/restore', async (c) => {
+    const parsed = backupRestoreRequestSchema.safeParse(await c.req.json().catch(() => undefined))
+    if (!parsed.success) {
+      return c.json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request: restore requires explicit {"confirm": true}',
+        },
+      }, 400)
+    }
+    try {
+      const result = await backupService.restoreFromBackup(c.req.param('id'))
+      return c.json(result)
+    } catch (err) {
+      if (err instanceof BackupRestoreError) {
+        const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'NOT_SUPPORTED' ? 501 : 409
+        return c.json({ error: { code: err.code, message: err.message } }, status)
+      }
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: { code: 'INTERNAL_ERROR', message } }, 500)
+    }
   })
 
   return app
