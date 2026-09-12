@@ -1,6 +1,6 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.5
+> **文档版本**：v1.6
 > **应用版本**：v0.7.30
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
@@ -19,6 +19,7 @@
 > | v1.3 | v0.7.23 | 2026-09-11 | 开放 `POST /api/backup/:id/restore`（备份恢复，全量替换 + 强制回滚点 + 显式 confirm）；`full` 档恢复明确 501 | deepseek-v4.1-flash |
 > | v1.4 | v0.7.28 | 2026-09-12 | `save_bookmark` 输入扩展可选 `source`（`agent` 缺省 / `extension`，Chrome 扩展接入；向后兼容，不加严）；登记 `GET /.well-known/*` 为免鉴权能力发现端点（Workers 同域部署配 `run_worker_first`）。规则求值仍禁止，见 §1 | glm-5.3-flash |
 > | v1.5 | v0.7.30 | 2026-09-12 | `POST /api/sync/process` 从占位升级为真实消费（回执摘要 + 退避语义，见 §4.3 与同步设计 §3.1）；登记 Workers Cron `[triggers]` 调度。冲突合并、双向拉回仍禁止（见 §1） | glm-5.3-flash |
+| v1.6 | v0.7.30 | 2026-09-12 | **开放导航规则求值**：新增 `GET /api/nav/feed`（按 nav_rules 逐步圈定，语义见 evaluator）；`GET /api/nav/bookmarks` 标注**已过时**（保留兼容，勿新增依赖）。`POST/PATCH /api/nav/rules` 收紧 rule 形状校验（对象/字符串均可，PATCH 传对象此前会落库报错，一并修复） | glm-5.3-flash |
 
 # API 结构表
 
@@ -28,9 +29,9 @@
 
 | 项 | 口径 |
 | --- | --- |
-| 当前覆盖 | **v1.4 = v1.3 + Skill `save_bookmark` 可选 `source`（extension 接入）+ 免鉴权能力发现 `GET /.well-known/capabilities`**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
+| 当前覆盖 | **v1.6 = v1.5 + 导航规则求值（`GET /api/nav/feed`）**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
 | 本版有的 | v1.3 全部；外加 `save_bookmark.source`（`agent` 缺省 / `extension`，向后兼容）与 `/.well-known/capabilities`（Workers 同域部署须配 `run_worker_first`，否则被 SPA 回退吞掉） |
-| 本版没有的 | 快照文件 `GET/PUT .../content`、冲突合并、默认双向同步、Dexie 专用接口、导航规则求值后的展示集合、ZIP 导入、`full` 档在线恢复、Skill 批量与删除、离线保存 |
+| 本版没有的 | 快照文件 `GET/PUT .../content`、冲突合并、默认双向同步、Dexie 专用接口、ZIP 导入、`full` 档在线恢复、Skill 批量与删除、离线保存 |
 | 升级规则 | 下表任一触发即停。先讨论升级方案、升本文档版本，再接线。禁止边写代码边加路由。 |
 
 ### 1.1 何时讨论升级（触发即停）
@@ -554,10 +555,11 @@ Job 回执固定包含 `id`、`bookmarkId`、`type`、`status`、`retryCount`、
 | 方法 | 路径 | 请求 | 成功 | 要点 |
 | --- | --- | --- | --- | --- |
 | GET | `/api/nav/rules` | — | `{items}` | |
-| POST | `/api/nav/rules` | `{name,mode?,rule?,searchQuery?,sortOrder?,enabled?}` | 201 规则 | `mode` 默认 `all` |
-| PATCH | `/api/nav/rules/:id` | 部分字段 | 200 规则 | |
+| POST | `/api/nav/rules` | `{name,mode?,rule?,searchQuery?,sortOrder?,enabled?}` | 201 规则 | `mode` 默认 `all`；v1.6 收紧：`mode` ∈ all/rule/search/hide，`rule` 接受对象或 JSON 字符串（形状：sceneIds/folderIds/tagIds 字符串数组、status 三态），非法 400 |
+| PATCH | `/api/nav/rules/:id` | 部分字段 | 200 规则 | v1.6：字段逐个校验；`rule` 同 POST（此前传对象会落库报错，已修） |
 | DELETE | `/api/nav/rules/:id` | — | `{ok:true}` | |
-| GET | `/api/nav/bookmarks` | `limit` `cursor` | `{items,nextCursor}` | 本版固定排除 `private` 与 `status=unread`。**不求值** `nav_rules`。条目只返回 `id,title,favicon,url,domain`，不要把 `note` 带出 |
+| GET | `/api/nav/bookmarks` | `limit` `cursor` | `{items,nextCursor}` | **已过时（v1.6 起）**：不求值 `nav_rules` 的固定投影（排除 private/unread），仅为兼容保留，**勿新增依赖**；新代码一律用 `/api/nav/feed`。条目只返回 `id,title,favicon,url,domain`，不要把 `note` 带出 |
+| GET | `/api/nav/feed` | `limit`（≤200） `offset` | `{items,nextCursor}` | **v1.6**：按 `nav_rules`（enabled，按 sort_order）逐步圈定的展示集合；`all`=全集重置 / `rule`=条件命中加入（OR）/ `search`=搜索命中加入 / `hide`=命中移出；候选恒为非私密、未软删、不含 Inbox；无规则回落旧投影语义。投影字段同旧行。分页为 offset（内存集合） |
 | GET | `/api/nav/recent` | `limit` | `{items}` | 按 `access_records.opened_at` 倒序，去重书签；同样排除私密与 Inbox |
 
 访问记录：`POST /api/bookmarks/:id/access-records` 体可带 `client`：`workbench` \| `navigation` \| `plugin` \| `unknown`，缺省 `workbench`。导航点击必须传 `navigation`。

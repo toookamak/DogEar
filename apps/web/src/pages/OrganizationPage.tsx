@@ -3,6 +3,7 @@ import { PageHeader } from '../components/layout/PageHeader.js'
 import { SceneManager } from '../components/organization/SceneManager.js'
 import { FolderManager } from '../components/organization/FolderManager.js'
 import { TagManager } from '../components/organization/TagManager.js'
+import { NavRuleManager } from '../components/nav/NavRuleManager.js'
 import { useOrganization } from '../hooks/useOrganization.js'
 import { Loading } from '../components/feedback/Loading.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
@@ -11,6 +12,7 @@ const TABS = [
   { key: 'scenes', label: '场景' },
   { key: 'folders', label: '文件夹' },
   { key: 'tags', label: '标签' },
+  { key: 'navrules', label: '导航规则' },
 ] as const
 
 type TabKey = typeof TABS[number]['key']
@@ -66,6 +68,9 @@ export function OrganizationPage() {
               )}
               {tab === 'tags' && (
                 <TagManager tags={tags} onCreate={addTag} onDelete={deleteTag} />
+              )}
+              {tab === 'navrules' && (
+                <NavRuleManager scenes={scenes} folders={folders} tags={tags} />
               )}
             </>
           )}

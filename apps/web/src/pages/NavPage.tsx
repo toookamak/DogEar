@@ -7,6 +7,7 @@ import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import { EmptyState } from '../components/feedback/EmptyState.js'
 import { navApi } from '../api/nav.js'
 import { bookmarksApi } from '../api/bookmarks.js'
+import { onOrgChanged } from '../org-events.js'
 import { toast, errorMessage } from '../toast.js'
 import type { BookmarkResponse } from '../types/api.js'
 
@@ -56,7 +57,7 @@ export function NavPage() {
     setLoading(true)
     setError(null)
     const [listRes, recentRes] = await Promise.allSettled([
-      navApi.bookmarks(50),
+      navApi.feed(50),
       navApi.recent(10),
     ])
     if (listRes.status === 'fulfilled') {
@@ -71,11 +72,14 @@ export function NavPage() {
 
   useEffect(() => { void load() }, [load])
 
+  // 规则变了导航就要变（v1.6 求值）：组织管理页改规则后 notifyOrgChanged 驱动这里重载
+  useEffect(() => onOrgChanged(() => { void load() }), [load])
+
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return
     setLoadingMore(true)
     try {
-      const result = await navApi.bookmarks(50, nextCursor)
+      const result = await navApi.feed(50, Number(nextCursor))
       setBookmarks((prev) => [...prev, ...result.items])
       setNextCursor(result.nextCursor)
     } catch (e) {
