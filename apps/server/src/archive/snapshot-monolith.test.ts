@@ -27,6 +27,7 @@ function makeRepo(jobs: Array<Record<string, any>>) {
     },
     get: async () => ({ id: 'bm-1', url: 'https://example.com/' }),
     archives: {
+      get: async (id: string) => archives.find((a) => a.id === id),
       create: async (input: Record<string, unknown>) => {
         archives.push(input)
         return input

@@ -63,6 +63,7 @@ function rd(id: number, over: Partial<RaindropBookmark> = {}): RaindropBookmark 
     _id: id,
     link: `https://rd-${id}.example.com/`,
     title: `Remote ${id}`,
+    collection: { $id: -1 },
     note: '',
     excerpt: '',
     created: '2026-09-01T00:00:00Z',

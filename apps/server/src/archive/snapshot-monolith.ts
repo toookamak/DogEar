@@ -92,13 +92,17 @@ export function createMonolithSnapshotProcessor(
       try {
         if (!bookmark?.url) throw new Error('Bookmark not found for job')
         const { filePath, bytes } = await snapshotUrl(jobId, bookmark.url)
-        // 先建 archives 记录再补完成态：file_path 有值才视为 completed（快照口径）
-        await repository.archives.create({
-          id: jobId,
-          bookmarkId: String(job.bookmarkId),
-          type: 'snapshot',
-          status: 'pending',
-        })
+        // 先建 archives 记录再补完成态：file_path 有值才视为 completed（快照口径）。
+        // Job 重试时上次失败可能已留记录（主键=jobId）：存在则复用，避免主键冲突
+        const existingArchive = await repository.archives.get(jobId)
+        if (!existingArchive) {
+          await repository.archives.create({
+            id: jobId,
+            bookmarkId: String(job.bookmarkId),
+            type: 'snapshot',
+            status: 'pending',
+          })
+        }
         await repository.archives.updateStatus(jobId, 'completed', {
           filePath,
           fileSize: bytes,
@@ -109,12 +113,16 @@ export function createMonolithSnapshotProcessor(
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         await repository.archiveJobs.update(jobId, { status: 'failed', error: message })
-        await repository.archives.create({
-          id: `${jobId}-err`,
-          bookmarkId: String(job.bookmarkId),
-          type: 'snapshot',
-        }).catch(() => undefined)
-        await repository.archives.updateStatus(`${jobId}-err`, 'failed', { error: message }).catch(() => undefined)
+        const errId = `${jobId}-err`
+        const existingErr = await repository.archives.get(errId).catch(() => undefined)
+        if (!existingErr) {
+          await repository.archives.create({
+            id: errId,
+            bookmarkId: String(job.bookmarkId),
+            type: 'snapshot',
+          }).catch(() => undefined)
+        }
+        await repository.archives.updateStatus(errId, 'failed', { error: message }).catch(() => undefined)
         failed += 1
       }
     }
