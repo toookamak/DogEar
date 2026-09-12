@@ -104,6 +104,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      - name: 构建前端工作台（[assets] 静态资源产物）
+        run: pnpm --filter @dogear/web build
+
       - name: 确保 D1 存在并回填 database_id
         working-directory: apps/server
         env:

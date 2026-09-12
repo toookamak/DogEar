@@ -4,14 +4,15 @@
 // 面板只需两处设置：
 //   Root directory: apps/server
 //   Deploy command: node scripts/ci-deploy.mjs
-// Build command 建议填 echo skip（Worker 由 wrangler 自己打包，无需 turbo 构建）。
+// Build command 建议填 echo skip（本脚本自带前端构建，Worker 由 wrangler 打包）。
 //
-// 本脚本按序完成四步（任何一步失败即中止，退出码非 0）：
-//   1. 确保 D1 数据库 dogear_prod 存在（不存在则自动创建）
-//   2. 把真实 database_id 回填到 CI 工作副本的 wrangler.toml
+// 本脚本按序完成五步（任何一步失败即中止，退出码非 0）：
+//   1. 构建前端工作台（apps/web → dist，与 API 同域部署，见 wrangler.toml [assets]）
+//   2. 确保 D1 数据库 dogear_prod 存在（不存在则自动创建）
+//   3. 把真实 database_id 回填到 CI 工作副本的 wrangler.toml
 //      （仓库里保留占位符，真实 id 属于具体 Cloudflare 账号，不提交进 git）
-//   3. 应用 D1 迁移（建表与默认数据）
-//   4. wrangler deploy 部署 Worker
+//   4. 应用 D1 迁移（建表与默认数据）
+//   5. wrangler deploy 部署 Worker（含前端静态资源）
 //
 // 测试：WRANGLER_BIN 可指向 mock 脚本（node 可执行文件），用于无凭据的本地行为测试。
 
@@ -22,6 +23,7 @@ import { fileURLToPath } from "node:url";
 
 const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const TOML_PATH = join(SERVER_DIR, "..", "wrangler.toml");
+const WEB_DIST = join(SERVER_DIR, "..", "..", "web", "dist");
 const DB_NAME = "dogear_prod";
 const PLACEHOLDER = "REPLACE_WITH_YOUR_D1_DATABASE_ID";
 
@@ -91,10 +93,27 @@ function stampToml(dbId) {
   }
 }
 
+function buildWeb() {
+  // 前端工作台构建（tsc --noEmit + vite build）。pnpm 在 Windows 上是 .cmd，
+  // 需经 shell 调起；Workers Builds（Linux）走同一路径无影响。
+  const r = spawnSync("pnpm", ["--filter", "@dogear/web", "build"], {
+    cwd: SERVER_DIR,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: process.env,
+  });
+  if (r.error) die(`无法执行 pnpm（构建前端工作台）：${r.error.message}`);
+  if (r.status !== 0) die(`前端工作台构建失败（exit ${r.status}），见上方日志`);
+  if (!existsSync(WEB_DIST)) die(`前端构建完成但找不到产物目录 ${WEB_DIST}`);
+}
+
 function main() {
   if (!existsSync(TOML_PATH)) die(`找不到 ${TOML_PATH}，请在 apps/server 目录结构下运行本脚本`);
 
-  step(`步骤 1/4 · 确保 D1 数据库 ${DB_NAME} 存在`);
+  step("步骤 1/5 · 构建前端工作台（apps/web）");
+  buildWeb();
+
+  step("步骤 2/5 · 确保 D1 数据库 dogear_prod 存在");
   let dbId = findDb(listDatabases());
   if (!dbId) {
     console.log(`D1 数据库 ${DB_NAME} 不存在，自动创建…`);
@@ -104,13 +123,13 @@ function main() {
   }
   console.log(`D1 就绪：${DB_NAME}（${dbId}）`);
 
-  step("步骤 2/4 · 回填 database_id 到 wrangler.toml（工作副本）");
+  step("步骤 3/5 · 回填 database_id 到 wrangler.toml（工作副本）");
   stampToml(dbId);
 
-  step("步骤 3/4 · 应用 D1 迁移（建表与默认数据）");
+  step("步骤 4/5 · 应用 D1 迁移（建表与默认数据）");
   wrangler(["d1", "migrations", "apply", DB_NAME, "--remote"]);
 
-  step("步骤 4/4 · 部署 Worker");
+  step("步骤 5/5 · 部署 Worker（含前端静态资源）");
   wrangler(["deploy"]);
 
   step("✅ 部署完成");
