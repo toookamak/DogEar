@@ -29,7 +29,7 @@ export function useOrganization() {
     }
   }, [])
 
-  const addScene = useCallback(async (data: { name: string; icon?: string }) => {
+  const addScene = useCallback(async (data: { name: string; icon?: string; aerr?: string }) => {
     const res = await organizationApi.scenes.create(data)
     setScenes(prev => [...prev, res])
     notifyOrgChanged()

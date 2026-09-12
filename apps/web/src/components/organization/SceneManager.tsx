@@ -2,9 +2,25 @@ import { useState } from 'react'
 import type { SceneResponse } from '../../types/api.js'
 import { ConfirmDialog } from '../feedback/ConfirmDialog.js'
 
+/**
+ * 场景「用途」选项（AERR 原型的用户侧文案，2026-09-12 定稿）。
+ * PRD 规定 AERR 四个词是系统内部概念、不展示给用户——界面上只出现
+ * 行为描述；取值即 scene-presentation.ts 映射表的 key，改挂即时生效。
+ */
+const PURPOSE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'reference', label: '参考资料 · 紧凑检索，按标题定位' },
+  { value: 'action', label: '近期要办 · 按最近加入' },
+  { value: 'explore', label: '发散浏览 · 找灵感' },
+  { value: 'read', label: '待读清单 · 准备读掉' },
+]
+
+function purposeLabel(value: string | null | undefined): string {
+  return PURPOSE_OPTIONS.find((o) => o.value === value)?.label ?? PURPOSE_OPTIONS[0].label
+}
+
 interface SceneManagerProps {
   scenes: SceneResponse[]
-  onCreate: (data: { name: string; icon?: string }) => Promise<unknown>
+  onCreate: (data: { name: string; icon?: string; aerr?: string }) => Promise<unknown>
   onUpdate: (id: string, data: Record<string, unknown>) => Promise<unknown>
   onDelete: (id: string) => Promise<unknown>
 }
@@ -17,9 +33,11 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('')
+  const [newAerr, setNewAerr] = useState('reference')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editIcon, setEditIcon] = useState('')
+  const [editAerr, setEditAerr] = useState('reference')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,9 +45,10 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
     if (!newName.trim()) return
     setError(null)
     try {
-      await onCreate({ name: newName.trim(), icon: newIcon.trim() || undefined })
+      await onCreate({ name: newName.trim(), icon: newIcon.trim() || undefined, aerr: newAerr })
       setNewName('')
       setNewIcon('')
+      setNewAerr('reference')
       setShowCreate(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : '创建失败')
@@ -40,7 +59,7 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
     if (!editName.trim()) return
     setError(null)
     try {
-      await onUpdate(id, { name: editName.trim(), icon: editIcon.trim() || null })
+      await onUpdate(id, { name: editName.trim(), icon: editIcon.trim() || null, aerr: editAerr })
       setEditingId(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败')
@@ -100,6 +119,17 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
             placeholder="图标 (可选)"
             className="input manager-create-icon"
           />
+          {/* 用途即 AERR 原型的用户侧文案（不出现 AERR 四词），决定默认排序/密度/主操作 */}
+          <select
+            value={newAerr}
+            onChange={(e) => setNewAerr(e.target.value)}
+            className="input manager-create-parent"
+            aria-label="场景用途"
+          >
+            {PURPOSE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
           <button onClick={handleCreate} className="btn btn--primary">创建</button>
           <button onClick={() => setShowCreate(false)} className="btn btn--pill">取消</button>
         </div>
@@ -113,6 +143,16 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
                 <div className="manager-edit">
                   <input value={editName} onChange={(e) => setEditName(e.target.value)} className="input manager-create-name" aria-label="场景名称" autoFocus />
                   <input value={editIcon} onChange={(e) => setEditIcon(e.target.value)} placeholder="图标" className="input manager-create-icon" aria-label="场景图标" />
+                  <select
+                    value={editAerr}
+                    onChange={(e) => setEditAerr(e.target.value)}
+                    className="input manager-create-parent"
+                    aria-label="场景用途"
+                  >
+                    {PURPOSE_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="list-row-actions">
                   <button onClick={() => handleUpdate(scene.id)} className="btn btn--primary">保存</button>
@@ -127,15 +167,18 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
                     {scene.name}
                     {!scene.enabled && <span className="badge badge--gap">已停用</span>}
                   </div>
-                  {!scene.enabled && (
+                  {/* 当前用途（行为描述，不出现 AERR 术语）；停用行优先展示停用说明 */}
+                  {!scene.enabled ? (
                     <div className="list-row-meta">
                       挑选器里不再出现；已挂上的书签仍能按它筛到
                     </div>
+                  ) : (
+                    <div className="list-row-meta">{purposeLabel(scene.aerr)}</div>
                   )}
                 </div>
                 <div className="list-row-actions">
                   <button
-                    onClick={() => { setEditingId(scene.id); setEditName(scene.name); setEditIcon(scene.icon || '') }}
+                    onClick={() => { setEditingId(scene.id); setEditName(scene.name); setEditIcon(scene.icon || ''); setEditAerr(scene.aerr || 'reference') }}
                     className="btn btn--pill"
                   >
                     编辑

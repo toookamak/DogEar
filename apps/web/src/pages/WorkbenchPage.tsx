@@ -254,11 +254,13 @@ export function WorkbenchPage() {
     try {
       const result = await bookmarksApi.batchUpdate(data)
       setSelectedIds(new Set())
+      // 双入口撤销：Toast 直带撤销按钮（状态栏保留兜底）
       if (result.undoId) offerUndo({ undoId: result.undoId, message: data.deleted ? '删除' : '批量修改' })
       await loadBookmarks()
       // 被跳过的条目要如实告知，避免「点了没反应」的误解
       const skipped = result.skipped?.length ?? 0
       if (skipped > 0) toast.info(`已处理，${skipped} 条被跳过（可能已被删除）`)
+      else if (result.undoId) toast.undoable(data.deleted ? '已移入回收站' : '已更新', result.undoId)
       else toast.success(data.deleted ? '已移入回收站' : '已更新')
     } catch (e) {
       toast.error(errorMessage(e, '批量操作失败'))

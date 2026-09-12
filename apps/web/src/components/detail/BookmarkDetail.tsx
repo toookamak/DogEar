@@ -91,10 +91,15 @@ export function BookmarkDetail({
     setConfirmDelete(false)
     try {
       const result = await bookmarksApi.delete(bookmark.id)
-      if (result.undoId) offerUndo({ undoId: result.undoId, message: '删除' })
+      // 双入口撤销：Toast 直带撤销按钮（状态栏保留兜底），状态栏通知保留供既有监听
+      if (result.undoId) {
+        offerUndo({ undoId: result.undoId, message: '删除' })
+        toast.undoable('已移入回收站', result.undoId)
+      } else {
+        toast.success('已移入回收站')
+      }
       onDeleted?.(bookmark.id)
       onClose()
-      toast.success('已移入回收站')
     } catch (e) {
       toast.error(errorMessage(e, '删除失败'))
     }
