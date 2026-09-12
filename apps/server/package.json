@@ -23,7 +23,14 @@
     "csv-stringify": "^6.4.5",
     "drizzle-orm": "^0.38.3",
     "fflate": "^0.8.3",
-    "hono": "^4.6.14"
+    "hono": "^4.6.14",
+    "metascraper": "^5.56.2",
+    "metascraper-author": "^5.56.2",
+    "metascraper-date": "^5.56.2",
+    "metascraper-description": "^5.56.2",
+    "metascraper-image": "^5.56.2",
+    "metascraper-logo": "^5.56.2",
+    "metascraper-title": "^5.56.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",

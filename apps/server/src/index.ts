@@ -1,11 +1,13 @@
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { createBookmarkRepository, initializeSqliteSchema } from '@dogear/db'
 import { createApp } from './app.js'
 import { createBackupRoutes } from './backup/backup-routes.js'
 import { ChannelConfigManager } from './channels/index.js'
+import { extractMetadataWithMetascraper } from './archive/metadata-enhancer.js'
+import { createMonolithSnapshotProcessor } from './archive/snapshot-monolith.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 
 const dbPath = process.env.DOGEAR_DB_PATH ?? './data/dogear.sqlite'
@@ -20,6 +22,12 @@ const app = createApp(repository, {
   password: pw,
   // 自托管（Bun/Docker）有本地文件系统，注入本地文件备份实现
   backupRoutes: (repo) => createBackupRoutes(repo, dbPath),
+  // 元数据增强（metascraper 规则组）：失败自动回退内置轻量提取
+  metadataEnhancer: extractMetadataWithMetascraper,
+  // 快照执行器（monolith 抓公开页）：POST /api/archive/process 消费 pending 快照 Job
+  snapshotProcessor: () => createMonolithSnapshotProcessor(repository, {
+    snapshotsDir: process.env.DOGEAR_SNAPSHOTS_DIR ?? join(dirname(dbPath), 'snapshots'),
+  })(),
 })
 
 // Background sync queue worker：每 60 秒消费一批 sync_queue（推送到已启用的

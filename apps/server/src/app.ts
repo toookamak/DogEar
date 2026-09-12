@@ -54,6 +54,17 @@ type AppOptions = {
   backupRoutes?: (repository: BookmarkRepository) => Hono
   /** 允许携带 Cookie 的工作台来源；默认本地开发地址，生产由入口按环境注入 */
   corsOrigin?: string
+  /**
+   * 元数据增强提取器（Track B 注入，metascraper 规则组，见 archive/metadata-enhancer.ts）。
+   * 注入后保存书签的元数据提取先用它，失败自动回退内置轻量提取；Workers 不注入、行为不变。
+   */
+  metadataEnhancer?: (url: string) => Promise<Record<string, unknown>>
+  /**
+   * 快照执行器（Track B 注入，monolith 抓公开页，见 archive/snapshot-monolith.ts）。
+   * 注入后 `POST /api/archive/process` 真实执行 pending 快照 Job 并落文件；
+   * Workers 不注入（保持 queued_pending_browser：等浏览器侧 SingleFile 消费，下一批）。
+   */
+  snapshotProcessor?: (repository: BookmarkRepository) => Promise<{ processed: number; succeeded: number; failed: number }>
 }
 
 type SkillLimit = 'read' | 'write' | 'batch'
@@ -143,6 +154,45 @@ function serializeBookmark(record: any) {
 
 function serializeAccessRecord(record: any) {
   return { ...record, openedAt: timestamp(record.openedAt) }
+}
+
+/**
+ * 保存后的异步元数据提取：优先用注入的增强提取器（Track B 的 metascraper 规则组），
+ * 失败或未注入时回退内置轻量提取。任何失败都静默——部分元数据比失败响应更重要。
+ */
+async function extractMetadataInto(
+  repository: BookmarkRepository,
+  options: AppOptions,
+  bookmarkId: string,
+  url: string,
+): Promise<void> {
+  const applyUpdates = async (meta: Record<string, unknown>) => {
+    const updates: Record<string, unknown> = {}
+    if (meta.title) updates.title = meta.title
+    if (meta.description) updates.excerpt = meta.description
+    if (meta.image) updates.cover = meta.image
+    if (meta.author) updates.author = meta.author
+    if (meta.domain) updates.domain = meta.domain
+    if (meta.favicon) updates.favicon = meta.favicon
+    if (meta.publishedAt) {
+      const d = new Date(String(meta.publishedAt))
+      if (!Number.isNaN(d.getTime())) updates.publishedAt = d.getTime()
+    }
+    if (Object.keys(updates).length > 0) await repository.update(bookmarkId, updates)
+  }
+  if (options.metadataEnhancer) {
+    try {
+      await applyUpdates(await options.metadataEnhancer(url))
+      return
+    } catch {
+      // 增强提取失败，回退内置轻量提取
+    }
+  }
+  try {
+    await applyUpdates(await extractMetadata(url) as unknown as Record<string, unknown>)
+  } catch {
+    // Metadata extraction failed silently - partial metadata is fine
+  }
 }
 
 function escapeHtml(text: string) {
@@ -301,27 +351,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     const recordWithId = record as { id: string; url: string }
     const recordId = recordWithId.id
     const recordUrl = recordWithId.url
-    Promise.resolve().then(async () => {
-      try {
-        const meta = await extractMetadata(recordUrl)
-        const updates: Record<string, unknown> = {}
-        if (meta.title) updates.title = meta.title
-        if (meta.description) updates.excerpt = meta.description
-        if (meta.image) updates.cover = meta.image
-        if (meta.author) updates.author = meta.author
-        if (meta.domain) updates.domain = meta.domain
-        if (meta.favicon) updates.favicon = meta.favicon
-        if (meta.publishedAt) {
-          const d = new Date(meta.publishedAt)
-          if (!Number.isNaN(d.getTime())) updates.publishedAt = d.getTime()
-        }
-        if (Object.keys(updates).length > 0) {
-          await repository.update(recordId, updates)
-        }
-      } catch {
-        // Metadata extraction failed silently - partial metadata is fine
-      }
-    })
+    void extractMetadataInto(repository, options, recordId, recordUrl)
 
     return c.json(serializeBookmark(record), 201)
   })
@@ -563,6 +593,21 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
 
   app.route('/api/channels', createChannelRoutes(repository))
   app.route('/api/archive', createArchiveRoutes(repository))
+
+  // 快照执行（Track B 注入 monolith 后可用）：消费 pending 的 snapshot Job 并落文件；
+  // Workers 不注入——保持 queued_pending_browser，等浏览器侧 SingleFile 消费（下一批）。
+  app.post('/api/archive/process', async (c) => {
+    if (!options.snapshotProcessor) {
+      return c.json({
+        error: {
+          code: 'NOT_SUPPORTED',
+          message: 'Server-side snapshot processing requires the Docker (Track B) deployment with monolith installed. Browser-side snapshot (SingleFile) is a separate path.',
+        },
+      }, 501)
+    }
+    const summary = await options.snapshotProcessor(repository)
+    return c.json(summary)
+  })
   app.route('/api/backup', options.backupRoutes ? options.backupRoutes(repository) : createUnsupportedBackupRoutes())
   app.route('/api/metadata', createMetadataRoutes())
   app.route('/api/nav', createNavRoutes(repository))
@@ -769,27 +814,7 @@ ${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保�
     // Async metadata extraction - don't block the response
     const savedId = saved.id
     const savedUrl = saved.url
-    Promise.resolve().then(async () => {
-      try {
-        const meta = await extractMetadata(savedUrl)
-        const updates: Record<string, unknown> = {}
-        if (meta.title) updates.title = meta.title
-        if (meta.description) updates.excerpt = meta.description
-        if (meta.image) updates.cover = meta.image
-        if (meta.author) updates.author = meta.author
-        if (meta.domain) updates.domain = meta.domain
-        if (meta.favicon) updates.favicon = meta.favicon
-        if (meta.publishedAt) {
-          const d = new Date(meta.publishedAt)
-          if (!Number.isNaN(d.getTime())) updates.publishedAt = d.getTime()
-        }
-        if (Object.keys(updates).length > 0) {
-          await repository.update(savedId, updates)
-        }
-      } catch {
-        // Metadata extraction failed silently - partial metadata is fine
-      }
-    })
+    void extractMetadataInto(repository, options, savedId, savedUrl)
 
     return c.json(saved, 201)
   })

@@ -35,12 +35,12 @@
 - [x] **D1 事务语义**：消费器按序单条处理，不依赖跨语句事务（D1 无 SQL 级事务的问题就此绕开）；若未来要求「多通道组原子推送」再讨论 D1 batch
 - [x] 调度：Workers Cron（`[triggers]` 每 5 分钟，`worker.ts` scheduled）+ 自托管定时器（60 秒，防重入）+ `POST /api/sync/process` 升级为真实消费（API 结构表 v1.5）
 
-### L3 快照文件——**搁置：引入 SingleFile（AGPL，单独成包）与 metascraper 均为生产依赖/许可决策，须先确认**
+### L3 快照文件（2026-09-12 部分落地，v0.7.30；用户批准引入依赖，登记见 `docs/modules/20260912_外部依赖登记.md`）
 
-- [ ] 工作台有 DOM 时用 SingleFile 产出单 HTML（单独成包，AGPL 不进 Hono）
-- [ ] Track B 无 DOM 时用 monolith 抓公开页；Skill `snapshot=true` 仍只入队
-- [ ] 快照有 `file_path` 才能下载；没有文件不得声称已生成
-- [ ] 元数据提取改 metascraper（失败不影响 Link）
+- [ ] 工作台有 DOM 时用 SingleFile 产出单 HTML（单独成包，AGPL 不进 Hono）。**已批准、待引入**：single-file-core 的浏览器侧消费者（领 `queued_pending_browser` Job → 目标页压缩 → 上传）需要真实浏览器环境开发联调，作为独立批次；服务端 monolith 路径已先行
+- [x] Track B 无 DOM 时用 monolith 抓公开页：`apps/server/src/archive/snapshot-monolith.ts`（注入式执行器，Dockerfile 已装 monolith；`POST /api/archive/process` 消费 pending 快照 Job，`file_path` 有值才标 completed，失败不回滚书签，二进制缺失给可执行提示）。Skill `snapshot=true` 仍只入队 ✓（口径不变）
+- [x] 快照有 `file_path` 才能下载；没有文件不得声称已生成（执行器只在拿到文件后写 `archives.completed`；此前下载路由已有 409/404 防线）
+- [x] 元数据提取改 metascraper（Track B 注入式增强，`archive/metadata-enhancer.ts`；失败自动回退内置轻量提取，不影响 Link 保存；Workers 不引入、行为不变）
 
 ### L4 导航圈选（2026-09-12 落地，v0.7.30；用户批准 API 结构表升 v1.6）
 
