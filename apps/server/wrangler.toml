@@ -1,10 +1,10 @@
 # DogEar · Cloudflare Workers（轨 A）部署配置
-# 全自动部署：推送到 GitHub 后由 .github/workflows/deploy-cloudflare.yml 自动完成
-# D1 建库（无则自动创建并回填 id）→ 迁移 → 部署 → 口令/Token 同步；
-# 用户侧只需配置仓库 Secrets（见 docs/modules/20260910_Cloudflare部署.md）。
-# 本地部署仍可用 `pnpm --filter @dogear/server deploy`。
-#
-# 本地联调（可选）：pnpm --filter @dogear/server dev:workers（用模拟 D1，不需要真实凭据）
+# 默认部署路径（零 Token）：Cloudflare Workers Builds（面板 Git 集成）自带账号凭据，
+#   面板设置 Root directory=apps/server、Deploy command=node scripts/ci-deploy.mjs，
+#   脚本一体完成：D1 无则建库 → 回填 database_id（仅构建机工作副本）→ 迁移 → deploy。
+# 备用路径：.github/workflows/deploy-cloudflare.yml（Actions，需配 API Token）。
+# 本地部署：pnpm --filter @dogear/server deploy；本地联调：pnpm --filter @dogear/server dev:workers
+# 详见 docs/modules/20260910_Cloudflare部署.md。
 
 name = "dogear"
 main = "src/worker.ts"
