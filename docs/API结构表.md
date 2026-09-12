@@ -1,7 +1,7 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.4
-> **应用版本**：v0.7.28
+> **文档版本**：v1.5
+> **应用版本**：v0.7.30
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
@@ -18,6 +18,7 @@
 > | v1.2 | v0.6.0 | 2026-09-04 | 开放通道连通、备份三档下载、导航规则 CRUD；快照内容、冲突、双向同步、规则求值仍禁止 | grok-4.6 |
 > | v1.3 | v0.7.23 | 2026-09-11 | 开放 `POST /api/backup/:id/restore`（备份恢复，全量替换 + 强制回滚点 + 显式 confirm）；`full` 档恢复明确 501 | deepseek-v4.1-flash |
 > | v1.4 | v0.7.28 | 2026-09-12 | `save_bookmark` 输入扩展可选 `source`（`agent` 缺省 / `extension`，Chrome 扩展接入；向后兼容，不加严）；登记 `GET /.well-known/*` 为免鉴权能力发现端点（Workers 同域部署配 `run_worker_first`）。规则求值仍禁止，见 §1 | glm-5.3-flash |
+> | v1.5 | v0.7.30 | 2026-09-12 | `POST /api/sync/process` 从占位升级为真实消费（回执摘要 + 退避语义，见 §4.3 与同步设计 §3.1）；登记 Workers Cron `[triggers]` 调度。冲突合并、双向拉回仍禁止（见 §1） | glm-5.3-flash |
 
 # API 结构表
 
@@ -173,6 +174,7 @@ Skill 本版无批量。
 | --- | --- | --- | --- |
 | GET | `/api/inbox` | `{bookmarks,nextCursor}` | `status=unread` 且未软删 |
 | GET | `/api/sync/pending-count` | `{pendingCount}` | `sync_queue` 中 `pending` 条数；未入队则为 0。真源写入成功不占用此数 |
+| POST | `/api/sync/process` | `{processed,succeeded,failed,requeued,remaining}` | **v1.5 真实消费**：先把退避到期的 failed 重置回 pending，再按通道消费一批（最多 10 条；当前仅 Raindrop 书签推送）。失败按 1s/2s/4s 封顶退避 + `retry_count` 累加，超 8 次不再自动重试。调度另有两处：Workers Cron（`[triggers]` 每 5 分钟）与自托管定时器（60 秒）。入队点见同步设计 §3.1 |
 | POST | `/api/bookmarks/:id/access-records` | 201 记录 | 体可选 `{source:"original"}`；回写 `lastOpenedAt` |
 | GET | `/api/bookmarks/:id/access-records` | `{records}` | 时间倒序 |
 
