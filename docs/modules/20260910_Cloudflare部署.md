@@ -1,15 +1,16 @@
-> **文档版本**：v0.1
-> **应用版本**：v0.7.5
-> **文档状态**：草案（待用户按本机实际情况执行一次验证）
-> **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。确定「推送到 GitHub 即自动部署」的落地口径，以及 Workers 与自托管（轨 B）的能力差异。以本文为准配置部署；不改 wiki。
+> **文档版本**：v0.2
+> **应用版本**：v0.7.24
+> **文档状态**：草案（待用户按真实 Cloudflare 账号执行一次验证）
+> **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。确定「推送到 GitHub 即全自动部署」的落地口径（D1 建库/迁移/密钥同步均由 CI 自动完成），以及 Workers 与自托管（轨 B）的能力差异。以本文为准配置部署；不改 wiki。
 > **权威级别**：模块规则。服从需求总纲与技术总纲；冲突时以需求总纲的产品对错为准。
 > **配套文档**：[技术总纲](../../wiki/DogEar-技术总纲.md)（§3 部署双轨、§11 T-1~T-12）· [API 结构表](../API结构表.md) · [数据库结构表](../数据库结构表.md) · [待办清单](../TODO.md)
 > **唯一需求源**：[需求总纲](../../wiki/DogEar-需求总纲.md)
-> **最后更新日期**：2026-09-10
+> **最后更新日期**：2026-09-12
 > **修改记录**：
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
 > | --- | --- | --- | --- | --- |
+> | v0.2 | v0.7.24 | 2026-09-12 | 部署改全自动口径：CI 自动建 D1 并回填 id（不再要求手动建库/回填）、口令与 Skill Token 从仓库 Secret 自动同步；preflight 仅查凭据；wrangler.toml 注释同步 | GLM-5.3-Flash |
 > | v0.1 | v0.7.5 | 2026-09-10 | 初稿：Workers 入口与 D1 绑定、一键部署流程、能力差异、验收清单 | deepseek-v4.1-flash |
 
 # Cloudflare Workers 部署（轨 A）
@@ -23,13 +24,24 @@
 | `apps/server/src/worker.ts` | Workers 入口。与自托管入口 `src/index.ts` 共用同一份 `createApp` 与业务逻辑，差异只在运行时装配（D1 替代 SQLite 文件、不注入文件备份） |
 | `apps/server/wrangler.toml` | Workers 配置：入口、`nodejs_compat`、D1 binding、`migrations_dir` |
 | `packages/db/drizzle/0004_m5_m7_tables.sql` | 补齐迁移链（见 §4） |
-| `.github/workflows/deploy-cloudflare.yml` | 推送 main 即：校验 → 应用 D1 迁移 → 部署 Worker →（可选）发布 Pages |
+| `.github/workflows/deploy-cloudflare.yml` | 推送 main 即：校验 → 自动建 D1（无则创建并回填 id）→ 应用迁移 → 部署 Worker →（可选）同步密钥 →（可选）发布 Pages |
 | `apps/server/scripts/verify-schema-parity.ts` | 校验「迁移链产出的 schema」与「运行时初始化器产出的 schema」一致 |
 
-## 2. 首次准备（一次性）
+## 2. 首次准备（全自动，无需手动建库）
+
+**默认路径：什么都不用手动做。** D1 数据库、表结构、登录口令均由 CI 在首次部署时自动完成：
+
+| 事项 | 谁来做 | 说明 |
+| --- | --- | --- |
+| 创建 D1（`dogear_prod`） | CI（deploy-worker 首步） | `wrangler d1 list` 查库，不存在则 `wrangler d1 create`，并把真实 `database_id` 写回 CI 工作副本的 `wrangler.toml` |
+| 建表与默认数据 | CI（`d1 migrations apply --remote`） | 迁移链插入 4 个默认 Scene 与 5 条设置 |
+| 部署 Worker | CI（`wrangler deploy`） | 使用回填后的配置 |
+| 登录口令 / Skill Token | CI（`wrangler secret put`） | 取自**同名仓库 Secret**（`DOGEAR_PASSWORD` / `DOGEAR_SKILL_TOKEN`）；仓库未配置则跳过并提示 |
+
+**手动路径（可选，应急/排查用）**：
 
 ```bash
-# 1. 建 D1，把输出的 database_id 回填到 apps/server/wrangler.toml
+# 1. 建 D1，并把输出的 database_id 替换 apps/server/wrangler.toml 中的占位符
 npx wrangler d1 create dogear_prod
 
 # 2. 建表与默认数据（迁移链会插入 4 个默认 Scene 与 5 条设置）
@@ -43,25 +55,29 @@ npx wrangler secret put DOGEAR_SKILL_TOKEN   # 可选，Agent(Skill) Bearer Toke
 pnpm --filter @dogear/server dev:workers
 ```
 
+> **设计说明（为什么 CI 回填、仓库保留占位符）**：真实 `database_id` 属于具体 Cloudflare 账号，不应提交进 git（否则换账号/换库即失效，多人场景还会互相覆盖）。故仓库始终保留占位符 `REPLACE_WITH_YOUR_D1_DATABASE_ID`，由 CI 在部署时查库→建库→仅改**工作副本**。此实现不依赖 wrangler 的「按名解析/自动开通」行为（各 4.x 小版本行为不一致），迁移与部署时配置里已是确定的真实 id。本地 `dev:workers` 用模拟 D1，不校验远端 id，占位符不影响本地开发。
+
 ## 3. 一键部署到 GitHub
 
 仓库需配置以下 Secrets / Variables（`Settings → Secrets and variables → Actions`）：
 
 | 名称 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Secret | 是 | 需 Workers Scripts:Edit、D1:Edit 权限 |
+| `CLOUDFLARE_API_TOKEN` | Secret | 是 | 需 Workers Scripts:Edit、D1:Edit 权限（自动建库/迁移/部署都要用） |
 | `CLOUDFLARE_ACCOUNT_ID` | Secret | 是 | Cloudflare 账号 ID |
+| `DOGEAR_PASSWORD` | Secret | 否（推荐） | 配置后 CI 自动 `wrangler secret put` 同步为工作台登录口令；不配则工作台无法登录（构建摘要会提示） |
+| `DOGEAR_SKILL_TOKEN` | Secret | 否 | Agent(Skill) 调用鉴权 Bearer Token，同样由 CI 自动同步 |
 | `CLOUDFLARE_PAGES_PROJECT` | Variable | 否 | 工作台 Pages 项目名；**不设则跳过前端发布步骤**，只部署 Worker |
 
-配好后 **push 到 main 即自动部署**（也可在 Actions 页手动 `workflow_dispatch`）。流程为四个阶段：
+配好后 **push 到 main 即全自动部署**（也可在 Actions 页手动 `workflow_dispatch`）。流程为四个阶段：
 
-`verify`（typecheck + test + schema 一致性） → `preflight`（判断前置条件是否齐备） → `deploy-worker`（先迁移后部署） → `deploy-web`（可选）。
+`verify`（typecheck + test + schema 一致性） → `preflight`（判断凭据是否齐备） → `deploy-worker`（自动建 D1 并回填 id → 迁移 → 部署 → 同步密钥） → `deploy-web`（可选）。
 
-**前置条件未满足时的行为**：`preflight` 会检查两件事——① 是否缺少 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`；② `apps/server/wrangler.toml` 的 `database_id` 是否仍是占位符 `REPLACE_WITH_YOUR_D1_DATABASE_ID`。任一未满足即把 `ready=false` 传给后续任务，**仅执行校验并跳过部署**，并在 Actions 的 Summary 里列出具体缺哪一项与配置步骤。
+**前置条件未满足时的行为**：`preflight` 只检查一件事——是否缺少 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`。缺少即把 `ready=false` 传给后续任务，**仅执行校验并跳过部署**，并在 Actions 的 Summary 里列出缺哪一项与配置步骤。D1 是否存在**不做检查**——由 deploy-worker 首步幂等处理（无则建、有则复用），首次部署与后续推送走同一条路。
 
-加第 ② 项的原因：若凭据配齐却忘了替换占位符，`wrangler d1 migrations apply` 会抛出难懂的 wrangler 报错；提前拦下并直接指明该改哪个文件，比事后排查省事。
+**为什么不再检查 wrangler.toml 占位符**（v0.1 曾有该项检查）：v0.2 起占位符就是仓库的**正常状态**，由 CI 回填工作副本，无需人工替换；占位符不再代表「忘了配置」。旧检查会把每次正常推送都拦下来，故移除。
 
-实现注意：job 级 `if` **无法读取 `secrets` 上下文**，故用一个 `preflight` 任务把前置条件转成 `outputs.ready` 再门控部署任务。该任务的 shell 用 `if [ -z ... ]; then` 而非 `[ -z ... ] && ...`：后者在判断为假时返回非零，会被 `bash -e` 直接终止脚本，反而在条件满足时失败（本轮在测试脚本里实际踩到过一次，可作反证——工作流本身用的是 `if...fi`，未受影响）。
+实现注意：job 级 `if` **无法读取 `secrets` 上下文**，故用一个 `preflight` 任务把前置条件转成 `outputs.ready` 再门控部署任务。该任务的 shell 用 `if [ -z ... ]; then` 而非 `[ -z ... ] && ...`：后者在判断为假时返回非零，会被 `bash -e` 直接终止脚本，反而在条件满足时失败（本轮在测试脚本里实际踩到过一次，可作反证——工作流本身用的是 `if...fi`，未受影响）。密钥同步用 `printf '%s'` 而非 `echo` 管道传入：`echo` 追加的换行会混进密钥值，导致口令校验失败。
 
 **关于本仓库的可见性**：该仓库为**私有仓库**——未鉴权访问 `github.com/<owner>/<repo>` 与 `github.com/<owner>/<repo>/actions` 均返回 404，`raw.githubusercontent.com` 上的文件同样 404（而账号页 `github.com/toookamak` 返回 200，可排除「账号不存在」）。因此 **Actions 的运行结果与 workflow badge 都需要登录才能查看**，CI 是否跑通无法在无凭据环境下核对，需仓库拥有者自行在 Actions 页确认。
 
@@ -102,8 +118,8 @@ pnpm --filter @dogear/server dev:workers
 
 待人工验证（需真实 Cloudflare 账号，本次未执行）：
 
-- [ ] 真实 `wrangler d1 create` + `secret put` + `wrangler deploy`
-- [ ] GitHub Actions 三个 Job 在真实 Secrets 下跑通
+- [ ] 真实首次部署：配置 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`（及推荐的 `DOGEAR_PASSWORD`）后推 main，确认 CI 自动建库/迁移/部署/密钥同步全链路跑通
+- [ ] GitHub Actions 各 Job 在真实 Secrets 下跑通（workflow 变更后需重验）
 - [ ] （可选）工作台 Pages 发布与跨域 CORS（`DOGEAR_CORS_ORIGIN`）
 
 ## 7. 未做的事

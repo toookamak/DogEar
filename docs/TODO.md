@@ -58,8 +58,8 @@
 
 - [ ] **ZIP 导入 / 导出**（D 组剩余项）：备份设计稿 §3 要求「本地导出为 ZIP + 从 CSV/ZIP 导入」，与已实现的「备份恢复」是**两条不同的路径**（后者从服务端已有的备份恢复，前者处理用户手上的本地文件）。需先定：ZIP 解析用哪个库（引入生产依赖须先确认）、以及上传大小上限
 - [ ] **`full` 档在线恢复**：当前明确返回 501（服务运行中替换被持有的库文件不安全）。若要支持，需先解决「关闭并重建数据库连接」的架构问题——属技术选型，**须先讨论**
-- [ ] **Track A 真实部署未跑**：Workers 入口、`wrangler.toml`、Actions 均就绪且本地（wrangler 4.42 + 模拟 D1）全链路验证通过，但**从未在真实 Cloudflare 上部署过**。需：`wrangler d1 create dogear_prod` → 回填 `database_id` → `db:migrate:remote` → `secret put DOGEAR_PASSWORD` → 推 main（详见 `docs/modules/20260910_Cloudflare部署.md`）
-- [ ] **CI 是否跑通未经确认**：仓库为私有，未鉴权访问 repo 页 / `/actions` / `raw.githubusercontent.com` 均 404（账号页 200，可排除账号不存在），且 GitHub API 限流，故**无法在本环境核对 Actions 运行结果**。「推送后一键部署」目前只验证到「配置与脚本正确」这一层——workflow 的 preflight 三种情形已用 bash 实跑、结构与引用已静态校验，但**它是否在 GitHub 上真的执行过、是否绿，需仓库拥有者在 Actions 页确认**（尤其：workflow 语法若非法，GitHub 会直接标红而不执行）
+- [ ] **Track A 真实部署未跑**：Workers 入口、`wrangler.toml`、Actions 均就绪且本地（wrangler 4.42 + 模拟 D1）全链路验证通过，但**从未在真实 Cloudflare 上部署过**。部署已全自动：只需配置仓库 Secrets（`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID`，推荐 `DOGEAR_PASSWORD`）后推 main——CI 会自动建 D1 并回填 id、应用迁移、部署 Worker、同步口令/Token（详见 `docs/modules/20260910_Cloudflare部署.md`）
+- [ ] **CI 是否跑通未经确认**：仓库为私有，未鉴权访问 repo 页 / `/actions` / `raw.githubusercontent.com` 均 404（账号页 200，可排除账号不存在），且 GitHub API 限流，故**无法在本环境核对 Actions 运行结果**。「推送后一键部署」目前只验证到「配置与脚本正确」这一层——2026-09-12 workflow 全自动改造后：YAML 解析通过、`wrangler deploy --dry-run` 通过、uuid 提取片段三情形（命中/缺失/坏 JSON）实测正确；**它是否在 GitHub 上真的执行过、是否绿，需仓库拥有者在 Actions 页确认**（尤其：workflow 语法若非法，GitHub 会直接标红而不执行）
 - [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）
 - [ ] R2 未接入（快照内容存储）
 - [ ] **`docs/Draft/README.md` 是失效索引**：其 8 个本地引用中**实测 7 个指向不存在的路径**（重命名前的旧文件，如 `../../wiki/DogEar_折耳书签_需求总纲_v1.0.7.md`、`../module/Scene-AI与待设计细部.md`、`../归档/*`；仅 `../技术总纲文档范例.md` 存在），且现行 `AGENTS.md` 目录规范中已无 `docs/Draft/`。照它办事会走错方向，建议单独收口
