@@ -96,26 +96,24 @@ export function TrashTab() {
         <h3 className="section-title">保留期限</h3>
         <div className="field-row">
           <input
-            className="input"
             type="number"
             min={1}
             max={365}
             value={retentionDays}
             onChange={(e) => setRetentionDays(e.target.value)}
-            style={{ width: '88px' }}
+            className="input input--narrow"
           />
           <span className="field-label">天</span>
           <button
             type="button"
-            className="btn btn--primary"
+            className="btn btn--primary btn--push"
             disabled={retentionDays === savedDays}
             onClick={saveRetention}
-            style={{ marginLeft: 'auto' }}
           >
             保存
           </button>
         </div>
-        <p className="muted" style={{ marginTop: 'var(--spacing-12)' }}>
+        <p className="muted muted--gap-top">
           超过保留期限的条目会在「清理过期项」时被永久删除。
         </p>
       </section>
@@ -143,7 +141,6 @@ export function TrashTab() {
                   <button
                     type="button"
                     className="btn btn--pill"
-                    style={{ color: 'var(--color-error)' }}
                     onClick={() => purge(item.id)}
                   >
                     {confirmPurge === item.id ? '确认永久删除？' : '永久删除'}
@@ -153,7 +150,7 @@ export function TrashTab() {
             ))}
           </div>
         )}
-        <div className="field-row" style={{ marginTop: 'var(--spacing-12)' }}>
+        <div className="field-row field-row--gap-top">
           <button type="button" className="btn btn--ghost" onClick={emptyExpired}>
             清理过期项
           </button>

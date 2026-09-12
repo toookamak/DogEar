@@ -120,8 +120,7 @@ export function FolderManager({ folders, onCreate, onUpdate, onDelete }: FolderM
                     </button>
                     <button
                       onClick={() => setConfirmId(folder.id)}
-                      className="btn btn--pill"
-                      style={{ color: 'var(--color-error)' }}
+                      className="btn btn--pill btn--danger"
                     >
                       删除
                     </button>

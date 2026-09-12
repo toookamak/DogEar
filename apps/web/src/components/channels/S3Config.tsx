@@ -92,7 +92,7 @@ export function S3Config({ channel, onSaved, onCancel }: S3ConfigProps) {
 
   return (
     <div className="channel-form">
-      <h3 className="section-title" style={{ margin: 0 }}>{isNew ? '添加 S3 通道' : '编辑 S3 通道'}</h3>
+      <h3 className="section-title section-title--flush">{isNew ? '添加 S3 通道' : '编辑 S3 通道'}</h3>
 
       <label className="channel-field">
         <span className="channel-field-label">配置名称</span>
@@ -181,7 +181,7 @@ export function S3Config({ channel, onSaved, onCancel }: S3ConfigProps) {
             <span className="channel-field-hint">测试的是已保存的配置</span>
           </>
         )}
-        <button type="button" onClick={onCancel} className="btn btn--ghost" style={{ marginLeft: 'auto' }}>
+        <button type="button" onClick={onCancel} className="btn btn--ghost btn--push">
           取消
         </button>
         <button type="button" onClick={handleSave} disabled={saving} className="btn btn--primary">

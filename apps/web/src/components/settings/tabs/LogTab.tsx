@@ -209,8 +209,7 @@ export function LogTab() {
                   {(job.status === 'pending' || job.status === 'running') && (
                     <button
                       type="button"
-                      className="btn btn--pill"
-                      style={{ color: 'var(--color-error)' }}
+                      className="btn btn--pill btn--danger"
                       onClick={() => cancelJob(job.id)}
                     >
                       取消

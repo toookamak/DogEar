@@ -97,7 +97,7 @@ export function AgentTab() {
             ))}
           </div>
         )}
-        <p className="muted" style={{ marginTop: 'var(--spacing-12)' }}>
+        <p className="muted muted--gap-top">
           关闭「新建」或「修改」后，Agent 的写入请求会被拒绝并计入「已拦截」用量。
         </p>
       </section>
@@ -128,7 +128,7 @@ export function AgentTab() {
 
       <section className="settings-section">
         <h3 className="section-title">可用 Skill（7 个）</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-6)' }}>
+        <div className="chips-row">
           {SKILLS.map((name) => (
             <span key={name} className="badge mono">{name}</span>
           ))}

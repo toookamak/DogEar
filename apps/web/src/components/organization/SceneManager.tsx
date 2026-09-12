@@ -125,7 +125,7 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
                   <div className="list-row-title">
                     {scene.icon && <span className="manager-icon">{scene.icon}</span>}
                     {scene.name}
-                    {!scene.enabled && <span className="badge" style={{ marginLeft: 'var(--spacing-8)' }}>已停用</span>}
+                    {!scene.enabled && <span className="badge badge--gap">已停用</span>}
                   </div>
                   {!scene.enabled && (
                     <div className="list-row-meta">
@@ -145,8 +145,7 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
                   </button>
                   <button
                     onClick={() => setConfirmId(scene.id)}
-                    className="btn btn--pill"
-                    style={{ color: 'var(--color-error)' }}
+                    className="btn btn--pill btn--danger"
                   >
                     删除
                   </button>

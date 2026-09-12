@@ -146,13 +146,13 @@ export function ChannelManager() {
   return (
     <section className="settings-section">
       <div className="manager-head">
-        <h3 className="section-title" style={{ margin: 0 }}>数据通道</h3>
+        <h3 className="section-title section-title--flush">数据通道</h3>
         <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}>
           添加通道
         </button>
       </div>
 
-      <p className="muted" style={{ marginBottom: 'var(--spacing-12)' }}>
+      <p className="muted muted--gap-bottom">
         通道是可选的数据出入口，不是登录门槛：保存书签不依赖任何通道，未配置也能正常使用。
       </p>
 
@@ -171,7 +171,7 @@ export function ChannelManager() {
                 <div className="list-row-main">
                   <div className="list-row-title">
                     {channel.label}
-                    <span className="badge" style={{ marginLeft: 'var(--spacing-8)' }}>
+                    <span className="badge badge--gap">
                       {CHANNEL_LABELS[channel.channel] ?? channel.channel}
                     </span>
                   </div>
@@ -205,8 +205,7 @@ export function ChannelManager() {
                   </button>
                   <button
                     type="button"
-                    className="btn btn--pill"
-                    style={{ color: 'var(--color-error)' }}
+                    className="btn btn--pill btn--danger"
                     onClick={() => setConfirmRemove(channel)}
                   >
                     删除

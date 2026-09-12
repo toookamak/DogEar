@@ -53,7 +53,7 @@ export function SuggestionPanel({ bookmarkId, onUpdate }: SuggestionPanelProps) 
 
   return (
     <section className="suggestion-panel">
-      <h3 className="section-title" style={{ fontSize: '14px' }}>AI 整理建议</h3>
+      <h3 className="section-title section-title--sm">AI 整理建议</h3>
 
       {loading ? (
         <p className="empty-note">加载中…</p>

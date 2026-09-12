@@ -136,7 +136,7 @@ export function ChannelConfig({ channel, defaultChannel = 'raindrop', onSaved, o
 
   return (
     <div className="channel-form">
-      <h3 className="section-title" style={{ margin: 0 }}>{isNew ? '添加通道' : '编辑通道'}</h3>
+      <h3 className="section-title section-title--flush">{isNew ? '添加通道' : '编辑通道'}</h3>
 
       <div className="channel-form-grid">
         <label className="channel-field">
@@ -183,8 +183,8 @@ export function ChannelConfig({ channel, defaultChannel = 'raindrop', onSaved, o
           </label>
 
           <div className="detail-section">
-            <h4 className="section-title" style={{ fontSize: '14px' }}>OAuth 授权（官方）</h4>
-            <p className="muted" style={{ margin: 0 }}>
+            <h4 className="section-title section-title--sm">OAuth 授权（官方）</h4>
+            <p className="muted muted--flush">
               到 Raindrop「设置 → 集成 → 创建 App」，Redirect URI 填 <code className="mono">{redirectUri}</code>，
               拿到 Client ID / Secret 后填入。
             </p>
@@ -276,7 +276,7 @@ export function ChannelConfig({ channel, defaultChannel = 'raindrop', onSaved, o
             {testing ? '测试中…' : '测试连接'}
           </button>
         )}
-        <button type="button" onClick={onCancel} className="btn btn--ghost" style={{ marginLeft: 'auto' }}>
+        <button type="button" onClick={onCancel} className="btn btn--ghost btn--push">
           取消
         </button>
         <button type="button" onClick={handleSave} disabled={saving} className="btn btn--primary">

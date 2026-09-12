@@ -72,7 +72,7 @@ export function StatusTab() {
             <span className="stat-label">本次刷新</span>
           </div>
         </div>
-        <p className="muted" style={{ marginTop: 'var(--spacing-12)' }}>
+        <p className="muted muted--gap-top">
           状态每 30 秒自动刷新。条/秒、时延、成功率与 429 次数需后端提供速率指标接口后接入。
         </p>
       </section>
@@ -113,7 +113,7 @@ export function StatusTab() {
                 </div>
               ))}
             </div>
-            <p className="muted" style={{ marginTop: 'var(--spacing-12)' }}>
+            <p className="muted muted--gap-top">
               逐条查看、重试与取消在「日志」分区的任务列表内。
             </p>
           </>
@@ -140,7 +140,7 @@ export function StatusTab() {
         ) : (
           <p className="empty-note">暂无用量数据。</p>
         )}
-        {usage && <p className="muted" style={{ marginTop: 'var(--spacing-12)' }}>统计日期：{usage.date}</p>}
+        {usage && <p className="muted muted--gap-top">统计日期：{usage.date}</p>}
       </section>
 
       <section className="settings-section">

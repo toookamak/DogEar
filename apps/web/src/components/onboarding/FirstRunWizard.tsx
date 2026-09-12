@@ -24,10 +24,10 @@ export function FirstRunWizard({ onDone }: { onDone: () => void }) {
         <h2 className="modal-title">开始使用 DogEar</h2>
 
         <div className="wizard-body">
-          <p className="modal-message" style={{ margin: 0 }}>
+          <p className="modal-message modal-message--flush">
             保存链接<strong>不依赖</strong> Raindrop、S3 或 WebDAV。登录本应用即可开始收藏。
           </p>
-          <p className="modal-message" style={{ margin: 0 }}>
+          <p className="modal-message modal-message--flush">
             数据通道是可选的数据出入口，可以以后在设置里再配，也可以一直不配。
           </p>
           <ul className="wizard-list">

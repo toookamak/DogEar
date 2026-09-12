@@ -124,7 +124,7 @@ export function RecycleBinList() {
   return (
     <>
       <div className="manager-head">
-        <p className="muted" style={{ margin: 0 }}>
+        <p className="muted muted--flush">
           {retentionDays
             ? `删除的书签保留 ${retentionDays} 天，超期后可清理；期间可随时恢复。`
             : '删除的书签可在保留期内恢复。'}
@@ -150,7 +150,6 @@ export function RecycleBinList() {
           <button
             type="button"
             className="btn btn--pill"
-            style={{ color: 'var(--color-error)' }}
             disabled={busy}
             onClick={() => setConfirm({ kind: 'bulk-purge', id: '' })}
           >
@@ -195,7 +194,6 @@ export function RecycleBinList() {
                 <button
                   type="button"
                   className="btn btn--pill"
-                  style={{ color: 'var(--color-error)' }}
                   onClick={() => setConfirm({ kind: 'purge', id: item.id })}
                 >
                   永久删除

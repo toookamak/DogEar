@@ -152,8 +152,7 @@ export function BookmarkDetail({
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            className="input"
-            style={{ minHeight: '64px', resize: 'vertical' }}
+            className="input textarea"
           />
         </label>
 
@@ -207,7 +206,6 @@ export function BookmarkDetail({
         <button
           type="button"
           className="btn btn--ghost"
-          style={{ color: 'var(--color-error)' }}
           onClick={() => setConfirmDelete(true)}
         >
           移入回收站
@@ -215,7 +213,7 @@ export function BookmarkDetail({
       </div>
 
       <div className="detail-section detail-facts">
-        <h3 className="section-title" style={{ fontSize: '14px' }}>来源信息</h3>
+        <h3 className="section-title section-title--sm">来源信息</h3>
         <div className="detail-fact-row"><span>收集方式</span><strong>{label(SOURCE_LABELS, bookmark.source)}</strong></div>
         <div className="detail-fact-row">
           <span>场景</span>

@@ -68,7 +68,7 @@ export function BookmarkTableView({
                 {bookmark.domain ?? ''}
                 {/* AI 建议落点③「Inbox 内」：表格视图同样在行内提示有建议待确认 */}
                 {bookmark.pendingSuggestionCount > 0 && (
-                  <span className="pill pill--ai" style={{ marginLeft: 'var(--spacing-6)' }}>
+                  <span className="pill pill--ai pill--gap">
                     AI 建议 {bookmark.pendingSuggestionCount}
                   </span>
                 )}

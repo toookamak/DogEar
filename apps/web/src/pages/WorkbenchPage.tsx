@@ -419,8 +419,7 @@ export function WorkbenchPage() {
           {selectedSuggestionCount > 0 && (
             <button
               type="button"
-              className="btn btn--pill"
-              style={{ color: 'var(--color-accent)' }}
+              className="btn btn--pill btn--accent"
               onClick={reviewSuggestions}
             >
               其中 {selectedSuggestionCount} 条有 AI 建议
@@ -462,8 +461,7 @@ export function WorkbenchPage() {
           </select>
           <button
             type="button"
-            className="btn btn--pill"
-            style={{ color: 'var(--color-error)' }}
+            className="btn btn--pill btn--danger"
             onClick={() => runBatch({ ids: [...selectedIds], deleted: true })}
           >
             移入回收站

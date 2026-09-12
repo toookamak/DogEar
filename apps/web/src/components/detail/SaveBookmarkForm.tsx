@@ -30,8 +30,8 @@ export function SaveBookmarkForm({ onSave, onClose }: SaveBookmarkFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="save-form">
-      <div className="manager-head" style={{ marginBottom: 0 }}>
-        <h3 className="section-title" style={{ margin: 0 }}>保存书签</h3>
+      <div className="manager-head manager-head--flush">
+        <h3 className="section-title section-title--flush">保存书签</h3>
         <button type="button" className="icon-btn" aria-label="关闭保存表单" onClick={onClose}>×</button>
       </div>
 
@@ -49,10 +49,9 @@ export function SaveBookmarkForm({ onSave, onClose }: SaveBookmarkFormProps) {
       <textarea
         value={note}
         onChange={(e) => setNote(e.target.value)}
-        className="input"
+        className="input textarea textarea--short"
         placeholder="备注（可选）"
         aria-label="备注"
-        style={{ minHeight: '50px', resize: 'vertical' }}
       />
 
       <input
@@ -75,7 +74,7 @@ export function SaveBookmarkForm({ onSave, onClose }: SaveBookmarkFormProps) {
         </label>
       </div>
 
-      <p className="muted" style={{ margin: 0 }}>
+      <p className="muted muted--flush">
         标题、摘要与图标会在保存后由服务端异步抓取。只需存下链接，整理可以以后再做。
       </p>
 

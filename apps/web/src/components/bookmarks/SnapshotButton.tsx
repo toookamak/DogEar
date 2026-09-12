@@ -27,18 +27,12 @@ export function SnapshotButton({ bookmarkId, url }: SnapshotButtonProps) {
       <button
         onClick={handleSnapshot}
         disabled={status === 'loading'}
-        className="btn-secondary-pill"
-        style={{ fontSize: '13px' }}
+        className="btn-secondary-pill snapshot-btn"
       >
         {status === 'loading' ? '处理中...' : status === 'queued' ? '已排队' : '快照'}
       </button>
       {message && (
-        <div style={{
-          fontFamily: 'var(--font-ui)',
-          fontSize: '12px',
-          color: status === 'error' ? 'var(--color-error)' : 'var(--color-text-muted)',
-          marginTop: 'var(--spacing-4)',
-        }}>
+        <div className={status === 'error' ? 'snapshot-hint snapshot-hint--error' : 'snapshot-hint'}>
           {message}
         </div>
       )}

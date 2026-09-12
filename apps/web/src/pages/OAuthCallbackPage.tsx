@@ -62,7 +62,7 @@ export function OAuthCallbackPage() {
           </>
         ) : (
           <>
-            <h2 className="section-title" style={{ textAlign: 'center', margin: 0 }}>
+            <h2 className="section-title section-title--center">
               {status === 'done' ? 'OAuth 授权成功' : 'OAuth 授权失败'}
             </h2>
             <div className={`alert alert--${status === 'done' ? 'success' : 'error'}`} role="status">

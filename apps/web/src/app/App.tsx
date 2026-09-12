@@ -33,7 +33,7 @@ export function App() {
   }
 
   if (session.loading || !session.authenticated) {
-    return <div style={{ padding: 'var(--spacing-16)', fontFamily: 'var(--font-ui)' }}>加载中...</div>
+    return <div className="loading">加载中...</div>
   }
 
   return (

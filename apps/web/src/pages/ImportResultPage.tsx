@@ -40,7 +40,7 @@ export function ImportResultPage() {
     return (
       <div>
         <PageHeader title="导入结果" />
-        <div className="org-content" style={{ padding: 'var(--spacing-16)' }}>
+        <div className="org-content org-content--padded">
           <ErrorMessage message={parseError} />
           <button type="button" className="btn btn--primary" onClick={() => setLocation('/settings')}>
             返回设置
@@ -74,7 +74,7 @@ export function ImportResultPage() {
               <span className="stat-label">错误</span>
             </div>
           </div>
-          <p className="muted" style={{ marginTop: 'var(--spacing-12)' }}>
+          <p className="muted muted--gap-top">
             跳过通常是同一条书签已存在（按 Raindrop ID 去重），不需要处理。
           </p>
         </section>
@@ -86,7 +86,7 @@ export function ImportResultPage() {
               {result.errors.map((err, index) => (
                 <div key={index} className="list-row">
                   <div className="list-row-main">
-                    <div className="list-row-meta" style={{ color: 'var(--color-error-text)' }}>{err}</div>
+                    <div className="list-row-meta list-row-meta--error">{err}</div>
                   </div>
                 </div>
               ))}
