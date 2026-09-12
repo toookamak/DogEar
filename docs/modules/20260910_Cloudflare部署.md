@@ -1,7 +1,7 @@
-> **文档版本**：v0.2
-> **应用版本**：v0.7.24
+> **文档版本**：v0.3
+> **应用版本**：v0.7.25
 > **文档状态**：草案（待用户按真实 Cloudflare 账号执行一次验证）
-> **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。确定「推送到 GitHub 即全自动部署」的落地口径（D1 建库/迁移/密钥同步均由 CI 自动完成），以及 Workers 与自托管（轨 B）的能力差异。以本文为准配置部署；不改 wiki。
+> **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。确定「Workers Builds 零 Token 全自动部署」为默认口径（建库/迁移/部署由 `apps/server/scripts/ci-deploy.mjs` 完成），GitHub Actions 为备用口径。以本文为准配置部署；不改 wiki。
 > **权威级别**：模块规则。服从需求总纲与技术总纲；冲突时以需求总纲的产品对错为准。
 > **配套文档**：[技术总纲](../../wiki/DogEar-技术总纲.md)（§3 部署双轨、§11 T-1~T-12）· [API 结构表](../API结构表.md) · [数据库结构表](../数据库结构表.md) · [待办清单](../TODO.md)
 > **唯一需求源**：[需求总纲](../../wiki/DogEar-需求总纲.md)
@@ -10,6 +10,7 @@
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
 > | --- | --- | --- | --- | --- |
+> | v0.3 | v0.7.25 | 2026-09-12 | 默认路径改为 Workers Builds（Cloudflare 自带凭据，零 Token、零 GitHub Secrets）：新增 `ci-deploy.mjs` 一体完成建库/回填/迁移/部署；Actions 降为备用口径；补前端 Pages 与口令 Secret 的面板配置 | GLM-5.3-Flash |
 > | v0.2 | v0.7.24 | 2026-09-12 | 部署改全自动口径：CI 自动建 D1 并回填 id（不再要求手动建库/回填）、口令与 Skill Token 从仓库 Secret 自动同步；preflight 仅查凭据；wrangler.toml 注释同步 | GLM-5.3-Flash |
 > | v0.1 | v0.7.5 | 2026-09-10 | 初稿：Workers 入口与 D1 绑定、一键部署流程、能力差异、验收清单 | deepseek-v4.1-flash |
 
@@ -24,21 +25,35 @@
 | `apps/server/src/worker.ts` | Workers 入口。与自托管入口 `src/index.ts` 共用同一份 `createApp` 与业务逻辑，差异只在运行时装配（D1 替代 SQLite 文件、不注入文件备份） |
 | `apps/server/wrangler.toml` | Workers 配置：入口、`nodejs_compat`、D1 binding、`migrations_dir` |
 | `packages/db/drizzle/0004_m5_m7_tables.sql` | 补齐迁移链（见 §4） |
-| `.github/workflows/deploy-cloudflare.yml` | 推送 main 即：校验 → 自动建 D1（无则创建并回填 id）→ 应用迁移 → 部署 Worker →（可选）同步密钥 →（可选）发布 Pages |
+| `.github/workflows/deploy-cloudflare.yml` | 备用路径（Actions）：校验 → 自动建 D1（无则创建并回填 id）→ 应用迁移 → 部署 Worker →（可选）同步密钥 →（可选）发布 Pages；需配置 API Token |
+| `apps/server/scripts/ci-deploy.mjs` | 默认路径（Workers Builds）的一体部署脚本：确保 D1 存在（无则创建）→ 回填 database_id 到工作副本 → 应用迁移 → `wrangler deploy` |
 | `apps/server/scripts/verify-schema-parity.ts` | 校验「迁移链产出的 schema」与「运行时初始化器产出的 schema」一致 |
 
-## 2. 首次准备（全自动，无需手动建库）
+## 2. 首次准备（路径一 · Workers Builds，零 Token）
 
-**默认路径：什么都不用手动做。** D1 数据库、表结构、登录口令均由 CI 在首次部署时自动完成：
+**默认口径：全程只用 Cloudflare 面板，不需要创建任何 API Token，也不需要 GitHub Secrets**——Workers Builds（面板的 Git 集成构建）跑在 Cloudflare 自己的构建机上，自带账号凭据。
 
-| 事项 | 谁来做 | 说明 |
+### 2.1 Worker（后端 API + 数据）
+
+| 步骤 | 位置 | 配置 |
 | --- | --- | --- |
-| 创建 D1（`dogear_prod`） | CI（deploy-worker 首步） | `wrangler d1 list` 查库，不存在则 `wrangler d1 create`，并把真实 `database_id` 写回 CI 工作副本的 `wrangler.toml` |
-| 建表与默认数据 | CI（`d1 migrations apply --remote`） | 迁移链插入 4 个默认 Scene 与 5 条设置 |
-| 部署 Worker | CI（`wrangler deploy`） | 使用回填后的配置 |
-| 登录口令 / Skill Token | CI（`wrangler secret put`） | 取自**同名仓库 Secret**（`DOGEAR_PASSWORD` / `DOGEAR_SKILL_TOKEN`）；仓库未配置则跳过并提示 |
+| 1. 构建设置 | Workers & Pages → `dogear` → Settings → Build | **Root directory**：`apps/server`；**Build command**：`echo skip`（Worker 由 wrangler 自己打包）；**Deploy command**：`node scripts/ci-deploy.mjs` |
+| 2. 登录口令 | 同项目 → Settings → Variables and Secrets | 添加 Secret `DOGEAR_PASSWORD`（工作台登录口令，如 `admin123`；弱口令+公网域名有被猜到的风险，介意请换强口令） |
+| 3. （可选）Skill Token | 同上 | 添加 Secret `DOGEAR_SKILL_TOKEN`（Agent(Skill) 调用鉴权） |
 
-**手动路径（可选，应急/排查用）**：
+部署脚本会自动完成：D1 数据库 `dogear_prod` 不存在则创建 → 把真实 `database_id` 回填到构建机上的 `wrangler.toml` 工作副本（仓库保留占位符）→ 应用迁移（建表与默认数据）→ 部署。之后每次推 main 自动重建部署。
+
+### 2.2 工作台（apps/web 前端）
+
+Workers Builds 只部署 Worker；前端走 **Pages 的 Git 集成**（同样零 Token）：
+
+| 步骤 | 配置 |
+| --- | --- |
+| Workers & Pages → Create → Pages → 连接本仓库 | **Root directory**：`apps/web`；**Build command**：`pnpm run build`；**Output directory**：`dist` |
+
+前端与 Worker 不同域，需在 Worker 侧放开 CORS：`apps/server/wrangler.toml` 的 `[vars]` 里取消注释并填 `DOGEAR_CORS_ORIGIN = "https://<Pages 项目名>.pages.dev"`（提交推送即可），或在 Worker 的 Variables 里加同名变量。
+
+### 2.3 手动路径（应急/排查用）
 
 ```bash
 # 1. 建 D1，并把输出的 database_id 替换 apps/server/wrangler.toml 中的占位符
@@ -55,9 +70,11 @@ npx wrangler secret put DOGEAR_SKILL_TOKEN   # 可选，Agent(Skill) Bearer Toke
 pnpm --filter @dogear/server dev:workers
 ```
 
-> **设计说明（为什么 CI 回填、仓库保留占位符）**：真实 `database_id` 属于具体 Cloudflare 账号，不应提交进 git（否则换账号/换库即失效，多人场景还会互相覆盖）。故仓库始终保留占位符 `REPLACE_WITH_YOUR_D1_DATABASE_ID`，由 CI 在部署时查库→建库→仅改**工作副本**。此实现不依赖 wrangler 的「按名解析/自动开通」行为（各 4.x 小版本行为不一致），迁移与部署时配置里已是确定的真实 id。本地 `dev:workers` 用模拟 D1，不校验远端 id，占位符不影响本地开发。
+> **设计说明（为什么 CI 回填、仓库保留占位符）**：真实 `database_id` 属于具体 Cloudflare 账号，不应提交进 git（否则换账号/换库即失效，多人场景还会互相覆盖）。故仓库始终保留占位符 `REPLACE_WITH_YOUR_D1_DATABASE_ID`，由部署环节查库→建库→仅改**工作副本**。wrangler 4.37+ 虽有资源自动开通，但各 4.x 小版本行为不一致（4.42 仍需 `experimentalProvision` 显式开启、`d1 migrations apply` 对无 id 配置的解析也不稳），`ci-deploy.mjs` 显式完成同样的事，对版本不敏感。本地 `dev:workers` 用模拟 D1，不校验远端 id，占位符不影响本地开发。
 
-## 3. 一键部署到 GitHub
+## 3. 路径二（备用）· GitHub Actions
+
+> 适用于不想用 Workers Builds、或希望部署逻辑全部进 git 的场景。代价是需要在 Cloudflare 面板创建一次 API Token（Cloudflare 不支持 GitHub OIDC 联邦，无法免 Token）。注意：若两条路径同时启用会重复部署，择一即可。
 
 仓库需配置以下 Secrets / Variables（`Settings → Secrets and variables → Actions`）：
 
@@ -118,8 +135,8 @@ pnpm --filter @dogear/server dev:workers
 
 待人工验证（需真实 Cloudflare 账号，本次未执行）：
 
-- [ ] 真实首次部署：配置 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`（及推荐的 `DOGEAR_PASSWORD`）后推 main，确认 CI 自动建库/迁移/部署/密钥同步全链路跑通
-- [ ] GitHub Actions 各 Job 在真实 Secrets 下跑通（workflow 变更后需重验）
+- [ ] 真实首次部署（路径一）：按 §2.1 面板配置推 main，确认 `ci-deploy.mjs` 自动建库/迁移/部署跑通，`DOGEAR_PASSWORD` 登录可用
+- [ ] （可选）路径二 Actions 在真实 Secrets 下跑通（workflow 变更后需重验）
 - [ ] （可选）工作台 Pages 发布与跨域 CORS（`DOGEAR_CORS_ORIGIN`）
 
 ## 7. 未做的事
