@@ -30,11 +30,13 @@ import type { BookmarkRepository } from '@dogear/db'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createArchiveRoutes } from './archive/archive-routes.js'
 import { ChannelConfigManager } from './channels/index.js'
+import { RaindropClient } from './channels/raindrop.js'
 import { createChannelRoutes } from './channels-routes.js'
 import { createMetadataRoutes } from './archive/metadata-routes.js'
 import { createNavRoutes } from './nav/nav-routes.js'
 import { extractMetadata } from './archive/metadata.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
+import { pullFromRaindrop } from './sync/raindrop-pull.js'
 
 const sessionCookie = 'dogear_session'
 const user = { id: 'user' }
@@ -375,6 +377,30 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     return c.json({ items })
   })
 
+  // Raindrop 拉回（双向同步的远端→本地侧）：每次只拉一页（50 条），防 API 风控；
+  // 新书签进 Inbox（source=raindrop），已有书签内容冲突时本地赢并记入 conflicts
+  app.post('/api/sync/pull', async (c) => {
+    // 拉取需要完整的 Raindrop 读接口（fetchBookmarks），不走推送用的结构化解析器
+    const channels = await channelManager.getAllChannels()
+    const raindrop = channels.find((ch) => ch.channel === 'raindrop' && ch.enabled && String(ch.config.token ?? ''))
+    if (!raindrop) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: '没有已启用且配置了 Token 的 Raindrop 通道' } }, 400)
+    }
+    const client = new RaindropClient(String(raindrop.config.token))
+    const body = await c.req.json().catch(() => ({})) as { intoInbox?: boolean; maxPages?: number }
+    const summary = await pullFromRaindrop(repository, client, {
+      intoInbox: body.intoInbox,
+      maxPages: typeof body.maxPages === 'number' ? body.maxPages : 1,
+    })
+    if (summary.conflicts > 0) {
+      await repository.operationLog.append({
+        actor: 'user', action: 'pull', targetType: 'channel', targetId: 'raindrop',
+        detail: `拉回 ${summary.created} 条新增，${summary.conflicts} 条冲突记入待处理`,
+      })
+    }
+    return c.json(summary)
+  })
+
   app.post('/api/sync/process', async (c) => {
     // L2：真实消费一批队列项（先按指数退避重置到期的失败项，再逐条推送到通道）
     const summary = await processSyncQueue(repository, async () => {
@@ -384,6 +410,56 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     return c.json(summary)
   })
 
+  // 同步冲突（拉回侧，本地赢自动记录）：列表 + 单条/批量解决
+  app.get('/api/conflicts', async (c) => {
+    const resolution = c.req.query('resolution')
+    const items = await repository.conflicts.list(resolution)
+    return c.json({ items })
+  })
+
+  app.get('/api/conflicts/pending-count', async (c) => {
+    return c.json({ pendingCount: await repository.conflicts.countPending() })
+  })
+
+  app.post('/api/conflicts/resolve-all', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as { choice?: string }
+    const choice = body.choice
+    if (!['kept_local', 'kept_remote', 'merged'].includes(choice ?? '')) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'choice must be kept_local/kept_remote/merged' } }, 400)
+    }
+    const resolved = await repository.conflicts.resolveAll(choice as 'kept_local' | 'kept_remote' | 'merged')
+    await repository.operationLog.append({ actor: 'user', action: 'resolve', targetType: 'conflict', targetId: 'all', detail: `批量解决 ${resolved} 条（${choice}）` })
+    return c.json({ resolved })
+  })
+
+  app.post('/api/conflicts/:id/resolve', async (c) => {
+    const body = await c.req.json().catch(() => ({})) as { choice?: string }
+    const choice = body.choice
+    if (!['kept_local', 'kept_remote', 'merged'].includes(choice ?? '')) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'choice must be kept_local/kept_remote/merged' } }, 400)
+    }
+    const conflict = await repository.conflicts.get(c.req.param('id')) as Record<string, unknown> | undefined
+    if (!conflict) return c.json({ error: { code: 'NOT_FOUND', message: 'Conflict not found' } }, 404)
+
+    if (choice === 'kept_remote' || choice === 'merged') {
+      // 用远端覆盖（kept_remote）或以本地为基补齐远端非空字段（merged）
+      const remote = typeof conflict.remoteSnapshot === 'string' ? JSON.parse(conflict.remoteSnapshot) as Record<string, unknown> : {}
+      const local = typeof conflict.localSnapshot === 'string' ? JSON.parse(conflict.localSnapshot) as Record<string, unknown> : {}
+      const bookmarkId = String(conflict.bookmarkId ?? '')
+      if (bookmarkId && await repository.get(bookmarkId, true)) {
+        const title = choice === 'kept_remote' ? remote.title : (local.title || remote.title)
+        const note = choice === 'kept_remote' ? remote.note : (local.note || remote.note)
+        await repository.update(bookmarkId, {
+          ...(title ? { title: String(title) } : {}),
+          ...(note !== undefined ? { note: note ? String(note) : null } : {}),
+        })
+      }
+    }
+    const resolved = await repository.conflicts.resolve(c.req.param('id'), choice as 'kept_local' | 'kept_remote' | 'merged')
+    await repository.operationLog.append({ actor: 'user', action: 'resolve', targetType: 'conflict', targetId: c.req.param('id'), detail: `冲突解决（${choice}）` })
+    return c.json(resolved)
+  })
+
   const workbenchPaths = [
     '/api/recycle-bin', '/api/recycle-bin/*', '/api/scenes', '/api/scenes/*',
     '/api/folders', '/api/folders/*', '/api/tags', '/api/tags/*',
@@ -391,6 +467,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     '/api/jobs', '/api/jobs/*', '/api/channels', '/api/channels/*',
     '/api/archive', '/api/archive/*', '/api/backup', '/api/backup/*',
     '/api/nav', '/api/nav/*',
+    '/api/conflicts', '/api/conflicts/*',
     '/api/skill/usage', '/api/skill/capabilities',
   ]
   for (const path of workbenchPaths) app.use(path, requireSession)

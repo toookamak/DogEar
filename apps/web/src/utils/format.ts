@@ -13,6 +13,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   page: '工作台',
   agent: 'Agent',
   extension: '插件',
+  raindrop: 'Raindrop',
 }
 
 export const SYNC_STATUS_LABELS: Record<string, string> = {

@@ -30,7 +30,8 @@
 
 - [x] `sync_queue` 按 channel 真正消费：入队点接线（create/单条 update/单条 delete/批量/Skill 保存——已启用 Raindrop 通道才入队并标 `syncStatus=pending`）；消费器按 channel 分发，非 Raindrop 书签级条目标 failed（禁止无 handler 假装成功）。**只推 Raindrop 的决定**见同步设计 §3.1：S3/WebDAV 是文件级导出，保持手动触发
 - [x] 429 指数退避（1s / 2s / 4s 封顶），记下 `retry_count`；超 8 次不再自动重试（防毒条目）
-- [ ] 新增 `conflict` 表：两端都留、本地赢、可单条/全部合并。**后置**：冲突只产生于双向同步的拉回侧，推送单向无冲突；随双向同步一起做（涉 schema 变更，届时先过数据库结构表）
+- [x] 新增 `conflicts` 表（2026-09-12，v0.7.30，迁移 0005，数据库结构表 v1.3）：两端都留（两端快照）、本地赢（自动）、可单条/全部按 kept_local/kept_remote/merged 解决；UI 在设置 → 输入源/导出「同步冲突」面板
+- [x] 双向拉回侧（2026-09-12，v0.7.30）：`POST /api/sync/pull` 单页拉回（50 条/次，防风控）、新增书签 `source=raindrop` 进 Inbox、通道「导入」保留为显式全量
 - [x] 客户端 1 分钟攒批 + 页面隐藏/卸载 flush（`apps/web/src/sync-scheduler.ts`，另带 60s 兜底轮询清积压）；状态栏未推送数已接真实队列
 - [x] **D1 事务语义**：消费器按序单条处理，不依赖跨语句事务（D1 无 SQL 级事务的问题就此绕开）；若未来要求「多通道组原子推送」再讨论 D1 batch
 - [x] 调度：Workers Cron（`[triggers]` 每 5 分钟，`worker.ts` scheduled）+ 自托管定时器（60 秒，防重入）+ `POST /api/sync/process` 升级为真实消费（API 结构表 v1.5）

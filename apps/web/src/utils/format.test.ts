@@ -100,8 +100,8 @@ describe('标签映射覆盖契约枚举', () => {
     expect(Object.keys(STATUS_LABELS).sort()).toEqual(['archived', 'saved', 'unread'])
   })
 
-  it('来源三态齐全', () => {
-    expect(Object.keys(SOURCE_LABELS).sort()).toEqual(['agent', 'extension', 'page'])
+  it('来源四态齐全（v1.8 起含拉回侧 raindrop）', () => {
+    expect(Object.keys(SOURCE_LABELS).sort()).toEqual(['agent', 'extension', 'page', 'raindrop'])
   })
 
   it('同步队列四态齐全', () => {

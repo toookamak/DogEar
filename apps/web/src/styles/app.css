@@ -1259,6 +1259,7 @@ input[type="radio"] {
 .bm-card-cover.src-page { background-color: var(--amber-soft); }
 .bm-card-cover.src-agent { background-color: var(--mint-soft); }
 .bm-card-cover.src-extension { background-color: var(--rust-soft); }
+.bm-card-cover.src-raindrop { background-color: var(--blue-soft); }
 
 .cover-monogram {
   display: inline-flex;
@@ -1368,6 +1369,10 @@ input[type="radio"] {
 
 .bm-card-preview.src-extension {
   background: linear-gradient(135deg, rgba(143, 106, 69, 0.16), rgba(143, 106, 69, 0.36));
+}
+
+.bm-card-preview.src-raindrop {
+  background: linear-gradient(135deg, rgba(63, 109, 150, 0.16), rgba(63, 109, 150, 0.36));
 }
 
 /* 预览区右上角的选择键（原型 .card-select-btn） */
@@ -1566,6 +1571,7 @@ input[type="radio"] {
 .bm-card-domain.src-page .d-fav { background-color: var(--amber); color: var(--on-accent); }
 .bm-card-domain.src-agent .d-fav { background-color: var(--mint); color: var(--on-accent); }
 .bm-card-domain.src-extension .d-fav { background-color: var(--rust); color: var(--on-accent); }
+.bm-card-domain.src-raindrop .d-fav { background-color: var(--blue); color: var(--on-accent); }
 
 .bm-card-domain:hover {
   border-color: var(--amber);

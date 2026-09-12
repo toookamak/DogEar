@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLocation } from 'wouter'
 import { channelsApi } from '../../api/channels.js'
+import { syncApi } from '../../api/sync.js'
 import type { ChannelConfigItem } from '../../api/channels.js'
 import { ChannelConfig } from './ChannelConfig.js'
 import { S3Config } from './S3Config.js'
@@ -40,7 +41,7 @@ export function ChannelManager() {
   const [editing, setEditing] = useState<ChannelConfigItem | null>(null)
   const [adding, setAdding] = useState(false)
   const [channelTab, setChannelTab] = useState<ChannelKey>('raindrop')
-  const [busy, setBusy] = useState<{ id: string; kind: 'import' | 'export' } | null>(null)
+  const [busy, setBusy] = useState<{ id: string; kind: 'import' | 'export' | 'pull' } | null>(null)
   const [exportOutcome, setExportOutcome] = useState<ExportOutcome | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<ChannelConfigItem | null>(null)
 
@@ -76,6 +77,22 @@ export function ChannelManager() {
     } catch (e) {
       const failure = { imported: 0, skipped: 0, errors: [errorMessage(e, '导入失败')] }
       setLocation(`/import-result?result=${encodeURIComponent(JSON.stringify(failure))}`)
+    }
+    setBusy(null)
+  }
+
+  /** 拉取：单页低频拉回（防 Raindrop 风控）；有冲突时提示去设置页处理 */
+  const handlePull = async (id: string) => {
+    setBusy({ id, kind: 'pull' })
+    try {
+      const summary = await syncApi.pull()
+      const parts = [`新增 ${summary.created} 条`]
+      if (summary.conflicts > 0) parts.push(`${summary.conflicts} 条冲突待处理（见下方「同步冲突」）`)
+      if (summary.hasMore) parts.push('远端还有更多，可再次拉取')
+      if (summary.created > 0 || summary.conflicts > 0) toast.success(`拉取完成：${parts.join('，')}`)
+      else toast.info('拉取完成：远端没有新内容')
+    } catch (e) {
+      toast.error(errorMessage(e, '拉取失败'))
     }
     setBusy(null)
   }
@@ -192,6 +209,17 @@ export function ChannelManager() {
                   >
                     {busy?.id === channel.id && busy.kind === 'import' ? '导入中…' : '导入'}
                   </button>
+                  {/* 拉取 = 低频单页同步（每次 50 条，防 Raindrop 风控）；「导入」是显式全量 */}
+                  {channel.channel === 'raindrop' && (
+                    <button
+                      type="button"
+                      className="btn btn--pill"
+                      disabled={busy?.id === channel.id}
+                      onClick={() => handlePull(channel.id)}
+                    >
+                      {busy?.id === channel.id && busy.kind === 'pull' ? '拉取中…' : '拉取'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn btn--pill"

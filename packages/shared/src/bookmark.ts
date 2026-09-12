@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
 export const bookmarkStatusSchema = z.enum(['unread', 'saved', 'archived'])
-export const bookmarkSourceSchema = z.enum(['page', 'agent', 'extension'])
+// 'raindrop'：双向同步拉回侧创建的书签来源（v1.8；向后兼容扩展，消费方按未知来源兜底）
+export const bookmarkSourceSchema = z.enum(['page', 'agent', 'extension', 'raindrop'])
 export const bookmarkTypeSchema = z.enum(['link', 'article', 'video', 'image'])
 export const bookmarkSyncStatusSchema = z.enum(['pending', 'synced'])
 export const snapshotStatusSchema = z.enum(['not_requested', 'queued_pending_browser'])

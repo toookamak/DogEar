@@ -89,6 +89,19 @@ export const scenes = sqliteTable('scenes', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
+export const conflicts = sqliteTable('conflicts', {
+  id: text('id').primaryKey(),
+  bookmarkId: text('bookmark_id'),
+  raindropId: text('raindrop_id').notNull(),
+  localSnapshot: text('local'),
+  remoteSnapshot: text('remote'),
+  resolution: text('resolution').notNull().default('pending'), // 'pending' | 'kept_local' | 'kept_remote' | 'merged'
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+}, (table) => ({
+  resolutionIdx: index('conflicts_resolution_idx').on(table.resolution),
+}))
+
 export const bookmarkScenes = sqliteTable('bookmark_scenes', {
   bookmarkId: text('bookmark_id').notNull().references(() => bookmarks.id, { onDelete: 'cascade' }),
   sceneId: text('scene_id').notNull().references(() => scenes.id, { onDelete: 'cascade' }),

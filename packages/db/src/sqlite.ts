@@ -146,6 +146,16 @@ const tableDefinitions: Record<string, string> = {
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (date, bucket)
   )`,
+  conflicts: `CREATE TABLE IF NOT EXISTS conflicts (
+    id TEXT PRIMARY KEY NOT NULL,
+    bookmark_id TEXT,
+    raindrop_id TEXT NOT NULL,
+    local_snapshot TEXT,
+    remote_snapshot TEXT,
+    resolution TEXT NOT NULL DEFAULT 'pending',
+    created_at INTEGER NOT NULL,
+    resolved_at INTEGER
+  )`,
   sync_queue: `CREATE TABLE IF NOT EXISTS sync_queue (
     id TEXT PRIMARY KEY NOT NULL,
     action TEXT NOT NULL,
@@ -247,6 +257,7 @@ function createIndexes(database: SqliteDatabase) {
   database.run('CREATE INDEX IF NOT EXISTS suggestions_bookmark_id_status_idx ON suggestions(bookmark_id, status)')
   database.run('CREATE INDEX IF NOT EXISTS operation_log_created_at_idx ON operation_log(created_at)')
   database.run('CREATE INDEX IF NOT EXISTS idempotency_keys_expires_at_idx ON idempotency_keys(expires_at)')
+  database.run('CREATE INDEX IF NOT EXISTS conflicts_resolution_idx ON conflicts(resolution)')
   database.run('CREATE INDEX IF NOT EXISTS sync_queue_status_channel_idx ON sync_queue(status, channel)')
   database.run('CREATE INDEX IF NOT EXISTS sync_queue_created_at_idx ON sync_queue(created_at)')
   database.run('CREATE INDEX IF NOT EXISTS channel_config_channel_enabled_idx ON channel_config(channel, enabled)')
@@ -285,7 +296,7 @@ export function initializeSqliteSchema(database: SqliteDatabase) {
     for (const [column, statement] of Object.entries(bookmarkColumns)) {
       if (!columns.has(column)) database.run(statement)
     }
-    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs', 'idempotency_keys', 'skill_usage', 'sync_queue', 'channel_config', 'archives', 'backups', 'nav_rules']) {
+    for (const table of ['scenes', 'bookmark_scenes', 'tags', 'bookmark_tags', 'suggestions', 'access_records', 'operation_log', 'settings', 'archive_jobs', 'idempotency_keys', 'skill_usage', 'conflicts', 'sync_queue', 'channel_config', 'archives', 'backups', 'nav_rules']) {
       database.run(tableDefinitions[table])
     }
     if (!columnsFor(database, 'access_records').has('client')) {

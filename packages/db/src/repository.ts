@@ -9,6 +9,7 @@ import {
   bookmarkTags,
   bookmarks,
   channelConfig,
+  conflicts,
   folders,
   idempotencyKeys,
   navRules,
@@ -27,7 +28,7 @@ type BookmarkInput = {
   id: string
   url: string
   status: 'unread' | 'saved' | 'archived'
-  source?: 'page' | 'agent' | 'extension'
+  source?: 'page' | 'agent' | 'extension' | 'raindrop'
   note?: string | null
   intent?: string | null
   important?: boolean
@@ -134,6 +135,7 @@ export type BookmarkRepository = {
   settings: ResourceRepositories['settings']
   archives: ResourceRepositories['archives']
   archiveJobs: ResourceRepositories['archiveJobs']
+  conflicts: ResourceRepositories['conflicts']
   syncQueue: ResourceRepositories['syncQueue']
 	  backups: ResourceRepositories['backups']
   navRules: {
@@ -179,6 +181,15 @@ type ResourceRepositories = {
     create: (data: { id: string; channel: string; label: string; config: string; enabled?: boolean }) => Promise<unknown>
     update: (id: string, data: { label?: string; config?: string; enabled?: boolean }) => Promise<unknown | undefined>
     remove: (id: string) => Promise<boolean>
+  }
+  conflicts: {
+    list: (resolution?: string) => Promise<unknown[]>
+    get: (id: string) => Promise<unknown | undefined>
+    findByRaindropId: (raindropId: string, resolution?: string) => Promise<unknown | undefined>
+    create: (data: { id: string; bookmarkId: string | null; raindropId: string; localSnapshot?: string | null; remoteSnapshot?: string | null }) => Promise<unknown>
+    resolve: (id: string, resolution: 'kept_local' | 'kept_remote' | 'merged') => Promise<unknown | undefined>
+    resolveAll: (resolution: 'kept_local' | 'kept_remote' | 'merged') => Promise<number>
+    countPending: () => Promise<number>
   }
   syncQueue: {
     enqueue: (action: string, targetType: string, targetId: string, channel: string, payload?: string | null) => Promise<SyncQueueItem>
@@ -638,6 +649,45 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     getStatus: async (id) => {
       const row = (await db.select({ status: archiveJobs.status }).from(archiveJobs).where(eq(archiveJobs.id, id)).all())[0]
       return row?.status
+    },
+  }
+
+  repository.conflicts = {
+    list: async (resolution) =>
+      db.select().from(conflicts).where(resolution ? eq(conflicts.resolution, resolution) : undefined)
+        .orderBy(desc(conflicts.createdAt)).all(),
+    get: async (id) => (await db.select().from(conflicts).where(eq(conflicts.id, id)).all())[0],
+    findByRaindropId: async (raindropId, resolution) =>
+      (await db.select().from(conflicts).where(and(eq(conflicts.raindropId, raindropId), resolution ? eq(conflicts.resolution, resolution) : undefined)).all())[0],
+    create: async (data) => {
+      const timestamp = now()
+      const record = {
+        id: data.id,
+        bookmarkId: data.bookmarkId,
+        raindropId: data.raindropId,
+        localSnapshot: data.localSnapshot ?? null,
+        remoteSnapshot: data.remoteSnapshot ?? null,
+        resolution: 'pending',
+        createdAt: timestamp,
+        resolvedAt: null,
+      }
+      await db.insert(conflicts).values(record).run()
+      return record
+    },
+    resolve: async (id, resolution) => {
+      await db.update(conflicts).set({ resolution, resolvedAt: now() }).where(eq(conflicts.id, id)).run()
+      return (await db.select().from(conflicts).where(eq(conflicts.id, id)).all())[0]
+    },
+    resolveAll: async (resolution) => {
+      const pending = await db.select().from(conflicts).where(eq(conflicts.resolution, 'pending')).all()
+      for (const row of pending) {
+        await db.update(conflicts).set({ resolution, resolvedAt: now() }).where(eq(conflicts.id, (row as any).id)).run()
+      }
+      return pending.length
+    },
+    countPending: async () => {
+      const result = await db.select({ count: count() }).from(conflicts).where(eq(conflicts.resolution, 'pending')).all()
+      return Number(result[0]?.count ?? 0)
     },
   }
 

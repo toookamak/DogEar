@@ -1,6 +1,6 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.7
+> **文档版本**：v1.8
 > **应用版本**：v0.7.30
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
@@ -21,6 +21,7 @@
 > | v1.5 | v0.7.30 | 2026-09-12 | `POST /api/sync/process` 从占位升级为真实消费（回执摘要 + 退避语义，见 §4.3 与同步设计 §3.1）；登记 Workers Cron `[triggers]` 调度。冲突合并、双向拉回仍禁止（见 §1） | glm-5.3-flash |
 | v1.6 | v0.7.30 | 2026-09-12 | **开放导航规则求值**：新增 `GET /api/nav/feed`（按 nav_rules 逐步圈定，语义见 evaluator）；`GET /api/nav/bookmarks` 标注**已过时**（保留兼容，勿新增依赖）。`POST/PATCH /api/nav/rules` 收紧 rule 形状校验（对象/字符串均可，PATCH 传对象此前会落库报错，一并修复） | glm-5.3-flash |
 | v1.7 | v0.7.30 | 2026-09-12 | **本地导出/导入（备份设计 §3）**：`GET /api/backup/export-zip`（ZIP：bookmarks.csv + meta.json）与 `POST /api/backup/import`（multipart 上传 CSV/ZIP，25MB 上限，显式 confirm，ZIP 内 snapshots/ 暂跳过）。两路径均限 Track B（依赖文件备份回滚点），Workers 501。依赖新增 `fflate`（用户批准，记录见 TODO） | glm-5.3-flash |
+| v1.8 | v0.7.30 | 2026-09-12 | **双向拉回侧**：`POST /api/sync/pull`（单页拉回，默认 50 条，防风控）；`GET /api/conflicts`、`GET /api/conflicts/pending-count`、`POST /api/conflicts/:id/resolve`、`POST /api/conflicts/resolve-all`。`bookmarks.source` 契约枚举扩展 `raindrop`（向后兼容）。`/api/channels/:id/import` 增加 `maxPages` 提示：自动拉取一律单页，全量导入走显式 import | glm-5.3-flash |
 
 # API 结构表
 
@@ -30,7 +31,7 @@
 
 | 项 | 口径 |
 | --- | --- |
-| 当前覆盖 | **v1.7 = v1.6 + 本地导出/导入 ZIP/CSV（Track B）**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
+| 当前覆盖 | **v1.8 = v1.7 + 双向拉回（单页）与冲突解决 API**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
 | 本版有的 | v1.3 全部；外加 `save_bookmark.source`（`agent` 缺省 / `extension`，向后兼容）与 `/.well-known/capabilities`（Workers 同域部署须配 `run_worker_first`，否则被 SPA 回退吞掉） |
 | 本版没有的 | 快照文件 `GET/PUT .../content`、冲突合并、默认双向同步、Dexie 专用接口、ZIP 导入、`full` 档在线恢复、Skill 批量与删除、离线保存 |
 | 升级规则 | 下表任一触发即停。先讨论升级方案、升本文档版本，再接线。禁止边写代码边加路由。 |
@@ -176,6 +177,7 @@ Skill 本版无批量。
 | --- | --- | --- | --- |
 | GET | `/api/inbox` | `{bookmarks,nextCursor}` | `status=unread` 且未软删 |
 | GET | `/api/sync/pending-count` | `{pendingCount}` | `sync_queue` 中 `pending` 条数；未入队则为 0。真源写入成功不占用此数 |
+| POST | `/api/sync/pull` | `{processed pages...,created,skipped,conflicts,errors,hasMore}` | **v1.8**：Raindrop 拉回，**每次只拉一页（50 条）**防风控；新书签 `source=raindrop` 进 Inbox；同 raindropId 两端都有变化 → 本地赢并记入 conflicts（两端快照都存）。需要已启用的 Raindrop 通道，否则 400 |
 | POST | `/api/sync/process` | `{processed,succeeded,failed,requeued,remaining}` | **v1.5 真实消费**：先把退避到期的 failed 重置回 pending，再按通道消费一批（最多 10 条；当前仅 Raindrop 书签推送）。失败按 1s/2s/4s 封顶退避 + `retry_count` 累加，超 8 次不再自动重试。调度另有两处：Workers Cron（`[triggers]` 每 5 分钟）与自托管定时器（60 秒）。入队点见同步设计 §3.1 |
 | POST | `/api/bookmarks/:id/access-records` | 201 记录 | 体可选 `{source:"original"}`；回写 `lastOpenedAt` |
 | GET | `/api/bookmarks/:id/access-records` | `{records}` | 时间倒序 |
@@ -564,6 +566,17 @@ Job 回执固定包含 `id`、`bookmarkId`、`type`、`status`、`retryCount`、
 | GET | `/api/nav/bookmarks` | `limit` `cursor` | `{items,nextCursor}` | **已过时（v1.6 起）**：不求值 `nav_rules` 的固定投影（排除 private/unread），仅为兼容保留，**勿新增依赖**；新代码一律用 `/api/nav/feed`。条目只返回 `id,title,favicon,url,domain`，不要把 `note` 带出 |
 | GET | `/api/nav/feed` | `limit`（≤200） `offset` | `{items,nextCursor}` | **v1.6**：按 `nav_rules`（enabled，按 sort_order）逐步圈定的展示集合；`all`=全集重置 / `rule`=条件命中加入（OR）/ `search`=搜索命中加入 / `hide`=命中移出；候选恒为非私密、未软删、不含 Inbox；无规则回落旧投影语义。投影字段同旧行。分页为 offset（内存集合） |
 | GET | `/api/nav/recent` | `limit` | `{items}` | 按 `access_records.opened_at` 倒序，去重书签；同样排除私密与 Inbox |
+
+### 4.3.1 同步冲突（v1.8，拉回侧）
+
+| 方法 | 路径 | 请求 | 成功 | 要点 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/conflicts` | `resolution?` | `{items}` | 默认 pending；条目含 localSnapshot/remoteSnapshot（JSON 字符串） |
+| GET | `/api/conflicts/pending-count` | — | `{pendingCount}` | |
+| POST | `/api/conflicts/:id/resolve` | `{choice}` | 冲突记录 | `choice` ∈ `kept_local`（默认已生效，仅标记）/ `kept_remote`（远端覆盖本地 title/note）/ `merged`（本地为基，补远端非空字段） |
+| POST | `/api/conflicts/resolve-all` | `{choice}` | `{resolved}` | 批量；写操作日志 |
+
+冲突产生规则见同步设计 §3.1：拉回时同 raindropId 两端都有变化 → 本地赢 + 记录两端快照；同 id 只留一条 pending。
 
 访问记录：`POST /api/bookmarks/:id/access-records` 体可带 `client`：`workbench` \| `navigation` \| `plugin` \| `unknown`，缺省 `workbench`。导航点击必须传 `navigation`。
 
