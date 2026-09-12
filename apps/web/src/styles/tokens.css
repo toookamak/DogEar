@@ -1,51 +1,143 @@
 /* DogEar · 设计令牌
- * 唯一视觉源：根目录 DESIGN.md。本文件只做 token 声明，不含布局与组件样式。
- * 取值一律来自 DESIGN.md §2 色板、§3 字体、§5 间距与圆角、§6 阴影；不新增自造色值。
+ * 视觉基准：dev/dogear-workbench 高保真原型（默认浅色主题），经用户确认以原型页效果为准。
+ * 本文件只做 token 声明，不含布局与组件样式。
+ *
+ * 两层命名：
+ *  1) 原型语义名（--canvas / --panel / --amber …）：组件样式的首选引用；
+ *  2) 兼容别名（--color-* / --spacing-* / --radius-*）：既有页面与内联样式仍在引用，
+ *     全部指向第 1 层，保证未重做的页面同步换肤。别名数值不再表示深浅层级，
+ *     而是「视觉角色」映射（例如 --color-bg-surface-400 = 卡片面 = --panel）。
  */
 
 :root {
   color-scheme: light;
 
-  /* Colors —— DESIGN.md §2 */
-  --color-bg-page: #f2f1ed;
-  --color-bg-surface-100: #f7f7f4;
-  --color-bg-surface-200: #f2f1ed;
-  --color-bg-surface-300: #ebeae5;
-  --color-bg-surface-400: #e6e5e0;
-  --color-bg-surface-500: #e1e0db;
-  --color-text-primary: #26251e;
-  --color-text-secondary: rgba(38, 37, 30, 0.55);
-  --color-text-muted: rgba(38, 37, 30, 0.35);
-  --color-accent: #f54e00;
-  --color-accent-secondary: #c08532;
-  --color-error: #cf2d56;
-  --color-success: #1f8a65;
+  /* ---- 纸面与面板（原型 tokens.css 默认主题） ---- */
+  --canvas: #faf9f5;
+  --panel: #ffffff;
+  --panel-raised: #f6f4ef;
+  --panel-hover: #efede6;
+  --panel-overlay: rgba(250, 249, 245, 0.94);
 
-  /* Semantic —— 由上述 DESIGN.md 色值派生的语义 token。
-   * 修补先前「被引用但未定义」的 6 个变量（曾导致样式静默失效）。 */
-  --color-primary: var(--color-accent);
-  --color-tag-bg: var(--color-bg-surface-400);
-  --color-success-text: var(--color-success);
-  --color-error-text: var(--color-error);
-  --color-success-bg: rgba(31, 138, 101, 0.09);
-  --color-error-bg: rgba(207, 45, 86, 0.09);
-  --color-bg-card: var(--color-bg-surface-400);
-  --color-bg-warning-subtle: rgba(192, 133, 50, 0.1);
-  --color-text-warning: #8a6420;
+  /* ---- 线 ---- */
+  --line: #e9e5dc;
+  --line-strong: #d3cdbf;
+  --line-soft: rgba(233, 229, 220, 0.6);
 
-  /* Borders —— DESIGN.md §2（oklab 感知均匀空间，附 rgba 等价备选见 DESIGN.md §9） */
-  --border-primary: oklab(0.263084 -0.00230259 0.0124794 / 0.1);
-  --border-medium: oklab(0.263084 -0.00230259 0.0124794 / 0.2);
-  --border-strong: rgba(38, 37, 30, 0.55);
-  --border-solid: #26251e;
-  --border-light: #f2f1ed;
+  /* ---- 文字 ---- */
+  --text: #2e2a23;
+  --muted: #716b5e;
+  --faint: #a29b8c;
+  --on-accent: #fff9f1;
 
-  /* Shadows —— DESIGN.md §6 */
-  --shadow-card: rgba(0, 0, 0, 0.14) 0px 28px 70px, rgba(0, 0, 0, 0.1) 0px 14px 32px, oklab(0.263084 -0.00230259 0.0124794 / 0.1) 0px 0px 0px 1px;
-  --shadow-ambient: rgba(0, 0, 0, 0.02) 0px 0px 16px, rgba(0, 0, 0, 0.008) 0px 0px 8px;
-  --shadow-focus: rgba(0, 0, 0, 0.1) 0px 4px 12px;
+  /* ---- 语义色（原型） ---- */
+  --amber: #cf6a43;
+  --amber-strong: #b8562f;
+  --amber-soft: rgba(207, 106, 67, 0.09);
+  --mint: #3f7a5c;
+  --mint-soft: rgba(63, 122, 92, 0.09);
+  --red: #bd5449;
+  --red-soft: rgba(189, 84, 73, 0.09);
+  --blue: #3f6d96;
+  --blue-soft: rgba(63, 109, 150, 0.09);
+  --indigo: #5d5a94;
+  --indigo-soft: rgba(93, 90, 148, 0.09);
+  --rust: #8f6a45;
+  --rust-soft: rgba(143, 106, 69, 0.09);
+  --slate: #636c7c;
+  --slate-soft: rgba(99, 108, 124, 0.11);
 
-  /* Spacing —— DESIGN.md §5（8px 基准 + 亚 8px 微距） */
+  /* ---- 字体（与原型 index.html 同源：Google Fonts，缺字回退系统栈） ---- */
+  --font-sans: "Manrope", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "Newsreader", Georgia, "Songti SC", serif;
+  --font-mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* ---- 圆角 / 间距 / 阴影（原型尺度：5 / 8 / 12） ---- */
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 22px;
+  --space-6: 30px;
+
+  --shadow-sm: 0 1px 2px rgba(88, 72, 44, 0.07);
+  --shadow-lg: 0 16px 44px rgba(88, 72, 44, 0.13);
+
+  --scrim: rgba(60, 50, 32, 0.28);
+  --overlay-dim: rgba(70, 58, 36, 0.32);
+  --drawer-shadow: rgba(70, 58, 36, 0.26);
+  --modal-shadow: 0 24px 72px rgba(60, 50, 32, 0.3);
+
+  /* ---- 布局外壳（原型尺寸） ---- */
+  --topbar-h: 48px;
+  --statusbar-h: 28px;
+  --sidebar-w: 228px;
+  --detail-w: clamp(380px, 40vw, 780px);
+
+  --z-sidebar: 40;
+  --z-detail-backdrop: 45;
+  --z-detail: 50;
+  --z-selection: 60;
+  --z-sync: 55;
+  --z-toast: 70;
+  --z-modal: 65;
+
+  /* =========================================================
+   * 兼容别名（既有 app.css 与页面内联样式的引用自动换肤）
+   * ========================================================= */
+
+  /* 页面底 / 面 */
+  --color-bg-page: var(--canvas);
+  --color-bg-surface-100: var(--panel);
+  --color-bg-surface-200: var(--canvas);
+  --color-bg-surface-300: var(--panel-raised);
+  --color-bg-surface-400: var(--panel);
+  --color-bg-surface-500: var(--panel-hover);
+  --color-bg-card: var(--panel);
+
+  /* 文字 */
+  --color-text-primary: var(--text);
+  --color-text-secondary: var(--muted);
+  --color-text-muted: var(--faint);
+  --color-text-warning: var(--rust);
+
+  /* 语义 */
+  --color-accent: var(--amber);
+  --color-accent-secondary: var(--amber-strong);
+  --color-primary: var(--amber);
+  --color-error: var(--red);
+  --color-error-text: var(--red);
+  --color-error-bg: var(--red-soft);
+  --color-success: var(--mint);
+  --color-success-text: var(--mint);
+  --color-success-bg: var(--mint-soft);
+  --color-tag-bg: var(--panel-hover);
+  --color-bg-warning-subtle: var(--rust-soft);
+  --btn-text: var(--on-accent);
+
+  /* 边框 */
+  --border-primary: var(--line);
+  --border-medium: var(--line-strong);
+  --border-strong: var(--line-strong);
+  --border-solid: var(--text);
+  --border-light: var(--canvas);
+
+  /* 阴影 */
+  --shadow-card: var(--shadow-lg);
+  --shadow-ambient: var(--shadow-sm);
+  --shadow-focus: 0 0 0 2px rgba(207, 106, 67, 0.25);
+
+  /* 字体 */
+  --font-display: var(--font-sans);
+  --font-ui: var(--font-sans);
+  --font-body: var(--font-serif);
+  --font-code: var(--font-mono);
+
+  /* 间距（沿用既有像素语义；组件样式优先用 --space-*） */
   --spacing-1: 1.5px;
   --spacing-2: 2px;
   --spacing-2_5: 2.5px;
@@ -63,52 +155,19 @@
   --spacing-48: 48px;
   --spacing-64: 64px;
   --spacing-96: 96px;
+  --spacing-sidebar: var(--sidebar-w);
 
-  /* Radius —— DESIGN.md §5 */
-  --radius-micro: 1.5px;
-  --radius-small: 2px;
-  --radius-medium: 3px;
-  --radius-standard: 4px;
+  /* 圆角 */
+  --radius-micro: 2px;
+  --radius-small: 4px;
+  --radius-medium: 5px;
+  --radius-standard: 5px;
   --radius-comfortable: 8px;
-  --radius-featured: 10px;
+  --radius-featured: 12px;
   --radius-full-pill: 9999px;
 
-  /* Typography —— DESIGN.md §3 */
-  --font-display: CursorGothic, system-ui, -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-body: jjannon, Iowan Old Style, Palatino Linotype, URW Palladio L, P052, ui-serif, Georgia, Cambria, Times New Roman, Times;
-  --font-code: berkeleyMono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", Courier;
-  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-
-  /* Layout —— 外壳尺寸 */
-  --topbar-h: 48px;
-  --statusbar-h: 24px;
-
-  /* Motion —— DESIGN.md §7 */
-  --transition-color: color 150ms ease;
+  /* 动效 */
+  --transition-color: color 150ms ease, background-color 150ms ease,
+    border-color 150ms ease;
   --transition-shadow: box-shadow 200ms ease;
-}
-
-/* 侧栏宽度随断点变化 —— DESIGN.md §8 */
-@media (max-width: 767px) {
-  :root {
-    --spacing-sidebar: 0px;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 899px) {
-  :root {
-    --spacing-sidebar: 200px;
-  }
-}
-
-@media (min-width: 900px) and (max-width: 1279px) {
-  :root {
-    --spacing-sidebar: 240px;
-  }
-}
-
-@media (min-width: 1280px) {
-  :root {
-    --spacing-sidebar: 280px;
-  }
 }

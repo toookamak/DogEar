@@ -78,12 +78,14 @@ export function Skeleton({ variant = 'grid', count = 8 }: SkeletonProps) {
     <div className="bm-grid" aria-hidden="true">
       {Array.from({ length: count }).map((_, i) => (
         <div className="bm-card" key={i}>
-          <div className="bm-card-head">
-            <span className="skel-cover skel-cover--icon" />
+          {/* 与 BookmarkCard 三段式同构：来源条 / 预览区 / 内容行 */}
+          <div className="bm-card-cover" />
+          <div className="bm-card-preview" />
+          <div className="bm-card-body">
+            <span className="skel-line w70" />
+            <span className="skel-line w40" />
             <span className="skel-line w70" />
           </div>
-          <span className="skel-line" />
-          <span className="skel-line w40" />
         </div>
       ))}
     </div>

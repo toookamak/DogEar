@@ -1,6 +1,7 @@
 /* DogEar · 样式入口
  * 仅做汇总导入，保持 main.tsx 的引用（'./styles.css'）不变。
- * token 见 ./styles/tokens.css（源自根目录 DESIGN.md）；布局与组件类见 ./styles/app.css。
+ * token 见 ./styles/tokens.css（视觉基准：dev/dogear-workbench 原型默认主题）；
+ * 布局与组件类见 ./styles/app.css。
  */
 
 @import './styles/tokens.css';
