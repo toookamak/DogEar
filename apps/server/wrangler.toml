@@ -37,6 +37,12 @@ database_name = "dogear_prod"
 database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 migrations_dir = "../../packages/db/drizzle"
 
+# Cron 触发（轨 A）：每 5 分钟消费 sync_queue，把书签变更推送到已启用的
+# Raindrop 通道（消费器见 src/sync/consumer.ts，worker.ts 的 scheduled 接住）。
+# 本地 dev 不会触发 cron；自托管（轨 B）由入口 index.ts 的定时器等价承担。
+[triggers]
+crons = ["*/5 * * * *"]
+
 # 非敏感的普通变量放这里；口令与 Token 用 `wrangler secret put`，不要写进本文件
 [vars]
 # 工作台来源（工作台与 API 不同域时填写，例如 https://dogear.pages.dev）；

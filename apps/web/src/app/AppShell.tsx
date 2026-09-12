@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { TopBar } from '../components/layout/TopBar.js'
 import { Sidebar } from '../components/layout/Sidebar.js'
 import { StatusBar } from '../components/layout/StatusBar.js'
 import { ToastRegion } from '../components/feedback/ToastRegion.js'
 import { FirstRunWizard, WIZARD_STORAGE_KEY } from '../components/onboarding/FirstRunWizard.js'
+import { installSyncScheduler } from '../sync-scheduler.js'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -23,6 +24,11 @@ export function AppShell({ children, onLogout }: AppShellProps) {
     }
   })
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // 通道同步攒批（L2）：外壳挂载即安装（幂等），页面隐藏/卸载时 flush，轮询清积压
+  useEffect(() => {
+    installSyncScheduler()
+  }, [])
 
   return (
     <div className="app-shell">

@@ -29,10 +29,12 @@ import { cors } from 'hono/cors'
 import type { BookmarkRepository } from '@dogear/db'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createArchiveRoutes } from './archive/archive-routes.js'
+import { ChannelConfigManager } from './channels/index.js'
 import { createChannelRoutes } from './channels-routes.js'
 import { createMetadataRoutes } from './archive/metadata-routes.js'
 import { createNavRoutes } from './nav/nav-routes.js'
 import { extractMetadata } from './archive/metadata.js'
+import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 
 const sessionCookie = 'dogear_session'
 const user = { id: 'user' }
@@ -159,6 +161,41 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   const app = new Hono()
   app.use('/api/*', cors({ origin: options.corsOrigin ?? 'http://localhost:5173', credentials: true }))
 
+  // ---- 通道同步入队（L2）：书签写操作成功后，按已启用的 Raindrop 通道入队推送 ----
+  // 队列只承载 Raindrop 书签级推送；S3/WebDAV 是文件级导出，保持手动触发（见同步设计 §3.1）。
+  const channelManager = new ChannelConfigManager(repository)
+
+  async function hasEnabledRaindropChannel(): Promise<boolean> {
+    try {
+      const channels = await channelManager.getAllChannels()
+      return channels.some((c) => c.channel === 'raindrop' && c.enabled && String(c.config.token ?? ''))
+    } catch {
+      return false
+    }
+  }
+
+  /** 书签写操作后的推送入队；任何失败都不影响主写操作（队列消费侧对未入队变更无感知） */
+  async function enqueueRaindropSync(
+    action: 'create' | 'update' | 'delete',
+    bookmark: { id: string; url?: string | null; title?: string | null; note?: string | null; raindropId?: string | null },
+  ): Promise<boolean> {
+    try {
+      if (!(await hasEnabledRaindropChannel())) return false
+      const payload = JSON.stringify({
+        url: bookmark.url ?? undefined,
+        title: bookmark.title ?? undefined,
+        note: bookmark.note ?? undefined,
+        raindropId: bookmark.raindropId ?? undefined,
+      })
+      await repository.syncQueue.enqueue(action, 'bookmark', bookmark.id, 'raindrop', payload)
+      // 入队即视为「待推送」，直到消费成功后由消费器标回 synced
+      if (action !== 'delete') await repository.update(bookmark.id, { syncStatus: 'pending' })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   app.get('/health', (c) => c.json({ ok: true }))
 
   app.post('/api/auth/login', async (c) => {
@@ -252,6 +289,10 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       })
     }
     await repository.operationLog.append({ actor, action: 'create', targetType: 'bookmark', targetId: id })
+    // 已启用 Raindrop 通道时入队推送；回执与库内状态同步标 pending
+    if (await enqueueRaindropSync('create', record as { id: string; url: string })) {
+      ;(record as { syncStatus?: string }).syncStatus = 'pending'
+    }
 
     // Async metadata extraction - don't block the response
     const recordWithId = record as { id: string; url: string }
@@ -302,13 +343,12 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.post('/api/sync/process', async (c) => {
-    const items = await repository.syncQueue.getPending(1)
-    if (items.length === 0) return c.json({ processed: 0, item: null })
-    const item = items[0]
-    await repository.syncQueue.updateStatus(item.id, 'processing')
-    // Mark as processing — actual processing is handled by the background worker
-    // or by the client-side channel handler
-    return c.json({ processed: 1, item })
+    // L2：真实消费一批队列项（先按指数退避重置到期的失败项，再逐条推送到通道）
+    const summary = await processSyncQueue(repository, async () => {
+      const channels = await channelManager.getAllChannels()
+      return resolveRaindropClient(channels)
+    }, 10)
+    return c.json(summary)
   })
 
   const workbenchPaths = [
@@ -344,6 +384,10 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       if (existing) snapshots.push({ id: existing.id, status: existing.status ?? 'unread', folderId: existing.folderId ?? null, deleted: Boolean(existing.deletedAt) })
     }
     const result = await repository.batchUpdate(body.data as any)
+    // 批量同样按通道入队：删除走远端删除，其余走更新
+    for (const updated of result.updated) {
+      await enqueueRaindropSync(body.data.deleted ? 'delete' : 'update', updated as { id: string; url?: string; title?: string | null; note?: string | null; raindropId?: string | null })
+    }
     const log = await repository.operationLog.append({
       actor: 'user',
       action: body.data.deleted ? 'delete' : 'update',
@@ -375,6 +419,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     const updated = await repository.update(c.req.param('bookmarkId'), changes)
     if (!updated) return skillError(c, 'BOOKMARK_DELETED', 409, 'Bookmark is deleted')
     await repository.operationLog.append({ actor: 'user', action: 'update', targetType: 'bookmark', targetId: c.req.param('bookmarkId') })
+    await enqueueRaindropSync('update', updated as { id: string; url?: string; title?: string | null; note?: string | null; raindropId?: string | null })
     return c.json(serializeBookmark(updated))
   })
 
@@ -388,6 +433,8 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       targetId: c.req.param('bookmarkId'),
       revertToken: JSON.stringify({ kind: 'undelete', ids: [c.req.param('bookmarkId')] }),
     }) as { id: string }
+    // 已推送过的书签才需要在远端删除（payload 带 raindropId；缺失时消费侧视为成功）
+    await enqueueRaindropSync('delete', deleted as { id: string; raindropId?: string | null })
     return c.json({ ok: true, deletedAt: timestamp((deleted as any).deletedAt), undoId: log.id })
   })
 
@@ -713,6 +760,8 @@ ${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保�
       saved.jobId = job.id
     }
     if (repository.operationLog) await repository.operationLog.append({ actor: 'agent', action: 'save_bookmark', targetType: 'bookmark', targetId: saved.id })
+    // Agent 保存同样走通道推送入队（与工作台保存一致）
+    await enqueueRaindropSync('create', saved as { id: string; url: string; title?: string | null; note?: string | null })
 
     // Async metadata extraction - don't block the response
     const savedId = saved.id

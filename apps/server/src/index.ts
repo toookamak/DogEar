@@ -5,6 +5,8 @@ import { dirname } from 'node:path'
 import { createBookmarkRepository, initializeSqliteSchema } from '@dogear/db'
 import { createApp } from './app.js'
 import { createBackupRoutes } from './backup/backup-routes.js'
+import { ChannelConfigManager } from './channels/index.js'
+import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 
 const dbPath = process.env.DOGEAR_DB_PATH ?? './data/dogear.sqlite'
 mkdirSync(dirname(dbPath), { recursive: true })
@@ -13,32 +15,39 @@ initializeSqliteSchema(sqlite)
 
 const pw = process.env.DOGEAR_PASSWORD || 'admin123'
 const repository = createBookmarkRepository(drizzle(sqlite))
+const channelManager = new ChannelConfigManager(repository)
 const app = createApp(repository, {
   password: pw,
   // 自托管（Bun/Docker）有本地文件系统，注入本地文件备份实现
   backupRoutes: (repo) => createBackupRoutes(repo, dbPath),
 })
 
-// Background sync queue worker: process pending items every 60 seconds
-// Only runs when the server is a long-running process (Bun runtime)
+// Background sync queue worker：每 60 秒消费一批 sync_queue（推送到已启用的
+// Raindrop 通道）。与工作台触发的 POST /api/sync/process、Workers Cron 共用消费器。
+// processRunning 防重入：上一批没跑完就跳过本次 tick。
 const syncWorkerInterval = 60_000
 let syncWorkerTimer: ReturnType<typeof setInterval> | null = null
+let syncWorkerRunning = false
 
-async function processSyncQueue() {
+async function runSyncWorker() {
+  if (syncWorkerRunning) return
+  syncWorkerRunning = true
   try {
-    const items = await repository.syncQueue.getPending(1)
-    if (items.length === 0) return
-
-    const item = items[0]
-    console.log(`[sync-worker] Skipping ${item.id}; queue consumption postponed`)
+    const summary = await processSyncQueue(repository, async () => {
+      const channels = await channelManager.getAllChannels()
+      return resolveRaindropClient(channels)
+    }, 25)
+    if (summary.processed > 0) console.log('[sync-worker]', JSON.stringify(summary))
   } catch (err) {
-    console.error('[sync-worker] Error fetching queue items:', err instanceof Error ? err.message : String(err))
+    console.error('[sync-worker] Error:', err instanceof Error ? err.message : String(err))
+  } finally {
+    syncWorkerRunning = false
   }
 }
 
-syncWorkerTimer = setInterval(processSyncQueue, syncWorkerInterval)
+syncWorkerTimer = setInterval(runSyncWorker, syncWorkerInterval)
 // Run first tick immediately after a short delay
-setTimeout(processSyncQueue, 5000)
+setTimeout(runSyncWorker, 5000)
 
 export default {
   port: Number(process.env.PORT ?? 8787),

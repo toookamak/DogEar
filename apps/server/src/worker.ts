@@ -12,6 +12,8 @@
 import { createD1BookmarkRepository } from '@dogear/db'
 import type { D1Database, ExecutionContext } from '@cloudflare/workers-types'
 import { createApp } from './app.js'
+import { ChannelConfigManager } from './channels/index.js'
+import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 
 export interface Env {
   DB: D1Database
@@ -51,5 +53,28 @@ export default {
     })
 
     return app.fetch(request, env, ctx)
+  },
+
+  /**
+   * Cron 触发（wrangler.toml [triggers]，每 5 分钟）：消费 sync_queue，
+   * 把书签变更推送到已启用的 Raindrop 通道。与工作台触发的
+   * POST /api/sync/process、自托管入口的定时器共用同一消费器。
+   */
+  async scheduled(controller: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (!env.DB) return
+    const repository = createD1BookmarkRepository(env.DB)
+    const channelManager = new ChannelConfigManager(repository)
+    ctx.waitUntil(
+      processSyncQueue(repository, async () => {
+        const channels = await channelManager.getAllChannels()
+        return resolveRaindropClient(channels)
+      }, 25)
+        .then((summary) => {
+          if (summary.processed > 0) console.log('[sync-cron]', JSON.stringify(summary))
+        })
+        .catch((err: unknown) => {
+          console.error('[sync-cron]', err instanceof Error ? err.message : String(err))
+        }),
+    )
   },
 }

@@ -183,6 +183,8 @@ type ResourceRepositories = {
   syncQueue: {
     enqueue: (action: string, targetType: string, targetId: string, channel: string, payload?: string | null) => Promise<SyncQueueItem>
     getPending: (limit?: number) => Promise<SyncQueueItem[]>
+    /** failed 项（供消费器按指数退避判断后重置回 pending） */
+    listFailed: (limit?: number) => Promise<SyncQueueItem[]>
     updateStatus: (id: string, status: string, error?: string | null) => Promise<SyncQueueItem | undefined>
     remove: (id: string) => Promise<boolean>
     countPending: () => Promise<number>
@@ -649,6 +651,10 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     },
     getPending: async (limit = 50) => {
       const rows = await db.select().from(syncQueue).where(eq(syncQueue.status, 'pending')).orderBy(syncQueue.createdAt).limit(limit).all()
+      return rows as SyncQueueItem[]
+    },
+    listFailed: async (limit = 100) => {
+      const rows = await db.select().from(syncQueue).where(eq(syncQueue.status, 'failed')).orderBy(syncQueue.updatedAt).limit(limit).all()
       return rows as SyncQueueItem[]
     },
     updateStatus: async (id, status, error = null) => {

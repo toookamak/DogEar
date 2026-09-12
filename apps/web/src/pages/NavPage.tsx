@@ -31,6 +31,19 @@ export function NavPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
+  // 轻量搜索（TODO L4 唯一不依赖规则求值的项）：只过滤已加载条目，不建完整 ⌘K
+  const [query, setQuery] = useState('')
+
+  const filtered = query.trim()
+    ? bookmarks.filter((b) => {
+        const q = query.trim().toLowerCase()
+        return (
+          (b.title ?? '').toLowerCase().includes(q) ||
+          (b.domain ?? '').toLowerCase().includes(q) ||
+          b.url.toLowerCase().includes(q)
+        )
+      })
+    : bookmarks
 
   const openBookmark = async (bookmark: NavItem) => {
     try {
@@ -89,7 +102,26 @@ export function NavPage() {
       )}
 
       <section className="nav-section">
-        <h3 className="section-title">全部书签</h3>
+        <div className="manager-head">
+          <h3 className="section-title">全部书签</h3>
+          {/* manager-head 为 space-between：标题居左，筛选框自然靠右 */}
+          <div className="toolbar-search">
+            <span className="toolbar-search-icon" aria-hidden="true">⌕</span>
+            <input
+              className="toolbar-search-input"
+              type="search"
+              placeholder="筛选标题 / 域名 / 链接"
+              aria-label="筛选书签"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button type="button" className="toolbar-search-clear" aria-label="清除筛选" onClick={() => setQuery('')}>
+                ×
+              </button>
+            )}
+          </div>
+        </div>
 
         {loading && <Skeleton variant="grid" count={8} />}
         {error && <ErrorMessage message={error} />}
@@ -100,9 +132,12 @@ export function NavPage() {
             action={{ label: '去看书签并确认', onClick: () => setLocation('/bookmarks') }}
           />
         )}
-        {!loading && !error && bookmarks.length > 0 && (
+        {!loading && !error && bookmarks.length > 0 && filtered.length === 0 && (
+          <p className="empty-note">没有匹配「{query}」的条目。</p>
+        )}
+        {!loading && !error && filtered.length > 0 && (
           <BookmarkGridView
-            bookmarks={bookmarks as BookmarkResponse[]}
+            bookmarks={filtered as BookmarkResponse[]}
             activeId={null}
             selectedIds={EMPTY_SELECTION}
             onOpen={(bookmark) => { void openBookmark(bookmark) }}

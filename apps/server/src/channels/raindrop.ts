@@ -86,11 +86,18 @@ export class RaindropClient {
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After')
       const waitSeconds = retryAfter ? parseInt(retryAfter, 10) : 60
-      throw new Error(`Rate limit exceeded, retry after ${waitSeconds} seconds`)
+      // 带 status 供队列消费器识别限流并按指数退避重试（1s/2s/4s 封顶）
+      throw Object.assign(
+        new Error(`Rate limit exceeded, retry after ${waitSeconds} seconds`),
+        { status: 429 },
+      )
     }
 
     if (response.status === 401 || response.status === 403) {
-      throw new Error('Invalid or expired Raindrop API token')
+      throw Object.assign(
+        new Error('Invalid or expired Raindrop API token'),
+        { status: response.status },
+      )
     }
 
     if (!response.ok) {
