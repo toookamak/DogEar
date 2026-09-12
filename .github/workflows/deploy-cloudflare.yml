@@ -1,7 +1,9 @@
 name: Deploy to Cloudflare
 
-# 推送到 main 即自动部署（轨 A：Cloudflare Workers + D1）。
-# 也可在 Actions 页手动触发。
+# 推送到 main 即自动部署（轨 A：Cloudflare Workers + D1）。也可在 Actions 页手动触发。
+# 全自动范围：D1 数据库不存在时自动创建并回填 id → 应用迁移 → 部署 Worker →
+# 同步口令/Token 密钥（取自同名仓库 Secret，未配置则跳过并提示）。
+# 前端 Pages 发布为可选，需配置仓库变量 CLOUDFLARE_PAGES_PROJECT。
 #
 # 关于「未配置凭据」：若仓库未配置 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID，
 # 本工作流**只跑校验并明确跳过部署**（在 Summary 里给出提示），不会报红——
@@ -46,6 +48,7 @@ jobs:
 
   # 判断是否具备部署凭据并给出可读结论。
   # 说明：job 级 if 无法读取 secrets，故用一个输出布尔值的步骤来门控后续任务。
+  # D1 无需人工准备：deploy-worker 阶段会自动创建库并回填 id，这里不再检查占位符。
   preflight:
     name: Check deploy prerequisites
     runs-on: ubuntu-latest
@@ -53,7 +56,7 @@ jobs:
       ready: ${{ steps.check.outputs.ready }}
     steps:
       - id: check
-        name: 检查部署前置条件（凭据 + D1 占位符）
+        name: 检查部署前置条件（Cloudflare 凭据）
         env:
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -64,34 +67,19 @@ jobs:
           if [ -z "$CF_API_TOKEN" ]; then missing="$missing CLOUDFLARE_API_TOKEN"; fi
           if [ -z "$CF_ACCOUNT_ID" ]; then missing="$missing CLOUDFLARE_ACCOUNT_ID"; fi
 
-          # 凭据齐备时才检查 wrangler.toml 的 D1 占位符。
-          # 若忘了替换，`wrangler d1 migrations apply` 会抛出难懂的 wrangler 报错；
-          # 这里提前拦下并直接给出该替换哪个文件。
-          placeholder=""
-          if [ -z "$missing" ]; then
-            if grep -q 'REPLACE_WITH_YOUR_D1_DATABASE_ID' apps/server/wrangler.toml; then
-              placeholder="apps/server/wrangler.toml 的 database_id 仍是占位符 REPLACE_WITH_YOUR_D1_DATABASE_ID"
-            fi
-          fi
-
-          if [ -n "$missing" ] || [ -n "$placeholder" ]; then
+          if [ -n "$missing" ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             {
               echo "## ⏭️ 跳过 Cloudflare 部署"
               echo ""
-              if [ -n "$missing" ]; then
-                echo "- 缺少仓库 Secrets：\`$missing\`"
-              fi
-              if [ -n "$placeholder" ]; then
-                echo "- $placeholder"
-              fi
+              echo "- 缺少仓库 Secrets：\`$missing\`"
               echo ""
               echo "本次仅执行校验（typecheck / test / schema 一致性），未部署。"
               echo ""
-              echo "配置后推送即自动部署，步骤见 \`docs/modules/20260910_Cloudflare部署.md\`："
-              echo "1. \`npx wrangler d1 create dogear_prod\`，把输出的 database_id 回填到 \`apps/server/wrangler.toml\`"
-              echo "2. 配置仓库 Secrets：\`CLOUDFLARE_API_TOKEN\`（需 Workers Scripts:Edit、D1:Edit）与 \`CLOUDFLARE_ACCOUNT_ID\`"
-              echo "3. 设置 Worker 密钥：\`npx wrangler secret put DOGEAR_PASSWORD\`"
+              echo "配置后推送即全自动部署，步骤见 \`docs/modules/20260910_Cloudflare部署.md\`："
+              echo "1. 配置仓库 Secrets：\`CLOUDFLARE_API_TOKEN\`（需 Workers Scripts:Edit、D1:Edit）与 \`CLOUDFLARE_ACCOUNT_ID\`"
+              echo "2. 可选：配置 \`DOGEAR_PASSWORD\` / \`DOGEAR_SKILL_TOKEN\` Secrets，部署时自动同步为 Worker 密钥"
+              echo "3. D1 数据库由 CI 自动创建并应用迁移，无需手动建库或回填 id"
             } >> "$GITHUB_STEP_SUMMARY"
             echo "::notice title=跳过 Cloudflare 部署::前置条件未满足，本次只做校验。"
           else
@@ -116,6 +104,37 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      - name: 确保 D1 存在并回填 database_id
+        working-directory: apps/server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # 全自动建库：dogear_prod 不存在则创建，随后把真实 id 写回 wrangler.toml。
+          # 只改 CI 工作副本（不提交回仓库），仓库里始终保留占位符，避免多人/多端互相覆盖。
+          # 迁移与部署都发生在回填之后，不依赖 wrangler 的「按名解析/自动开通」行为，
+          # 对 wrangler 4.x 各版本行为稳定。
+          get_db_id() {
+            pnpm exec wrangler d1 list --json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{const a=JSON.parse(s);const db=(Array.isArray(a)?a:[]).find(d=>d.name==='dogear_prod');if(db&&db.uuid)process.stdout.write(db.uuid)}catch(e){process.exit(1)}})"
+          }
+          DB_ID=$(get_db_id)
+          if [ -z "$DB_ID" ]; then
+            echo "D1 数据库 dogear_prod 不存在，自动创建…"
+            pnpm exec wrangler d1 create dogear_prod
+            DB_ID=$(get_db_id)
+          fi
+          if [ -z "$DB_ID" ]; then
+            echo "::error::未能从 d1 list 解析到 dogear_prod 的 database_id"
+            exit 1
+          fi
+          sed -i "s|REPLACE_WITH_YOUR_D1_DATABASE_ID|$DB_ID|" wrangler.toml
+          if grep -q "$DB_ID" wrangler.toml; then
+            echo "D1 就绪（database_id: $DB_ID）"
+          else
+            echo "::error::database_id 回填 wrangler.toml 失败"
+            exit 1
+          fi
+
       - name: 应用 D1 迁移（建表与默认数据）
         uses: cloudflare/wrangler-action@v3
         with:
@@ -131,6 +150,27 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/server
           command: deploy
+
+      - name: 同步 Worker 密钥（口令 / Skill Token）
+        working-directory: apps/server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DOGEAR_PASSWORD: ${{ secrets.DOGEAR_PASSWORD }}
+          DOGEAR_SKILL_TOKEN: ${{ secrets.DOGEAR_SKILL_TOKEN }}
+        run: |
+          # 仓库里配置了哪个 Secret 就同步哪个；放在 deploy 之后，Worker 已存在。
+          # 用 printf 而非 echo：echo 追加的换行会混进密钥值，导致口令校验失败。
+          if [ -n "$DOGEAR_PASSWORD" ]; then
+            printf '%s' "$DOGEAR_PASSWORD" | pnpm exec wrangler secret put DOGEAR_PASSWORD
+          else
+            echo "::notice title=跳过 DOGEAR_PASSWORD::仓库未配置该 Secret，工作台登录口令未同步（工作台将无法登录）。"
+          fi
+          if [ -n "$DOGEAR_SKILL_TOKEN" ]; then
+            printf '%s' "$DOGEAR_SKILL_TOKEN" | pnpm exec wrangler secret put DOGEAR_SKILL_TOKEN
+          else
+            echo "::notice title=跳过 DOGEAR_SKILL_TOKEN::仓库未配置该 Secret（可选，Agent Skill 调用鉴权）。"
+          fi
 
   # 工作台前端：需凭据齐备且设置了仓库变量 CLOUDFLARE_PAGES_PROJECT，
   # 以免未建 Pages 项目时这一步失败。
