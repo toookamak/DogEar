@@ -1,7 +1,7 @@
-> **文档版本**：v0.3
-> **应用版本**：v0.7.25
+> **文档版本**：v0.4
+> **应用版本**：v0.7.26
 > **文档状态**：草案（待用户按真实 Cloudflare 账号执行一次验证）
-> **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。确定「Workers Builds 零 Token 全自动部署」为默认口径（建库/迁移/部署由 `apps/server/scripts/ci-deploy.mjs` 完成），GitHub Actions 为备用口径。以本文为准配置部署；不改 wiki。
+> **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。默认口径：**前后端同域合并部署**——前端工作台（apps/web）作为静态资源随 Worker 一起发布（Workers Builds 零 Token，建库/迁移/构建/部署由 `apps/server/scripts/ci-deploy.mjs` 一体完成）；GitHub Actions 为备用口径。以本文为准配置部署；不改 wiki。
 > **权威级别**：模块规则。服从需求总纲与技术总纲；冲突时以需求总纲的产品对错为准。
 > **配套文档**：[技术总纲](../../wiki/DogEar-技术总纲.md)（§3 部署双轨、§11 T-1~T-12）· [API 结构表](../API结构表.md) · [数据库结构表](../数据库结构表.md) · [待办清单](../TODO.md)
 > **唯一需求源**：[需求总纲](../../wiki/DogEar-需求总纲.md)
@@ -10,6 +10,7 @@
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
 > | --- | --- | --- | --- | --- |
+> | v0.4 | v0.7.26 | 2026-09-12 | 前端并入 Worker 同域部署（`[assets]` + `run_worker_first` + SPA 回退）：ci-deploy.mjs 增前端构建步骤、Actions 补构建步骤；**取消 Pages 项目与 CORS 配置**（前端相对路径 `/api` 同域零改动，跨域方案需改前端+Cookie 成本高，经用户拍板合并） | GLM-5.3-Flash |
 > | v0.3 | v0.7.25 | 2026-09-12 | 默认路径改为 Workers Builds（Cloudflare 自带凭据，零 Token、零 GitHub Secrets）：新增 `ci-deploy.mjs` 一体完成建库/回填/迁移/部署；Actions 降为备用口径；补前端 Pages 与口令 Secret 的面板配置 | GLM-5.3-Flash |
 > | v0.2 | v0.7.24 | 2026-09-12 | 部署改全自动口径：CI 自动建 D1 并回填 id（不再要求手动建库/回填）、口令与 Skill Token 从仓库 Secret 自动同步；preflight 仅查凭据；wrangler.toml 注释同步 | GLM-5.3-Flash |
 > | v0.1 | v0.7.5 | 2026-09-10 | 初稿：Workers 入口与 D1 绑定、一键部署流程、能力差异、验收清单 | deepseek-v4.1-flash |
@@ -23,10 +24,10 @@
 | 文件 | 作用 |
 | --- | --- |
 | `apps/server/src/worker.ts` | Workers 入口。与自托管入口 `src/index.ts` 共用同一份 `createApp` 与业务逻辑，差异只在运行时装配（D1 替代 SQLite 文件、不注入文件备份） |
-| `apps/server/wrangler.toml` | Workers 配置：入口、`nodejs_compat`、D1 binding、`migrations_dir` |
+| `apps/server/wrangler.toml` | Workers 配置：入口、`nodejs_compat`、D1 binding、`migrations_dir`、`[assets]`（前端同域静态资源） |
 | `packages/db/drizzle/0004_m5_m7_tables.sql` | 补齐迁移链（见 §4） |
-| `.github/workflows/deploy-cloudflare.yml` | 备用路径（Actions）：校验 → 自动建 D1（无则创建并回填 id）→ 应用迁移 → 部署 Worker →（可选）同步密钥 →（可选）发布 Pages；需配置 API Token |
-| `apps/server/scripts/ci-deploy.mjs` | 默认路径（Workers Builds）的一体部署脚本：确保 D1 存在（无则创建）→ 回填 database_id 到工作副本 → 应用迁移 → `wrangler deploy` |
+| `.github/workflows/deploy-cloudflare.yml` | 备用路径（Actions）：校验 → 构建前端 → 自动建 D1（无则创建并回填 id）→ 应用迁移 → 部署 Worker →（可选）同步密钥；需配置 API Token |
+| `apps/server/scripts/ci-deploy.mjs` | 默认路径（Workers Builds）的一体部署脚本：构建前端工作台 → 确保 D1 存在（无则创建）→ 回填 database_id 到工作副本 → 应用迁移 → `wrangler deploy`（含前端静态资源） |
 | `apps/server/scripts/verify-schema-parity.ts` | 校验「迁移链产出的 schema」与「运行时初始化器产出的 schema」一致 |
 
 ## 2. 首次准备（路径一 · Workers Builds，零 Token）
@@ -43,15 +44,15 @@
 
 部署脚本会自动完成：D1 数据库 `dogear_prod` 不存在则创建 → 把真实 `database_id` 回填到构建机上的 `wrangler.toml` 工作副本（仓库保留占位符）→ 应用迁移（建表与默认数据）→ 部署。之后每次推 main 自动重建部署。
 
-### 2.2 工作台（apps/web 前端）
+### 2.2 工作台（apps/web 前端）——已并入 Worker，无需单独部署
 
-Workers Builds 只部署 Worker；前端走 **Pages 的 Git 集成**（同样零 Token）：
+前端作为静态资源与 API **同域**部署在同一个 Worker 上（v0.4 起，`wrangler.toml` 的 `[assets]`）：
 
-| 步骤 | 配置 |
-| --- | --- |
-| Workers & Pages → Create → Pages → 连接本仓库 | **Root directory**：`apps/web`；**Build command**：`pnpm run build`；**Output directory**：`dist` |
+- `/api/*` 与 `/health` 先经 Worker 处理（`run_worker_first`，已实测多级嵌套路径命中）；
+- 其余路径由前端静态资源承接，未命中回退 `index.html`（SPA fallback）；
+- `ci-deploy.mjs` 第 1 步自动构建前端，推 main 即随 Worker 一起发布——**没有独立 Pages 项目，也不需要配置 CORS**。
 
-前端与 Worker 不同域，需在 Worker 侧放开 CORS：`apps/server/wrangler.toml` 的 `[vars]` 里取消注释并填 `DOGEAR_CORS_ORIGIN = "https://<Pages 项目名>.pages.dev"`（提交推送即可），或在 Worker 的 Variables 里加同名变量。
+> 设计依据：前端请求全部使用相对路径 `/api/*`，同域部署零改动、Cookie 同源无跨站问题；跨域（Pages）方案需改前端 API 地址、开 CORS、处理跨域 Cookie，成本高且不满足「全自动」目标（2026-09-12 经用户拍板合并）。注意：本地 `dev:workers` 与 `pnpm --filter @dogear/server deploy` 前，需先 `pnpm --filter @dogear/web build`（`[assets]` 目录必须存在）。
 
 ### 2.3 手动路径（应急/排查用）
 
@@ -88,7 +89,7 @@ pnpm --filter @dogear/server dev:workers
 
 配好后 **push 到 main 即全自动部署**（也可在 Actions 页手动 `workflow_dispatch`）。流程为四个阶段：
 
-`verify`（typecheck + test + schema 一致性） → `preflight`（判断凭据是否齐备） → `deploy-worker`（自动建 D1 并回填 id → 迁移 → 部署 → 同步密钥） → `deploy-web`（可选）。
+`verify`（typecheck + test + schema 一致性） → `preflight`（判断凭据是否齐备） → `deploy-worker`（构建前端 → 自动建 D1 并回填 id → 迁移 → 部署 → 同步密钥） → `deploy-web`（可选）。
 
 **前置条件未满足时的行为**：`preflight` 只检查一件事——是否缺少 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`。缺少即把 `ready=false` 传给后续任务，**仅执行校验并跳过部署**，并在 Actions 的 Summary 里列出缺哪一项与配置步骤。D1 是否存在**不做检查**——由 deploy-worker 首步幂等处理（无则建、有则复用），首次部署与后续推送走同一条路。
 
@@ -137,7 +138,7 @@ pnpm --filter @dogear/server dev:workers
 
 - [ ] 真实首次部署（路径一）：按 §2.1 面板配置推 main，确认 `ci-deploy.mjs` 自动建库/迁移/部署跑通，`DOGEAR_PASSWORD` 登录可用
 - [ ] （可选）路径二 Actions 在真实 Secrets 下跑通（workflow 变更后需重验）
-- [ ] （可选）工作台 Pages 发布与跨域 CORS（`DOGEAR_CORS_ORIGIN`）
+- [ ] 打开 Worker 域名根路径即见工作台登录页（前端同域），`DOGEAR_PASSWORD` 登录后列表可读、保存可用
 
 ## 7. 未做的事
 
