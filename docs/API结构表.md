@@ -1,12 +1,12 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.3
-> **应用版本**：v0.7.23
+> **文档版本**：v1.4
+> **应用版本**：v0.7.28
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
 > **配套**：[数据库结构表](./数据库结构表.md) · [API 设计](./modules/20260904_API设计.md)
-> **最后更新日期**：2026-09-11
+> **最后更新日期**：2026-09-12
 > **修改记录**：
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
@@ -17,6 +17,7 @@
 > | v1.1 | v0.2.0 | 2026-09-04 | 补齐 M4 工作台 API 的请求、回执、分页、错误和 Skill 管理契约，供正式前端接线评审 | gpt-5 |
 > | v1.2 | v0.6.0 | 2026-09-04 | 开放通道连通、备份三档下载、导航规则 CRUD；快照内容、冲突、双向同步、规则求值仍禁止 | grok-4.6 |
 > | v1.3 | v0.7.23 | 2026-09-11 | 开放 `POST /api/backup/:id/restore`（备份恢复，全量替换 + 强制回滚点 + 显式 confirm）；`full` 档恢复明确 501 | deepseek-v4.1-flash |
+> | v1.4 | v0.7.28 | 2026-09-12 | `save_bookmark` 输入扩展可选 `source`（`agent` 缺省 / `extension`，Chrome 扩展接入；向后兼容，不加严）；登记 `GET /.well-known/*` 为免鉴权能力发现端点（Workers 同域部署配 `run_worker_first`）。规则求值仍禁止，见 §1 | glm-5.3-flash |
 
 # API 结构表
 
@@ -26,8 +27,8 @@
 
 | 项 | 口径 |
 | --- | --- |
-| 当前覆盖 | **v1.3 = v1.2 + 备份恢复（书签表）**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
-| 本版有的 | v1.2 全部；外加 `POST /api/backup/:id/restore`（从 light/medium 备份**全量替换**书签表，强制回滚点，需显式 `confirm`） |
+| 当前覆盖 | **v1.4 = v1.3 + Skill `save_bookmark` 可选 `source`（extension 接入）+ 免鉴权能力发现 `GET /.well-known/capabilities`**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
+| 本版有的 | v1.3 全部；外加 `save_bookmark.source`（`agent` 缺省 / `extension`，向后兼容）与 `/.well-known/capabilities`（Workers 同域部署须配 `run_worker_first`，否则被 SPA 回退吞掉） |
 | 本版没有的 | 快照文件 `GET/PUT .../content`、冲突合并、默认双向同步、Dexie 专用接口、导航规则求值后的展示集合、ZIP 导入、`full` 档在线恢复、Skill 批量与删除、离线保存 |
 | 升级规则 | 下表任一触发即停。先讨论升级方案、升本文档版本，再接线。禁止边写代码边加路由。 |
 
@@ -236,7 +237,7 @@ Skill 本版无批量。
 
 | name | 输入 | 成功 | 约束 |
 | --- | --- | --- | --- |
-| `save_bookmark` | `url` 必填；`note` `intent` 可选；`snapshot` 默认 false | 201 含正式 `id`；`source=agent` `status=unread` | 不写场景/文件夹/标签；`snapshot=true` 只插 Job，`snapshotStatus=queued_pending_browser`；log actor=agent；建议可异步，本回执可 `suggestions:[]` |
+| `save_bookmark` | `url` 必填；`note` `intent` 可选；`snapshot` 默认 false；`source` 可选（v1.4：`agent` 缺省 / `extension`，Chrome 扩展保存；其余值 400） | 201 含正式 `id`；`source` 按入参（缺省 `agent`）`status=unread` | 不写场景/文件夹/标签；`snapshot=true` 只插 Job，`snapshotStatus=queued_pending_browser`；log actor=agent；建议可异步，本回执可 `suggestions:[]`；**回执不对称**：首次为扁平 receipt，24h 幂等重放为 `{bookmark,...}` 包裹（接入方按 `data.bookmark ?? data` 兼容） |
 | `search_bookmarks` | `query` `filters` `limit` `cursor` | `{items,nextCursor}` | 标题/URL/标签/备注；默认排除回收站与 `private`（`includePrivate:true` 才含私密） |
 | `list_bookmarks` | 筛选 + `limit` `cursor` | 同上 | 无 query 时用此，勿塞进 search |
 | `update_bookmark` | `id` + 可改字段；结构字段另见下 | 见下 | 默认能力关 |
