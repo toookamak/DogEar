@@ -34,6 +34,14 @@ describe('M3/M4 shared schemas', () => {
     }).snapshotStatus).toBe('queued_pending_browser')
   })
 
+  it('save skill input keeps agent default and accepts extension source', () => {
+    // 既有 agent 不传 source 不受影响；Chrome 扩展传 extension；其余取值拒绝
+    expect(saveBookmarkSkillInputSchema.parse({ url: 'https://example.com' }).source).toBeUndefined()
+    expect(saveBookmarkSkillInputSchema.parse({ url: 'https://example.com', source: 'extension' }).source).toBe('extension')
+    expect(saveBookmarkSkillInputSchema.parse({ url: 'https://example.com', source: 'agent' }).source).toBe('agent')
+    expect(() => saveBookmarkSkillInputSchema.parse({ url: 'https://example.com', source: 'page' })).toThrow()
+  })
+
   it('enforces suggestion target and status contracts', () => {
     const suggestion = suggestionSchema.parse({
       id: '550e8400-e29b-41d4-a716-446655440001',

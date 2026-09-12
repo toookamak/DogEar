@@ -69,7 +69,15 @@ export const skillNameSchema = z.enum([
   'suggest_scene',
 ])
 
-export const saveBookmarkSkillInputSchema = saveBookmarkInputSchema
+/**
+ * save_bookmark 的 Skill 入参：base 之上扩展可选 `source`。
+ * Chrome 扩展保存传 `source: 'extension'`（工作台来源条据此显示「插件」）；
+ * 缺省仍为 `agent`，既有 agent 不传该字段不受影响（对外契约向后兼容）。
+ * Skill 侧有意不加 .strict()（见 contracts-v1.1.ts 的说明），多传字段仍被宽松忽略。
+ */
+export const saveBookmarkSkillInputSchema = saveBookmarkInputSchema.extend({
+  source: z.enum(['agent', 'extension']).optional(),
+})
 export const searchBookmarksSkillInputSchema = paginationQuerySchema.extend({
   query: z.string().optional(),
   filters: bookmarkListFiltersSchema.optional(),

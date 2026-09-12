@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "DogEar · 折耳书签",
+  "version": "0.1.0",
+  "description": "一键把当前标签页保存到 DogEar（折耳书签）。填写 DogEar 地址与 Skill Token 即可连通使用。",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_title": "保存到 DogEar",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  }
+}

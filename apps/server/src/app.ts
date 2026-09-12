@@ -57,7 +57,7 @@ type AppOptions = {
 type SkillLimit = 'read' | 'write' | 'batch'
 
 const skillDefinitions = [
-  { name: 'save_bookmark', write: true, capability: 'write_new', input: 'url, note?, intent?, snapshot?', notes: 'Writes one bookmark to the source database.' },
+  { name: 'save_bookmark', write: true, capability: 'write_new', input: 'url, note?, intent?, snapshot?, source?', notes: 'Writes one bookmark to the source database. source: agent (default) | extension (Chrome extension).' },
   { name: 'search_bookmarks', write: false, capability: 'read', input: 'query?, filters?, limit?, cursor?', notes: 'Searches active non-private bookmarks by default.' },
   { name: 'update_bookmark', write: true, capability: 'update_existing', input: 'id plus editable fields', notes: 'Disabled by default; structure changes require confirmation.' },
   { name: 'list_bookmarks', write: false, capability: 'read', input: 'filters?, limit?, cursor?', notes: 'Lists active bookmarks.' },
@@ -695,7 +695,8 @@ ${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保�
       }
     }
     const id = randomUUID()
-    const record = await repository.create({ id, url: input.data.url, status: 'unread', source: 'agent', note: input.data.note, intent: input.data.intent, syncStatus: 'synced' })
+    // 来源：Chrome 扩展传 source:'extension'，缺省仍为 agent（契约向后兼容）
+    const record = await repository.create({ id, url: input.data.url, status: 'unread', source: input.data.source ?? 'agent', note: input.data.note, intent: input.data.intent, syncStatus: 'synced' })
     if (idempotencyKey) {
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
       await repository.idempotency.store({

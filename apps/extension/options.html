@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>DogEar 扩展设置</title>
+    <style>
+      :root {
+        --canvas: #faf9f5;
+        --panel: #ffffff;
+        --line: #e9e5dc;
+        --line-strong: #d3cdbf;
+        --text: #2e2a23;
+        --muted: #716b5e;
+        --faint: #a29b8c;
+        --amber: #cf6a43;
+        --amber-strong: #b8562f;
+        --amber-soft: rgba(207, 106, 67, 0.09);
+        --mint: #3f7a5c;
+        --mint-soft: rgba(63, 122, 92, 0.09);
+        --red: #bd5449;
+        --red-soft: rgba(189, 84, 73, 0.09);
+        --radius-sm: 5px;
+        --radius: 8px;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: var(--canvas);
+        color: var(--text);
+        font: 13px/1.6 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+      .card {
+        max-width: 460px;
+        margin: 0 auto;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        box-shadow: 0 16px 44px rgba(88, 72, 44, 0.13);
+      }
+      h1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 4px;
+        font-size: 17px;
+      }
+      .mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #cf6a43, #b8562f);
+        color: #fff9f1;
+        font-family: Georgia, serif;
+        font-size: 13px;
+      }
+      .sub { margin: 0 0 16px; color: var(--muted); font-size: 12px; }
+      label { display: block; margin: 12px 0 4px; color: var(--muted); font-size: 12px; }
+      input {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--panel);
+        color: var(--text);
+        font: 13px ui-monospace, Consolas, monospace;
+      }
+      input:focus {
+        outline: none;
+        border-color: rgba(207, 106, 67, 0.45);
+        box-shadow: 0 0 0 2px var(--amber-soft);
+      }
+      .row { display: flex; gap: 8px; margin-top: 16px; }
+      button.primary {
+        padding: 8px 14px;
+        border: none;
+        border-radius: var(--radius-sm);
+        background: var(--amber);
+        color: #fff9f1;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.primary:hover:not(:disabled) { background: var(--amber-strong); }
+      button.primary:disabled { opacity: 0.5; cursor: default; }
+      button.ghost {
+        padding: 7px 13px;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius-sm);
+        background: none;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      button.ghost:hover { color: var(--text); border-color: var(--amber); }
+      #message {
+        display: none;
+        margin-top: 12px;
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 12px;
+      }
+      #message.ok { display: block; background: var(--mint-soft); color: var(--mint); }
+      #message.err { display: block; background: var(--red-soft); color: var(--red); }
+      details { margin-top: 16px; color: var(--muted); font-size: 12px; }
+      details summary { cursor: pointer; color: var(--muted); }
+      code {
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: var(--canvas);
+        border: 1px solid var(--line);
+        font: 11px ui-monospace, Consolas, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1><span class="mark">D</span> DogEar 扩展设置</h1>
+      <p class="sub">填写 DogEar 服务地址与 Skill Token，保存即可连通。</p>
+
+      <label for="addr">DogEar 地址</label>
+      <input id="addr" type="url" placeholder="https://your-dogear.workers.dev" />
+
+      <label for="token">Skill Token</label>
+      <input id="token" type="password" placeholder="DOGEAR_SKILL_TOKEN" />
+      <p class="sub" style="margin-top: 6px">
+        Token 由部署方配置（<code>wrangler secret put DOGEAR_SKILL_TOKEN</code>），用于 Agent 与扩展保存接口。
+      </p>
+
+      <div class="row">
+        <button type="button" class="primary" id="save-config">保存</button>
+        <button type="button" class="ghost" id="test">测试连通</button>
+      </div>
+      <div id="message"></div>
+
+      <details>
+        <summary>Agent 接入说明</summary>
+        <p>
+          Agent 保存同一接口：<code>POST &lt;DogEar地址&gt;/api/skill/save_bookmark</code>，
+          头部带 <code>Authorization: Bearer &lt;Token&gt;</code>，能力发现见
+          <code>GET /.well-known/capabilities</code>。详见仓库
+          <code>docs/modules/20260912_浏览器扩展与Agent接入.md</code>。
+        </p>
+      </details>
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>
