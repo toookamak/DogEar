@@ -38,6 +38,8 @@ export function TopBar({ sidebarOpen, onToggleSidebar, onLogout }: TopBarProps) 
           onClick={() => setLocation('/')}
         >
           DogEar
+          {/* 版本号（mono 小字，来源 apps/web/package.json，经 __APP_VERSION__ 注入） */}
+          <span className="topbar-brand-version">v{__APP_VERSION__}</span>
         </button>
       </div>
 
