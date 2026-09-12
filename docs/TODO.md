@@ -58,8 +58,9 @@
 
 - [ ] **ZIP 导入 / 导出**（D 组剩余项）：备份设计稿 §3 要求「本地导出为 ZIP + 从 CSV/ZIP 导入」，与已实现的「备份恢复」是**两条不同的路径**（后者从服务端已有的备份恢复，前者处理用户手上的本地文件）。需先定：ZIP 解析用哪个库（引入生产依赖须先确认）、以及上传大小上限。**搁置：依赖选型待确认**
 - [ ] **`full` 档在线恢复**：当前明确返回 501（服务运行中替换被持有的库文件不安全）。若要支持，需先解决「关闭并重建数据库连接」的架构问题——属技术选型，**须先讨论**。**搁置：架构问题待讨论**
-- [ ] **Track A 真实部署未跑**：Workers 入口、`wrangler.toml`（含前端同域 `[assets]`）、部署脚本均就绪且本地全链路验证通过，但**从未在真实 Cloudflare 上完整部署过**。默认走 Workers Builds 零 Token：面板把 root directory 设为 `apps/server`、Deploy command 填 `node scripts/ci-deploy.mjs` 后推 main——自动构建前端/建 D1/回填 id/迁移/部署，前后端同域名（见 `docs/modules/20260910_Cloudflare部署.md` §2）；Actions 为备用口径（需 API Token）。**待用户在 Cloudflare 面板操作**
-- [ ] **CI 是否跑通未经确认**：仓库为私有，未鉴权访问 repo 页 / `/actions` / `raw.githubusercontent.com` 均 404（账号页 200，可排除账号不存在），且 GitHub API 限流，故**无法在本环境核对 Actions 运行结果**。「推送后一键部署」目前只验证到「配置与脚本正确」这一层——2026-09-12 workflow 全自动改造后：YAML 解析通过、`wrangler deploy --dry-run` 通过、uuid 提取片段三情形（命中/缺失/坏 JSON）实测正确；**它是否在 GitHub 上真的执行过、是否绿，需仓库拥有者在 Actions 页确认**（尤其：workflow 语法若非法，GitHub 会直接标红而不执行）。**待用户确认**
+- [x] **Track A 真实部署已跑通（2026-09-12）**：推 main 后 Workers Builds 自动构建部署成功，线上工作台为新版视觉（用户确认「配色好了」）——零 Token 默认路径（面板 root directory=`apps/server`、Deploy command=`node scripts/ci-deploy.mjs`）全链路实证可用，本条闭环
+- [ ] **CI 是否跑通未经确认**：部署已成功即间接证明 workflow 可用；如需核对每次运行的日志与耗时，到仓库 Actions 页查看。**待用户可选确认**
+- [ ] **线上 Skill Token 未配置**：线上要启用 Chrome 扩展 / Agent 保存，须 `wrangler secret put DOGEAR_SKILL_TOKEN`（或配 GitHub Secret `DOGEAR_SKILL_TOKEN` 由 Actions 同步）。**待用户操作**
 - [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）。**依赖 L2 队列真消费，先做 L2**
 - [ ] R2 未接入（快照内容存储）。**依赖 L3，先做 L3**
 - [x] **`docs/Draft/README.md` 失效索引已收口（2026-09-12）**：整体移入 `docs/archive/Draft-README-失效索引.md` 并在文首加废弃说明；`docs/Draft/` 仅剩 `sync-card-showcase.html` 演示素材
