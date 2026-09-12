@@ -58,7 +58,7 @@
 
 ## 已知小缺口
 
-- [ ] **ZIP 导入 / 导出**（D 组剩余项）：备份设计稿 §3 要求「本地导出为 ZIP + 从 CSV/ZIP 导入」，与已实现的「备份恢复」是**两条不同的路径**（后者从服务端已有的备份恢复，前者处理用户手上的本地文件）。需先定：ZIP 解析用哪个库（引入生产依赖须先确认）、以及上传大小上限。**搁置：依赖选型待确认**
+- [x] **ZIP 导入 / 导出（2026-09-12，v0.7.30，用户批准 fflate + 25MB）**：`GET /api/backup/export-zip` 与 `POST /api/backup/import`（Track B，与文件备份同注入；Workers 501）。导入为全量替换 + 自动回滚点（复用恢复的保护链）；ZIP 内 snapshots/ 暂跳过（待 L3）。**依赖登记**：`fflate@^0.8.3`（MIT，纯 JS 零依赖，仅 apps/server 使用——若效果不佳可整体摘除：删依赖 + backup-routes/service 的 export-zip/import 路径即可，无其他耦合）
 - [ ] **`full` 档在线恢复**：当前明确返回 501（服务运行中替换被持有的库文件不安全）。若要支持，需先解决「关闭并重建数据库连接」的架构问题——属技术选型，**须先讨论**。**搁置：架构问题待讨论**
 - [x] **Track A 真实部署已跑通（2026-09-12）**：推 main 后 Workers Builds 自动构建部署成功，线上工作台为新版视觉（用户确认「配色好了」）——零 Token 默认路径（面板 root directory=`apps/server`、Deploy command=`node scripts/ci-deploy.mjs`）全链路实证可用，本条闭环
 - [ ] **CI 是否跑通未经确认**：部署已成功即间接证明 workflow 可用；如需核对每次运行的日志与耗时，到仓库 Actions 页查看。**待用户可选确认**

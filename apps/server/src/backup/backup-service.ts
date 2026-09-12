@@ -87,7 +87,22 @@ export class BackupService {
     }
 
     const rows = await this.readBackupRows(backup.tier, backup.filePath)
+    return this.replaceBookmarksWithRows(rows, `备份 ${id}`)
+  }
 
+  /**
+   * 本地导入（备份设计 §3.2）：把解析出的书签 CSV 行**全量替换**进真源。
+   * 与 restoreFromBackup 共用同一套替换与回滚点保护；来源只影响日志文案。
+   */
+  async importRows(rows: BackupRow[], source: string): Promise<RestoreResult> {
+    return this.replaceBookmarksWithRows(rows, source)
+  }
+
+  /**
+   * 全量替换的公共主体：回滚点（做不出来就整体放弃）→ 软删 + purge → 按 CSV 行重建
+   * （复用行内 id 保持身份一致；标签/场景按名字查找或创建）。
+   */
+  private async replaceBookmarksWithRows(rows: BackupRow[], source: string): Promise<RestoreResult> {
     // 回滚点：先落盘一份全量备份。失败则整体放弃，避免「替换了却无法回退」。
     const rollbackBackupId = await this.createBackupNow('full', 'local')
 
@@ -162,11 +177,63 @@ export class BackupService {
       actor: 'user',
       action: 'import',
       targetType: 'backup',
-      targetId: id,
-      detail: `从备份恢复 ${restored} 条（替换掉 ${removed} 条）；回滚点 ${rollbackBackupId}`,
+      targetId: source,
+      detail: `${source}：导入 ${restored} 条（替换掉 ${removed} 条）；回滚点 ${rollbackBackupId}`,
     })
 
     return { ok: true, restored, removed, createdTags, createdScenes, rollbackBackupId }
+  }
+
+  /**
+   * 本地导出（备份设计 §3.1）：当前书签表打包为 ZIP（bookmarks.csv + meta.json）。
+   * 纯内存生成；快照文件归档待 L3 快照产出落地后在 snapshots/ 目录补充。
+   */
+  async exportZip(): Promise<{ name: string; bytes: Uint8Array; count: number }> {
+    const csv = await this.buildExportCsv()
+    const { zipSync, strToU8 } = await import('fflate')
+    const count = parseCsv(csv).length
+    const now = new Date()
+    const stamp = [
+      String(now.getFullYear()).padStart(4, '0'),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('') + '_' + [
+      String(now.getHours()).padStart(2, '0'),
+      String(now.getMinutes()).padStart(2, '0'),
+      String(now.getSeconds()).padStart(2, '0'),
+    ].join('')
+    const meta = JSON.stringify({
+      app: 'DogEar',
+      exportedAt: now.toISOString(),
+      bookmarks: count,
+      note: '快照文件归档待快照存储（L3）落地后加入 snapshots/ 目录',
+    }, null, 2)
+    const bytes = zipSync({
+      'bookmarks.csv': strToU8(csv),
+      'meta.json': strToU8(meta),
+    })
+    return { name: `dogear_export_${stamp}.zip`, bytes, count }
+  }
+
+  /** 导出/打包共用的书签 CSV（列与轻档备份一致，导入侧 parseCsv 直接可读） */
+  private async buildExportCsv(): Promise<string> {
+    const result = await this.repository.list({}, 10000)
+    const csvData = (result.items as any[]).map((b) => ({
+      id: b.id,
+      url: b.url,
+      title: b.title ?? '',
+      note: b.note ?? '',
+      status: b.status,
+      tags: (b.tags || []).map((t: any) => t.name).join('|'),
+      scenes: (b.scenes || []).map((s: any) => s.name).join('|'),
+      createdAt: b.createdAt?.getTime() ?? Date.now(),
+    }))
+    return new Promise<string>((resolve, reject) => {
+      stringify(csvData, { header: true, columns: ['id', 'url', 'title', 'note', 'status', 'tags', 'scenes', 'createdAt'] }, (err, out) => {
+        if (err) reject(err)
+        else resolve(out)
+      })
+    })
   }
 
   /** 解析备份内容为书签行。medium 档是内含 CSV 的 JSON，需先取出再解析。 */

@@ -1,6 +1,6 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.6
+> **文档版本**：v1.7
 > **应用版本**：v0.7.30
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
@@ -20,6 +20,7 @@
 > | v1.4 | v0.7.28 | 2026-09-12 | `save_bookmark` 输入扩展可选 `source`（`agent` 缺省 / `extension`，Chrome 扩展接入；向后兼容，不加严）；登记 `GET /.well-known/*` 为免鉴权能力发现端点（Workers 同域部署配 `run_worker_first`）。规则求值仍禁止，见 §1 | glm-5.3-flash |
 > | v1.5 | v0.7.30 | 2026-09-12 | `POST /api/sync/process` 从占位升级为真实消费（回执摘要 + 退避语义，见 §4.3 与同步设计 §3.1）；登记 Workers Cron `[triggers]` 调度。冲突合并、双向拉回仍禁止（见 §1） | glm-5.3-flash |
 | v1.6 | v0.7.30 | 2026-09-12 | **开放导航规则求值**：新增 `GET /api/nav/feed`（按 nav_rules 逐步圈定，语义见 evaluator）；`GET /api/nav/bookmarks` 标注**已过时**（保留兼容，勿新增依赖）。`POST/PATCH /api/nav/rules` 收紧 rule 形状校验（对象/字符串均可，PATCH 传对象此前会落库报错，一并修复） | glm-5.3-flash |
+| v1.7 | v0.7.30 | 2026-09-12 | **本地导出/导入（备份设计 §3）**：`GET /api/backup/export-zip`（ZIP：bookmarks.csv + meta.json）与 `POST /api/backup/import`（multipart 上传 CSV/ZIP，25MB 上限，显式 confirm，ZIP 内 snapshots/ 暂跳过）。两路径均限 Track B（依赖文件备份回滚点），Workers 501。依赖新增 `fflate`（用户批准，记录见 TODO） | glm-5.3-flash |
 
 # API 结构表
 
@@ -29,7 +30,7 @@
 
 | 项 | 口径 |
 | --- | --- |
-| 当前覆盖 | **v1.6 = v1.5 + 导航规则求值（`GET /api/nav/feed`）**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
+| 当前覆盖 | **v1.7 = v1.6 + 本地导出/导入 ZIP/CSV（Track B）**。路径沿用已接线的 `/api/channels`、`/api/backup`、`/api/nav`、`/api/archive`、`/api/jobs`。 |
 | 本版有的 | v1.3 全部；外加 `save_bookmark.source`（`agent` 缺省 / `extension`，向后兼容）与 `/.well-known/capabilities`（Workers 同域部署须配 `run_worker_first`，否则被 SPA 回退吞掉） |
 | 本版没有的 | 快照文件 `GET/PUT .../content`、冲突合并、默认双向同步、Dexie 专用接口、ZIP 导入、`full` 档在线恢复、Skill 批量与删除、离线保存 |
 | 升级规则 | 下表任一触发即停。先讨论升级方案、升本文档版本，再接线。禁止边写代码边加路由。 |
@@ -514,6 +515,8 @@ Job 回执固定包含 `id`、`bookmarkId`、`type`、`status`、`retryCount`、
 | GET | `/api/backup/:id` | — | 记录 | 无文件也返回记录，`filePath` 为 null |
 | GET | `/api/backup/:id/download` | — | 文件流 | **本版必做**。`status!=completed` 或无 `file_path` → 409 `CONFLICT` 或 404 |
 | POST | `/api/backup/:id/restore` | `{confirm:true, bookmarks?}` | `{ok,restored,removed,createdTags,createdScenes,rollbackBackupId}` | **破坏性**。语义见下 |
+| GET | `/api/backup/export-zip` | — | ZIP 文件流 | **v1.7（Track B）**：`bookmarks.csv`（列同轻档）+ `meta.json`；文件名 `dogear_export_YYYYMMDD_HHMMSS.zip`。纯内存生成，不写备份记录 |
+| POST | `/api/backup/import` | multipart：`file`（CSV/ZIP，≤25MB）+ `confirm:true` | `{ok,restored,removed,createdTags,createdScenes,rollbackBackupId,skippedSnapshots,sourceFile}` | **v1.7（Track B，破坏性）**：全量替换书签表；导入前自动创建回滚点备份；ZIP 内 `snapshots/` 暂跳过并在回执报告数量（快照存储待 L3）；Workers 501 |
 
 `light` 至少一种可下载格式（CSV 即可）。`medium` = 轻档 + 设置（无密钥）。`full` = SQLite 或全表导出；没有快照文件则 `includes` 不得声称含快照。失败不删书签。
 

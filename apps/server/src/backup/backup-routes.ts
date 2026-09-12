@@ -3,11 +3,70 @@ import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type { BookmarkRepository } from '@dogear/db'
 import { backupRestoreRequestSchema } from '@dogear/shared'
-import { BackupRestoreError, BackupService } from './backup-service.js'
+import { BackupRestoreError, BackupService, parseCsv } from './backup-service.js'
 
 export function createBackupRoutes(repository: BookmarkRepository, dbPath?: string) {
   const app = new Hono()
   const backupService = new BackupService(repository, dbPath)
+
+  /** 上传上限（用户拍板）：25MB，足够多年量级的 CSV/ZIP 导出包 */
+  const IMPORT_MAX_BYTES = 25 * 1024 * 1024
+
+  /** 本地导出 ZIP（备份设计 §3.1）：bookmarks.csv + meta.json，浏览器下载 */
+  app.get('/export-zip', async (c) => {
+    const result = await backupService.exportZip()
+    return c.body(result.bytes as unknown as ArrayBuffer, 200, {
+      'Content-Disposition': `attachment; filename="${result.name}"`,
+      'Content-Type': 'application/zip',
+    })
+  })
+
+  /**
+   * 本地导入（备份设计 §3.2）：multipart 上传 CSV / ZIP，全量替换书签表。
+   * 保护与恢复一致：显式 confirm + 导入前自动创建回滚点备份（BackupService.importRows）。
+   * ZIP 中的 snapshots/ 本轮跳过（快照存储待 L3），回执里如实报告 skippedSnapshots。
+   */
+  app.post('/import', async (c) => {
+    const body = await c.req.parseBody()
+    const file = body.file
+    if (!(file instanceof File)) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'multipart field "file" is required' } }, 400)
+    }
+    if (file.size > IMPORT_MAX_BYTES) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: `文件过大（上限 ${Math.round(IMPORT_MAX_BYTES / 1024 / 1024)}MB）` } }, 400)
+    }
+    if (body.confirm !== 'true') {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Import requires explicit confirm=true（当前书签将被替换；系统会先自动创建回滚点备份）' } }, 400)
+    }
+
+    const name = file.name.toLowerCase()
+    let csv: string
+    let skippedSnapshots = 0
+    try {
+      if (name.endsWith('.zip')) {
+        const { unzipSync, strFromU8 } = await import('fflate')
+        const entries = unzipSync(new Uint8Array(await file.arrayBuffer()))
+        const csvEntry = Object.entries(entries).find(([path, data]) =>
+          path.split('/').pop() === 'bookmarks.csv' && data.length > 0)
+        if (!csvEntry) {
+          return c.json({ error: { code: 'BAD_BACKUP', message: 'ZIP 里没有找到 bookmarks.csv' } }, 400)
+        }
+        csv = strFromU8(csvEntry[1])
+        skippedSnapshots = Object.keys(entries).filter((path) => path.includes('snapshots/')).length
+      } else {
+        csv = await file.text()
+      }
+    } catch (e) {
+      return c.json({ error: { code: 'BAD_BACKUP', message: `无法读取文件：${e instanceof Error ? e.message : String(e)}` } }, 400)
+    }
+
+    const rows = parseCsv(csv)
+    if (rows.length === 0) {
+      return c.json({ error: { code: 'BAD_BACKUP', message: '文件里没有可导入的书签行' } }, 400)
+    }
+    const result = await backupService.importRows(rows, `本地导入 ${file.name}`)
+    return c.json({ ...result, skippedSnapshots, sourceFile: file.name })
+  })
 
   app.post('/', async (c) => {
     const body = await c.req.json().catch(() => ({}))

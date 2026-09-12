@@ -94,6 +94,9 @@ function createUnsupportedBackupRoutes() {
   app.post('/', unsupported)
   app.get('/:id', unsupported)
   app.get('/:id/download', unsupported)
+  // 本地导出/导入（ZIP/CSV）依赖文件备份体系（回滚点），与上面同属 Track B 能力
+  app.get('/export-zip', unsupported)
+  app.post('/import', unsupported)
   return app
 }
 

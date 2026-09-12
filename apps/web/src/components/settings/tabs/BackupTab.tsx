@@ -11,6 +11,11 @@ import type { BackupResponse } from '../../../types/api.js'
 
 const TIERS = ['light', 'medium', 'full'] as const
 
+/** 导入回执的 restored 计数（容错：异常回执不给 NaN） */
+function result2count(body: any): number {
+  return typeof body?.restored === 'number' ? body.restored : 0
+}
+
 /**
  * 备份与恢复：三档备份创建、备份列表、下载、**从备份恢复**。
  *
@@ -28,6 +33,7 @@ export function BackupTab() {
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<BackupResponse | null>(null)
   const [restoring, setRestoring] = useState(false)
+  const [importPending, setImportPending] = useState(false)
 
   const load = async () => {
     try {
@@ -51,6 +57,58 @@ export function BackupTab() {
       setNotice({ kind: 'error', text: e instanceof Error ? e.message : '备份创建失败' })
     }
     setCreating(null)
+  }
+
+  // 本地导出 / 导入（备份设计 §3）：ZIP/CSV 走用户本地文件，与服务端备份记录是两条路径
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importBusy, setImportBusy] = useState(false)
+
+  const handleExportZip = async () => {
+    setNotice(null)
+    try {
+      const response = await fetch('/api/backup/export-zip')
+      if (!response.ok) throw new Error(`导出失败（HTTP ${response.status}）`)
+      const blob = await response.blob()
+      const disposition = response.headers.get('Content-Disposition') ?? ''
+      const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'dogear_export.zip'
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = name
+      anchor.click()
+      URL.revokeObjectURL(url)
+      setNotice({ kind: 'success', text: `已导出 ${name}。` })
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof Error ? e.message : '导出失败' })
+    }
+  }
+
+  const handleImport = async () => {
+    if (!importFile) return
+    setImportBusy(true)
+    setNotice(null)
+    try {
+      const form = new FormData()
+      form.append('file', importFile)
+      form.append('confirm', 'true')
+      const response = await fetch('/api/backup/import', { method: 'POST', body: form })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(body?.error?.message ?? `导入失败（HTTP ${response.status}）`)
+      }
+      const parts = [
+        `已导入 ${result2count(body)} 条书签`,
+        `替换掉原有 ${body?.removed ?? 0} 条`,
+      ]
+      if (body?.skippedSnapshots > 0) parts.push(`ZIP 中 ${body.skippedSnapshots} 个快照文件暂未导入（快照存储待接入）`)
+      if (body?.rollbackBackupId) parts.push('已自动保存回滚点备份')
+      setNotice({ kind: 'success', text: parts.join('，') + '。' })
+      setImportFile(null)
+      await load()
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof Error ? e.message : '导入失败' })
+    }
+    setImportBusy(false)
   }
 
   const handleRestore = async () => {
@@ -107,6 +165,36 @@ export function BackupTab() {
       </section>
 
       <section className="settings-section">
+        <h3 className="section-title">本地导出 / 导入</h3>
+        <div className="backup-actions">
+          <button type="button" className="btn btn--primary" onClick={() => { void handleExportZip() }}>
+            导出 ZIP（书签 CSV）
+          </button>
+          <label className="btn btn--ghost">
+            选择要导入的 CSV / ZIP…
+            <input
+              type="file"
+              accept=".csv,.zip"
+              style={{ display: 'none' }}
+              onChange={(e) => { setNotice(null); setImportFile(e.target.files?.[0] ?? null) }}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={!importFile || importBusy}
+            onClick={() => { setImportPending(true) }}
+          >
+            {importBusy ? '导入中…' : importFile ? `导入「${importFile.name}」` : '导入'}
+          </button>
+        </div>
+        <p className="muted backup-note">
+          导出为 ZIP（bookmarks.csv + meta.json）；导入支持 CSV 或该 ZIP，语义为**全量替换**当前书签表——
+          导入前服务端会自动创建一次回滚点备份。上传上限 25MB；ZIP 中的快照文件暂不导入（快照存储待接入）。
+        </p>
+      </section>
+
+      <section className="settings-section">
         <h3 className="section-title">备份记录</h3>
         {backups.length === 0 ? (
           <p className="empty-note">暂无备份记录。创建备份后可在此下载或恢复。</p>
@@ -154,6 +242,20 @@ export function BackupTab() {
           轻档 / 中档（CSV）可在线恢复；重档是数据库文件副本，需停服后手工替换。
         </p>
       </section>
+
+      <ConfirmDialog
+        open={importPending}
+        title="确认导入本地文件？"
+        message={
+          importFile
+            ? `将用「${importFile.name}」的书签数据**覆盖**当前书签库——这是全量替换，导入之后新增的书签会被移除。`
+              + '导入前服务端会自动创建一次回滚点备份。'
+            : ''
+        }
+        confirmLabel={importBusy ? '导入中…' : '确认导入'}
+        onConfirm={() => { if (!importBusy) void handleImport() }}
+        onCancel={() => { if (!importBusy) { setImportPending(false); setImportFile(null) } }}
+      />
 
       <ConfirmDialog
         open={restoreTarget !== null}
