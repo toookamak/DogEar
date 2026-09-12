@@ -1,9 +1,11 @@
 # DogEar · Cloudflare Workers（轨 A）部署配置
 # 默认部署路径（零 Token）：Cloudflare Workers Builds（面板 Git 集成）自带账号凭据，
 #   面板设置 Root directory=apps/server、Deploy command=node scripts/ci-deploy.mjs，
-#   脚本一体完成：D1 无则建库 → 回填 database_id（仅构建机工作副本）→ 迁移 → deploy。
+#   脚本一体完成：构建前端 → D1 无则建库 → 回填 database_id（仅构建机工作副本）→
+#   迁移 → deploy（API + 前端静态资源同域，见下方 [assets]）。
 # 备用路径：.github/workflows/deploy-cloudflare.yml（Actions，需配 API Token）。
-# 本地部署：pnpm --filter @dogear/server deploy；本地联调：pnpm --filter @dogear/server dev:workers
+# 本地部署：pnpm --filter @dogear/server deploy；本地联调：先 pnpm --filter @dogear/web build
+#   再 pnpm --filter @dogear/server dev:workers（用模拟 D1，不需要真实凭据）。
 # 详见 docs/modules/20260910_Cloudflare部署.md。
 
 name = "dogear"
@@ -15,6 +17,15 @@ compatibility_flags = ["nodejs_compat"]
 
 [observability]
 enabled = true
+
+# 前端工作台（apps/web 构建产物）与 API 同域部署：
+# /api/* 与 /health 先经 Worker 处理（run_worker_first），
+# 其余路径由静态资源承接，未命中回退 index.html（SPA fallback）。
+# 本地联调前需先构建前端：pnpm --filter @dogear/web build
+[assets]
+directory = "../web/dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/health"]
 
 # 本地与线上统一的真源库绑定，名称必须与 worker.ts 的 Env.DB 一致
 [[d1_databases]]
