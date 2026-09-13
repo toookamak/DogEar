@@ -1,5 +1,8 @@
 # Changelog
 
+- 2026-09-14 / v0.7.36 — **feat(workbench)：网格卡片预览区显示封面**。有 `cover` URL 时填满 120px 预览（`object-fit: cover`），加载失败回退原来的来源色渐变 + 衬线水印；旧 Raindrop 导入若封面只在 `raindropExtras` 也回填。导航页投影不含 cover，仍走装饰。未改 DESIGN.md（原文写装饰预览）。
+- 2026-09-13 / v0.7.35 — **perf(workers)：轨 A 包体、首屏、缓存与装配**。①S3 AWS SDK / csv 改为动态 import，未用 S3 不进 Worker 主图；②isolate 缓存 `createApp`，CORS 按 Origin 回显；③会话 HMAC 改 Web Crypto；④`minify`、API `no-store`、静态 `_headers`；⑤前端路由 lazy + manualChunks，去掉 Google Fonts；⑥请求/cron 结构化日志。Skill Token 仍 node:crypto，`nodejs_compat` 暂留。文档：`docs/modules/20260913_轨A实际绑定与性能口径.md`。未改 wiki。
+
 - 2026-09-13 / v0.7.34 / be2cf08 — **fix：待处理总数、Raindrop 简介、快照执行、Skill Token、添加书签文案**。①Inbox `listInbox` 漏传 `total`，标题数字变成当页条数——现回传筛选总数；②Raindrop 导入/拉回把 `excerpt` 写入书签列（旧数据从 raindropExtras 回填展示）；③Track A 注入 fetch 轻量快照，工作台点击后执行队列并可查看 HTML（登录墙/资源内联仍走 Track B monolith 或以后的 SingleFile）；④设置 → Agent 接入可生成 Skill Token（明文只显示一次，输入框旁「复制 Token」可反复复制到扩展）；⑤添加书签入口统一用「添加」（顶栏/工作台/表单/空态/向导/扩展），「保存」留给配置与编辑已有书签，避免与退出、设置保存冲突。
 
 - 2026-09-13 / v0.7.33 / ee29f4a — **feat(workbench)：导入/导出进度进状态栏 + 列表「加载更多」改分页器**。①**状态栏任务进度**：`StatusBar` 订阅全局 channel-tasks，任务运行中常驻显示「导入中 37 / 397 条（第 1 页）」「导出中 12 / 40 条」（mono 琥珀小字），任何页面都看得到，完成/失败仍走 toast；②**列表分页**：工作台（Inbox/书签共用）摘要行改「共 N 条」，列表底部改「上一页 · 第 x / y 页 · 下一页」（keyset 游标链式取页，不做任意跳页——避免为跳页改 offset 牺牲排序稳定性，备选方案记屏稿；筛选/排序变更回第 1 页，撤销/批量后刷新当前页，快速连点用请求序号丢弃旧回执），单页不显示分页器；③**配套服务端**：`GET /api/bookmarks`、`/search`、`/inbox` 回执新增 `total`（加性，API 结构表 v1.11）；`repository.list` 关联读取改**页级批量**——一页 4 条查询替代逐条 4~5 条（50 条一页原本 200+ 次子请求，Workers Free 档 50 上限内列表页根本打不开，这是分页上线的隐性前提）。**验证**：typecheck 4 包 + server 79 / db 9 / web 68 项测试全过。**未验证**：浏览器人工过一遍翻页/筛选/状态栏进度（屏稿：`docs/modules/20260913_状态栏任务进度与列表分页屏稿.md`）；导航页 `/nav` 的「加载更多」未动（feed 亦为 50 条量级，如需同款分页另批）。
