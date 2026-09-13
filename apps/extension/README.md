@@ -9,6 +9,8 @@
 3. 点「加载已解压的扩展程序」，选择本目录（`apps/extension`）。
 4. 工具栏出现 DogEar 图标；首次点击按提示进入「设置」。
 
+已加载过旧版的，改完代码后在扩展页点「重新加载」。本次加了 `scripting` 权限（读当前页简介），重新加载时 Chrome 会提示权限变更。
+
 ## 配置
 
 | 项 | 说明 |
@@ -21,12 +23,14 @@
 ## 保存行为
 
 - 调用 `POST /api/skill/save_bookmark`，`Authorization: Bearer <Token>`，`source: "extension"`——工作台来源条显示「插件」。
+- 请求体会带上当前标签的 `title`、页面 `excerpt`（og/meta description，可读时）、`favicon`（http(s) 图标），不再只传 URL。
 - 每次保存带 `Idempotency-Key`（UUID），服务端 24 小时内同 key 重放不重复入库。
 - 备注为可选字段；快照（snapshot）暂未提供入口，需在工作台手动触发。
 - 常见错误：`401/403` = Token 无效或服务端 `write_new` 能力被关闭（设置页 → Agent 接入里可查看开关）；连接失败 = 地址不可达。
 
 ## 权限说明
 
-- `activeTab`：读取当前标签页的标题与 URL（仅在你点击保存时使用）。
+- `activeTab`：读取当前标签页的标题与 URL（仅在你点击扩展时使用）。
+- `scripting`：在当前标签页读取 og/meta 简介，写入 `excerpt`。
 - `storage`：保存地址与 Token。
 - `host_permissions`（http/https）：允许扩展直接请求你自填的 DogEar 地址。扩展不发任何数据到第三方。

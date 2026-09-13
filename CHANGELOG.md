@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-14 / v0.7.37 — **fix(extension)：保存时带上网页标题、简介和图标**。插件此前只传 URL；`save_bookmark` 现接受可选 `title`/`excerpt`/`favicon` 并立即落库，事后抓页不覆盖已有标题。Workers 用 `waitUntil` 把封面等补抓跑完。需在 `chrome://extensions` 重新加载扩展（新增 scripting 权限）。
+
 - 2026-09-14 / v0.7.36 — **fix(web)：补回 `.bm-card-thumb` 选择器**，修复 Vite/postcss `Unexpected }` 导致 Workers 构建失败。
 
 - 2026-09-14 / v0.7.36 — **fix(workbench)：网格封面不显示**。相对 og:image 相对书签页绝对化；Raindrop `media[0].link` 回填；直链失败再走同源 `/api/bookmarks/:id/cover` 代理（防盗链），避免 onError 静默退回装饰底。

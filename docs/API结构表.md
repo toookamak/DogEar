@@ -1,12 +1,12 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.12
-> **应用版本**：v0.7.34
+> **文档版本**：v1.13
+> **应用版本**：v0.7.37
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
 > **配套**：[数据库结构表](./数据库结构表.md) · [API 设计](./modules/20260904_API设计.md)
-> **最后更新日期**：2026-09-13
+> **最后更新日期**：2026-09-14
 > **修改记录**：
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
@@ -26,6 +26,7 @@
 | v1.10 | v0.7.32 | 2026-09-13 | **导出改按页契约（同一限额问题的收尾）**：`POST /api/channels/:id/export`（Raindrop）请求改 `{excludeIds?, count?}`，回执改 `{exported,failed,processed,total,hasMore,errors,failedIds}`——每次推一页（20 条，Raindrop create 无批量端点），前端把上一轮 `failedIds` 传回 `excludeIds` 跳过毒条目，直到 `processed=0`。S3/WebDAV 回执对齐同一形状（单轮即完，`hasMore=false`）。`/api/sync/pull` 与 sync_queue 消费器契约不变，内部改批量 D1（消费器不再写 processing 中间态，中断条目保持 pending 下个 tick 重试） | glm-5.3-flash |
 | v1.11 | v0.7.33 | 2026-09-13 | **列表回执增加 `total`（加性变更）**：`GET /api/bookmarks`、`GET /api/bookmarks/search`、`GET /api/inbox` 回执新增 `total`（当前筛选条件下的总数，分页器「共 y 页」用；游标条件不计入统计）。配套：list 关联读取改页级批量（一页 4 条查询替代逐条 4~5 条，Workers Free 档 50 子请求内跑得动整页列表）。导航页 `GET /api/nav/feed` 未动 | glm-5.3-flash |
 | v1.12 | v0.7.34 | 2026-09-13 | **Skill Token 工作台签发 + 快照内容**：`GET/POST /api/skill/token`（会话鉴权；POST 生成一次明文、库内只存 sha256）；`POST /api/archive/process` 在 Track A 用 fetch 轻量抓取；`GET /api/archive/:id/content` 返回已完成快照 HTML（inline metadata）。Skill `snapshot=true` 仍只入队 | glm-4.6 |
+| v1.13 | v0.7.37 | 2026-09-14 | **`save_bookmark` 可选页面元数据（加性）**：入参增加可选 `title`、`excerpt`、`favicon`（Chrome 扩展保存时当场传入；空串视为未传）。调用方已写入的字段事后抓页不覆盖。未传时行为与 v1.12 相同 | composer |
 
 # API 结构表
 
@@ -249,7 +250,7 @@ Skill 本版无批量。
 
 | name | 输入 | 成功 | 约束 |
 | --- | --- | --- | --- |
-| `save_bookmark` | `url` 必填；`note` `intent` 可选；`snapshot` 默认 false；`source` 可选（v1.4：`agent` 缺省 / `extension`，Chrome 扩展保存；其余值 400） | 201 含正式 `id`；`source` 按入参（缺省 `agent`）`status=unread` | 不写场景/文件夹/标签；`snapshot=true` 只插 Job，`snapshotStatus=queued_pending_browser`；log actor=agent；建议可异步，本回执可 `suggestions:[]`；**回执不对称**：首次为扁平 receipt，24h 幂等重放为 `{bookmark,...}` 包裹（接入方按 `data.bookmark ?? data` 兼容） |
+| `save_bookmark` | `url` 必填；`note` `intent` 可选；`snapshot` 默认 false；`source` 可选（v1.4：`agent` 缺省 / `extension`）；`title` `excerpt` `favicon` 可选（v1.13，Chrome 扩展传入页面名/简介/图标，空串视为未传） | 201 含正式 `id`；`source` 按入参（缺省 `agent`）`status=unread`；传入的 title/excerpt/favicon 立即落库 | 不写场景/文件夹/标签；`snapshot=true` 只插 Job，`snapshotStatus=queued_pending_browser`；log actor=agent；建议可异步，本回执可 `suggestions:[]`；**回执不对称**：首次为扁平 receipt，24h 幂等重放为 `{bookmark,...}` 包裹（接入方按 `data.bookmark ?? data` 兼容）；事后抓页不覆盖调用方已给的 title/excerpt/favicon |
 | `search_bookmarks` | `query` `filters` `limit` `cursor` | `{items,nextCursor}` | 标题/URL/标签/备注；默认排除回收站与 `private`（`includePrivate:true` 才含私密） |
 | `list_bookmarks` | 筛选 + `limit` `cursor` | 同上 | 无 query 时用此，勿塞进 search |
 | `update_bookmark` | `id` + 可改字段；结构字段另见下 | 见下 | 默认能力关 |
