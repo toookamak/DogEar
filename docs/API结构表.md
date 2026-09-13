@@ -1,7 +1,7 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.10
-> **应用版本**：v0.7.32
+> **文档版本**：v1.11
+> **应用版本**：v0.7.33
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
@@ -24,6 +24,7 @@
 | v1.8 | v0.7.30 | 2026-09-12 | **双向拉回侧**：`POST /api/sync/pull`（单页拉回，默认 50 条，防风控）；`GET /api/conflicts`、`GET /api/conflicts/pending-count`、`POST /api/conflicts/:id/resolve`、`POST /api/conflicts/resolve-all`。`bookmarks.source` 契约枚举扩展 `raindrop`（向后兼容）。`/api/channels/:id/import` 增加 `maxPages` 提示：自动拉取一律单页，全量导入走显式 import | glm-5.3-flash |
 | v1.9 | v0.7.31 | 2026-09-13 | **导入改按页契约**：`POST /api/channels/:id/import`（Raindrop）请求改 `{page?:0, intoInbox?:true}`，回执改 `{page,imported,skipped,errors,total,hasMore}`——每次只导一页（50 条），由前端逐页驱动；全量循环在 Workers 上会撞单次调用 50 子请求（D1 每查一次都计入）/10ms CPU 上限（实测 397 条只进 50 条）。按 raindropId 去重，重导续传。破坏性：旧一次性全量回执 `{imported,skipped,errors}` 不再返回 | glm-5.3-flash |
 | v1.10 | v0.7.32 | 2026-09-13 | **导出改按页契约（同一限额问题的收尾）**：`POST /api/channels/:id/export`（Raindrop）请求改 `{excludeIds?, count?}`，回执改 `{exported,failed,processed,total,hasMore,errors,failedIds}`——每次推一页（20 条，Raindrop create 无批量端点），前端把上一轮 `failedIds` 传回 `excludeIds` 跳过毒条目，直到 `processed=0`。S3/WebDAV 回执对齐同一形状（单轮即完，`hasMore=false`）。`/api/sync/pull` 与 sync_queue 消费器契约不变，内部改批量 D1（消费器不再写 processing 中间态，中断条目保持 pending 下个 tick 重试） | glm-5.3-flash |
+| v1.11 | v0.7.33 | 2026-09-13 | **列表回执增加 `total`（加性变更）**：`GET /api/bookmarks`、`GET /api/bookmarks/search`、`GET /api/inbox` 回执新增 `total`（当前筛选条件下的总数，分页器「共 y 页」用；游标条件不计入统计）。配套：list 关联读取改页级批量（一页 4 条查询替代逐条 4~5 条，Workers Free 档 50 子请求内跑得动整页列表）。导航页 `GET /api/nav/feed` 未动 | glm-5.3-flash |
 
 # API 结构表
 
