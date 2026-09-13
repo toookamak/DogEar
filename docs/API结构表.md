@@ -1,7 +1,7 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.11
-> **应用版本**：v0.7.33
+> **文档版本**：v1.12
+> **应用版本**：v0.7.34
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
@@ -25,6 +25,7 @@
 | v1.9 | v0.7.31 | 2026-09-13 | **导入改按页契约**：`POST /api/channels/:id/import`（Raindrop）请求改 `{page?:0, intoInbox?:true}`，回执改 `{page,imported,skipped,errors,total,hasMore}`——每次只导一页（50 条），由前端逐页驱动；全量循环在 Workers 上会撞单次调用 50 子请求（D1 每查一次都计入）/10ms CPU 上限（实测 397 条只进 50 条）。按 raindropId 去重，重导续传。破坏性：旧一次性全量回执 `{imported,skipped,errors}` 不再返回 | glm-5.3-flash |
 | v1.10 | v0.7.32 | 2026-09-13 | **导出改按页契约（同一限额问题的收尾）**：`POST /api/channels/:id/export`（Raindrop）请求改 `{excludeIds?, count?}`，回执改 `{exported,failed,processed,total,hasMore,errors,failedIds}`——每次推一页（20 条，Raindrop create 无批量端点），前端把上一轮 `failedIds` 传回 `excludeIds` 跳过毒条目，直到 `processed=0`。S3/WebDAV 回执对齐同一形状（单轮即完，`hasMore=false`）。`/api/sync/pull` 与 sync_queue 消费器契约不变，内部改批量 D1（消费器不再写 processing 中间态，中断条目保持 pending 下个 tick 重试） | glm-5.3-flash |
 | v1.11 | v0.7.33 | 2026-09-13 | **列表回执增加 `total`（加性变更）**：`GET /api/bookmarks`、`GET /api/bookmarks/search`、`GET /api/inbox` 回执新增 `total`（当前筛选条件下的总数，分页器「共 y 页」用；游标条件不计入统计）。配套：list 关联读取改页级批量（一页 4 条查询替代逐条 4~5 条，Workers Free 档 50 子请求内跑得动整页列表）。导航页 `GET /api/nav/feed` 未动 | glm-5.3-flash |
+| v1.12 | v0.7.34 | 2026-09-13 | **Skill Token 工作台签发 + 快照内容**：`GET/POST /api/skill/token`（会话鉴权；POST 生成一次明文、库内只存 sha256）；`POST /api/archive/process` 在 Track A 用 fetch 轻量抓取；`GET /api/archive/:id/content` 返回已完成快照 HTML（inline metadata）。Skill `snapshot=true` 仍只入队 | glm-4.6 |
 
 # API 结构表
 
@@ -231,7 +232,9 @@ Skill 本版无批量。
 | PUT | `/api/settings` | |
 | PUT | `/api/skill/capabilities` | 三级开关 |
 | GET | `/api/skill/usage` | 今日请求量/写入量/拦截次数 |
-| POST | `/api/bookmarks/:id/archives` | 体 `{type:"snapshot"}`；只建 Job；回执必须带 `snapshotStatus:"queued_pending_browser"` |
+| GET | `/api/skill/token` | `{configured,fromEnv,fromSettings}`；不返回明文或摘要 |
+| POST | `/api/skill/token` | `{token,configured}`；明文只此一次，库内 `skill.token_hash` |
+| POST | `/api/bookmarks/:id/archives` | 体 `{type:\"snapshot\"}`；只建 Job；回执必须带 `snapshotStatus:\"queued_pending_browser\"` |
 | GET | `/api/jobs` | 与 `/api/archive` 读同一套 `archive_jobs`，禁止两套列表 |
 | POST | `/api/jobs/:id/retry` | |
 | POST | `/api/jobs/:id/cancel` | |
@@ -545,9 +548,11 @@ Job 回执固定包含 `id`、`bookmarkId`、`type`、`status`、`retryCount`、
 | POST | `/api/archive/:id/retry` | `{ok,job}` | 仅 failed |
 | POST | `/api/archive/:id/cancel` | `{ok,job}` | 仅 pending/running |
 | GET | `/api/jobs` | `{items,nextCursor}` | **必须列出同一批 Job** |
-| POST | `/api/bookmarks/:id/archives` | `{jobId,snapshotStatus:"queued_pending_browser"}` | 与 POST `/api/archive` 同语义 |
+| POST | `/api/bookmarks/:id/archives` | `{jobId,snapshotStatus:\"queued_pending_browser\"}` | 与 POST `/api/archive` 同语义 |
+| POST | `/api/archive/process` | `{processed,succeeded,failed}` | 消费 pending 快照；Track A fetch / Track B monolith；未注入 501 |
+| GET | `/api/archive/:id/content` | HTML | 仅 completed 且 metadata 含 html；无内容 404 |
 
-无文件时 `snapshotStatus` 只能是 `not_requested` 或 `queued_pending_browser`。本版不实现内容 GET/PUT。元数据提取可异步，失败不影响 Link；不强制 metascraper（推后）。
+创建时无文件则 `snapshotStatus` 仍为 `queued_pending_browser`。工作台随后触发 process。元数据提取可异步，失败不影响 Link。
 
 ### 9.4 单条导出
 

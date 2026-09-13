@@ -63,7 +63,7 @@
 - [ ] **`full` 档在线恢复**：当前明确返回 501（服务运行中替换被持有的库文件不安全）。若要支持，需先解决「关闭并重建数据库连接」的架构问题——属技术选型，**须先讨论**。**搁置：架构问题待讨论**
 - [x] **Track A 真实部署已跑通（2026-09-12）**：推 main 后 Workers Builds 自动构建部署成功，线上工作台为新版视觉（用户确认「配色好了」）——零 Token 默认路径（面板 root directory=`apps/server`、Deploy command=`node scripts/ci-deploy.mjs`）全链路实证可用，本条闭环
 - [ ] **CI 是否跑通未经确认**：部署已成功即间接证明 workflow 可用；如需核对每次运行的日志与耗时，到仓库 Actions 页查看。**待用户可选确认**
-- [ ] **线上 Skill Token 未配置**：线上要启用 Chrome 扩展 / Agent 保存，须 `wrangler secret put DOGEAR_SKILL_TOKEN`（或配 GitHub Secret `DOGEAR_SKILL_TOKEN` 由 Actions 同步）。**待用户操作**
+- [x] **线上 Skill Token 可在设置页生成（2026-09-13，v0.7.34）**：设置 → Agent 接入「生成 Token」（明文只显示一次，库内 sha256）。环境变量 `DOGEAR_SKILL_TOKEN` 仍可用。扩展保存需同时开启「新建」
 - [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）。**依赖 L2 队列真消费，先做 L2**
 - [ ] R2 未接入（快照内容存储）。**依赖 L3，先做 L3**
 - [x] **`docs/Draft/README.md` 失效索引已收口（2026-09-12）**：整体移入 `docs/archive/Draft-README-失效索引.md` 并在文首加废弃说明；`docs/Draft/` 仅剩 `sync-card-showcase.html` 演示素材

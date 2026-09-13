@@ -14,7 +14,7 @@
 | 项 | 说明 |
 | --- | --- |
 | DogEar 地址 | 服务地址，如 `https://your-dogear.workers.dev`（本地联调 `http://127.0.0.1:8787`） |
-| Skill Token | 服务端配置的 `DOGEAR_SKILL_TOKEN`（Workers：`wrangler secret put DOGEAR_SKILL_TOKEN`；Docker 自托管：环境变量） |
+| Skill Token | 设置 →「Agent 接入」点「生成 Token」，复制后填到扩展。也可用服务端 `DOGEAR_SKILL_TOKEN`（环境变量）。扩展保存还需在同一页开启「新建」。 |
 
 「测试连通」会请求 `GET /.well-known/capabilities` 验证地址可达。配置保存在 `chrome.storage.sync`（随 Chrome 账号同步）。
 
