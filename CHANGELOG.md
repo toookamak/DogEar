@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-14 / v0.7.36 — **fix(web)：补回 `.bm-card-thumb` 选择器**，修复 Vite/postcss `Unexpected }` 导致 Workers 构建失败。
+
 - 2026-09-14 / v0.7.36 — **fix(workbench)：网格封面不显示**。相对 og:image 相对书签页绝对化；Raindrop `media[0].link` 回填；直链失败再走同源 `/api/bookmarks/:id/cover` 代理（防盗链），避免 onError 静默退回装饰底。
 
 - 2026-09-14 / v0.7.36 — **fix(ci)：同步 pnpm-lock（vite 改 devDependencies）**，修复 Workers Builds `frozen-lockfile` 安装失败。
