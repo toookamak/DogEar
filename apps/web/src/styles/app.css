@@ -1219,7 +1219,7 @@ input[type="radio"] {
 }
 
 /* ---------------------------------------------------------------- 书签卡片与网格
- * 三段式（原型 .bookmark-card）：来源条 card-cover / 装饰预览 card-preview / 内容 card-body。
+ * 三段式（原型 .bookmark-card）：来源条 card-cover / 预览 card-preview（封面图或装饰） / 内容 card-body。
  */
 
 .bm-grid {
@@ -1384,9 +1384,26 @@ input[type="radio"] {
   background: linear-gradient(135deg, color-mix(in srgb, var(--blue) 16%, transparent), color-mix(in srgb, var(--blue) 36%, transparent));
 }
 
+
+/* 有封面时关掉斜纹和水印，让图铺满预览区 */
+.bm-card-preview--photo::before,
+.bm-card-preview--photo::after {
+  display: none;
+}
+
+.bm-card-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background-color: var(--panel-hover);
+}
+
 /* 预览区右上角的选择键（原型 .card-select-btn） */
 .bm-card-select {
   position: absolute;
+  z-index: 1;
   top: 8px;
   right: 8px;
   appearance: none;

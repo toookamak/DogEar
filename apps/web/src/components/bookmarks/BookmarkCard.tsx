@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { BookmarkResponse } from '../../types/api.js'
 import {
   STATUS_LABELS,
@@ -17,7 +18,7 @@ interface BookmarkCardProps {
 
 /**
  * 书签卡片（网格视图与导航页共用）：对齐原型三段式结构——
- * 来源条（monogram + 来源 + 状态）/ 装饰预览（渐变底 + 衬线水印 + 选择键）/ 内容（标题、摘要、标签、域名）。
+ * 来源条（monogram + 来源 + 状态）/ 预览（有 cover 显示封面图，否则渐变底 + 衬线水印）/ 内容。
  * 样式见 styles/app.css 的 .bm-card；来源与状态着色由 src-* / state-* 修饰符驱动。
  */
 export function BookmarkCard({
@@ -43,6 +44,13 @@ export function BookmarkCard({
   // tags 为 undefined（投影未返回）时不显示标签区；空数组才是真实的「未整理」
   const tags = bookmark.tags
   const pendingSuggestions = bookmark.pendingSuggestionCount ?? 0
+  const coverUrl = (bookmark.cover ?? '').trim() || null
+  const [coverBroken, setCoverBroken] = useState(false)
+  useEffect(() => {
+    setCoverBroken(false)
+  }, [coverUrl])
+  const showCover = Boolean(coverUrl) && !coverBroken
+
 
   return (
     <article
@@ -74,7 +82,21 @@ export function BookmarkCard({
         )}
       </div>
 
-      <div className={`bm-card-preview${source ? ` src-${source}` : ''}`} data-mark={mark} aria-hidden="true">
+      <div
+        className={`bm-card-preview${source ? ` src-${source}` : ''}${showCover ? ' bm-card-preview--photo' : ''}`}
+        data-mark={showCover ? undefined : mark}
+        aria-hidden="true"
+      >
+        {showCover && coverUrl && (
+          <img
+            className="bm-card-thumb"
+            src={coverUrl}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setCoverBroken(true)}
+          />
+        )}
         {selectable && (
           <input
             type="checkbox"
