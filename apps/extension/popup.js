@@ -24,7 +24,32 @@ function showErrorHint(text) {
   el.style.display = 'block'
 }
 
-async function saveCurrentTab() {
+function httpUrl(value) {
+  return typeof value === 'string' && /^https?:\/\//i.test(value) ? value : undefined
+}
+
+async function readPageExtras(tabId) {
+  if (typeof chrome.scripting?.executeScript !== 'function') return {}
+  try {
+    const [injection] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const attr = (selector) => document.querySelector(selector)?.getAttribute('content')?.trim() || ''
+        return {
+          excerpt: attr('meta[property="og:description"]') || attr('meta[name="description"]'),
+        }
+      },
+    })
+    const result = injection?.result
+    if (!result || typeof result !== 'object') return {}
+    const excerpt = typeof result.excerpt === 'string' ? result.excerpt.trim() : ''
+    return excerpt ? { excerpt } : {}
+  } catch {
+    return {}
+  }
+}
+
+async function readCurrentTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.url || !/^https?:/.test(tab.url)) {
     document.getElementById('page-title').textContent = '当前页面无法添加'
@@ -32,7 +57,13 @@ async function saveCurrentTab() {
   }
   document.getElementById('page-title').textContent = tab.title || tab.url
   document.getElementById('page-url').textContent = tab.url
-  return { url: tab.url, title: tab.title }
+  const extras = tab.id != null ? await readPageExtras(tab.id) : {}
+  return {
+    url: tab.url,
+    title: (tab.title || '').trim() || undefined,
+    excerpt: extras.excerpt,
+    favicon: httpUrl(tab.favIconUrl),
+  }
 }
 
 async function save() {
@@ -40,6 +71,7 @@ async function save() {
   const addr = normalizeAddr(config.addr)
   const button = document.getElementById('save')
   const note = document.getElementById('note').value.trim()
+  if (!page) return
   button.disabled = true
   try {
     const response = await fetch(`${addr}/api/skill/save_bookmark`, {
@@ -49,7 +81,14 @@ async function save() {
         Authorization: `Bearer ${config.token}`,
         'Idempotency-Key': crypto.randomUUID(),
       },
-      body: JSON.stringify({ url: page.url, note: note || undefined, source: 'extension' }),
+      body: JSON.stringify({
+        url: page.url,
+        title: page.title,
+        excerpt: page.excerpt,
+        favicon: page.favicon,
+        note: note || undefined,
+        source: 'extension',
+      }),
     })
     if (response.status === 401 || response.status === 403) {
       showStatus('err', 'Token 无效或添加能力已关闭。')
@@ -84,7 +123,7 @@ document.getElementById('go-options').addEventListener('click', () => chrome.run
 document.getElementById('open-options').addEventListener('click', () => chrome.runtime.openOptionsPage())
 
 void (async () => {
-  page = await saveCurrentTab()
+  page = await readCurrentTab()
   const config = await getConfig()
   const addr = normalizeAddr(config.addr)
   document.getElementById('addr').textContent = addr || '未配置'

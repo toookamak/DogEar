@@ -75,7 +75,7 @@ type AppOptions = {
 type SkillLimit = 'read' | 'write' | 'batch'
 
 const skillDefinitions = [
-  { name: 'save_bookmark', write: true, capability: 'write_new', input: 'url, note?, intent?, snapshot?, source?', notes: 'Writes one bookmark to the source database. source: agent (default) | extension (Chrome extension).' },
+  { name: 'save_bookmark', write: true, capability: 'write_new', input: 'url, note?, intent?, snapshot?, source?, title?, excerpt?, favicon?', notes: 'Writes one bookmark to the source database. source: agent (default) | extension (Chrome extension). Optional title/excerpt/favicon from the caller (browser extension) are stored immediately; remaining metadata is filled asynchronously.' },
   { name: 'search_bookmarks', write: false, capability: 'read', input: 'query?, filters?, limit?, cursor?', notes: 'Searches active non-private bookmarks by default.' },
   { name: 'update_bookmark', write: true, capability: 'update_existing', input: 'id plus editable fields', notes: 'Disabled by default; structure changes require confirmation.' },
   { name: 'list_bookmarks', write: false, capability: 'read', input: 'filters?, limit?, cursor?', notes: 'Lists active bookmarks.' },
@@ -154,24 +154,61 @@ function serializeAccessRecord(record: any) {
   return { ...record, openedAt: timestamp(record.openedAt) }
 }
 
+type ExistingPageMeta = {
+  title?: string | null
+  excerpt?: string | null
+  cover?: string | null
+  favicon?: string | null
+}
+
+function domainFromUrl(url: string): string | undefined {
+  try {
+    return new URL(url).hostname || undefined
+  } catch {
+    return undefined
+  }
+}
+
+function hasFetchedPageMeta(meta: Record<string, unknown>): boolean {
+  return Boolean(meta.title || meta.description || meta.image || meta.author || meta.favicon)
+}
+
+/**
+ * Workers 在返回响应后会冻结 isolate；必须 waitUntil 才能把事后抓页做完。
+ * Node / Bun / 单测没有 ExecutionContext，退回 fire-and-forget。
+ */
+function scheduleBackground(
+  c: { executionCtx: { waitUntil: (promise: Promise<unknown>) => void } },
+  task: Promise<unknown>,
+): void {
+  try {
+    c.executionCtx.waitUntil(task)
+  } catch {
+    void task
+  }
+}
+
 /**
  * 保存后的异步元数据提取：优先用注入的增强提取器（Track B 的 metascraper 规则组），
- * 失败或未注入时回退内置轻量提取。任何失败都静默——部分元数据比失败响应更重要。
+ * 失败、未注入、或增强器只拿到域名时回退内置轻量提取。
+ * 调用方已经写入的 title/excerpt/cover/favicon 不覆盖（插件当场拿到的标题优先）。
+ * 任何失败都静默——部分元数据比失败响应更重要。
  */
 async function extractMetadataInto(
   repository: BookmarkRepository,
   options: AppOptions,
   bookmarkId: string,
   url: string,
+  existing: ExistingPageMeta = {},
 ): Promise<void> {
   const applyUpdates = async (meta: Record<string, unknown>) => {
     const updates: Record<string, unknown> = {}
-    if (meta.title) updates.title = meta.title
-    if (meta.description) updates.excerpt = meta.description
-    if (meta.image) updates.cover = meta.image
+    if (meta.title && !existing.title) updates.title = meta.title
+    if (meta.description && !existing.excerpt) updates.excerpt = meta.description
+    if (meta.image && !existing.cover) updates.cover = meta.image
     if (meta.author) updates.author = meta.author
     if (meta.domain) updates.domain = meta.domain
-    if (meta.favicon) updates.favicon = meta.favicon
+    if (meta.favicon && !existing.favicon) updates.favicon = meta.favicon
     if (meta.publishedAt) {
       const d = new Date(String(meta.publishedAt))
       if (!Number.isNaN(d.getTime())) updates.publishedAt = d.getTime()
@@ -180,8 +217,9 @@ async function extractMetadataInto(
   }
   if (options.metadataEnhancer) {
     try {
-      await applyUpdates(await options.metadataEnhancer(url))
-      return
+      const enhanced = await options.metadataEnhancer(url) as Record<string, unknown>
+      await applyUpdates(enhanced)
+      if (hasFetchedPageMeta(enhanced)) return
     } catch {
       // 增强提取失败，回退内置轻量提取
     }
@@ -340,10 +378,11 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     }
 
     // Async metadata extraction - don't block the response
-    const recordWithId = record as { id: string; url: string }
-    const recordId = recordWithId.id
-    const recordUrl = recordWithId.url
-    void extractMetadataInto(repository, options, recordId, recordUrl)
+    const recordWithId = record as { id: string; url: string; title?: string | null; excerpt?: string | null }
+    scheduleBackground(c, extractMetadataInto(repository, options, recordWithId.id, recordWithId.url, {
+      title: recordWithId.title,
+      excerpt: recordWithId.excerpt,
+    }))
 
     return c.json(serializeBookmark(record), 201)
   })
@@ -906,7 +945,19 @@ ${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保�
     }
     const id = randomUUID()
     // 来源：Chrome 扩展传 source:'extension'，缺省仍为 agent（契约向后兼容）
-    const record = await repository.create({ id, url: input.data.url, status: 'unread', source: input.data.source ?? 'agent', note: input.data.note, intent: input.data.intent, syncStatus: 'synced' })
+    const record = await repository.create({
+      id,
+      url: input.data.url,
+      status: 'unread',
+      source: input.data.source ?? 'agent',
+      note: input.data.note,
+      intent: input.data.intent,
+      title: input.data.title,
+      excerpt: input.data.excerpt ?? null,
+      favicon: input.data.favicon ?? null,
+      domain: domainFromUrl(input.data.url) ?? null,
+      syncStatus: 'synced',
+    })
     if (idempotencyKey) {
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
       await repository.idempotency.store({
@@ -927,9 +978,11 @@ ${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保�
     await enqueueRaindropSync('create', saved as { id: string; url: string; title?: string | null; note?: string | null })
 
     // Async metadata extraction - don't block the response
-    const savedId = saved.id
-    const savedUrl = saved.url
-    void extractMetadataInto(repository, options, savedId, savedUrl)
+    scheduleBackground(c, extractMetadataInto(repository, options, saved.id, saved.url, {
+      title: saved.title,
+      excerpt: saved.excerpt,
+      favicon: saved.favicon,
+    }))
 
     return c.json(saved, 201)
   })

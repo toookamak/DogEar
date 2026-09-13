@@ -281,6 +281,45 @@ describe('skill API', () => {
     expect(await inboxResponse.json()).toEqual({ bookmarks: expect.arrayContaining([expect.objectContaining({ id: saved.id, url: 'https://example.com/agent', source: 'agent', status: 'unread' })]), nextCursor: null })
   })
 
+  it('persists title/excerpt from save_bookmark and does not overwrite title with fetched metadata', async () => {
+    const repo = repository()
+    let fetched = false
+    const app = createApp(repo, {
+      password: 'secret',
+      skillToken: 'skill-secret',
+      metadataEnhancer: async () => {
+        fetched = true
+        return { title: '抓取到的标题', description: '抓取到的简介' }
+      },
+    })
+    const response = await app.request('/api/skill/save_bookmark', {
+      method: 'POST',
+      body: JSON.stringify({
+        url: 'https://example.com/from-extension',
+        title: '插件标题',
+        excerpt: '插件简介',
+        favicon: 'https://example.com/favicon.ico',
+        source: 'extension',
+      }),
+      headers: { 'content-type': 'application/json', authorization: 'Bearer skill-secret' },
+    })
+    const saved = await response.json()
+    expect(response.status).toBe(201)
+    expect(saved).toMatchObject({
+      url: 'https://example.com/from-extension',
+      title: '插件标题',
+      excerpt: '插件简介',
+      favicon: 'https://example.com/favicon.ico',
+      source: 'extension',
+      domain: 'example.com',
+    })
+    expect(repo.records[0]).toMatchObject({ title: '插件标题', excerpt: '插件简介', favicon: 'https://example.com/favicon.ico' })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(fetched).toBe(true)
+    expect(repo.records[0].title).toBe('插件标题')
+    expect(repo.records[0].excerpt).toBe('插件简介')
+  })
+
   it('queues snapshots, returns supported reads, rejects disabled updates, and never writes suggestions to structure', async () => {
     const repo = repository()
     const app = createApp(repo, { password: 'secret', skillToken: 'skill-secret' })

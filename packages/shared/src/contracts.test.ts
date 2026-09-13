@@ -42,6 +42,20 @@ describe('M3/M4 shared schemas', () => {
     expect(() => saveBookmarkSkillInputSchema.parse({ url: 'https://example.com', source: 'page' })).toThrow()
   })
 
+  it('save skill input accepts optional title/excerpt/favicon from the extension', () => {
+    expect(saveBookmarkSkillInputSchema.parse({
+      url: 'https://example.com',
+      title: '  网页名  ',
+      excerpt: '简介',
+      favicon: 'https://example.com/favicon.ico',
+    })).toMatchObject({
+      title: '网页名',
+      excerpt: '简介',
+      favicon: 'https://example.com/favicon.ico',
+    })
+    expect(saveBookmarkSkillInputSchema.parse({ url: 'https://example.com', title: '   ' }).title).toBeUndefined()
+  })
+
   it('enforces suggestion target and status contracts', () => {
     const suggestion = suggestionSchema.parse({
       id: '550e8400-e29b-41d4-a716-446655440001',

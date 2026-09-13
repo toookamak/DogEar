@@ -35,6 +35,7 @@ type BookmarkInput = {
   private?: boolean
   syncStatus?: 'pending' | 'synced'
   title?: string
+  favicon?: string | null
   excerpt?: string | null
   cover?: string | null
   type?: 'link' | 'article' | 'video' | 'image'
