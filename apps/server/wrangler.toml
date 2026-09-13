@@ -49,3 +49,9 @@ crons = ["*/5 * * * *"]
 # 工作台来源（工作台与 API 不同域时填写，例如 https://dogear.pages.dev）；
 # 留空则按请求 Origin 回显，适合同域部署
 # DOGEAR_CORS_ORIGIN = "https://your-workbench.pages.dev"
+
+
+# 封面对象存储（方案 2）：D1 只记原 URL；图片本体在 R2。部署脚本会确保桶存在。
+[[r2_buckets]]
+binding = "COVERS"
+bucket_name = "dogear-covers"

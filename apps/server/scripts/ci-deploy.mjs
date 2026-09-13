@@ -25,6 +25,7 @@ const SERVER_DIR = dirname(fileURLToPath(import.meta.url));
 const TOML_PATH = join(SERVER_DIR, "..", "wrangler.toml");
 const WEB_DIST = join(SERVER_DIR, "..", "..", "web", "dist");
 const DB_NAME = "dogear_prod";
+const R2_BUCKET = "dogear-covers";
 const PLACEHOLDER = "REPLACE_WITH_YOUR_D1_DATABASE_ID";
 
 const step = (msg) => console.log(`\n==> ${msg}`);
@@ -62,6 +63,22 @@ function wrangler(args, { capture = false } = {}) {
   if (r.status !== 0) die(`wrangler ${args.join(" ")} 失败（exit ${r.status}），见上方日志`);
   return capture ? r.stdout : "";
 }
+function wranglerAllowFail(args) {
+  const entry = wranglerBin();
+  const isNodeScript = entry.endsWith(".js") || entry.endsWith(".mjs");
+  return spawnSync(
+    isNodeScript ? process.execPath : entry,
+    isNodeScript ? [entry, ...args] : args,
+    { cwd: SERVER_DIR, stdio: "inherit", encoding: "utf8", env: process.env },
+  );
+}
+
+function ensureR2() {
+  const r = wranglerAllowFail(["r2", "bucket", "create", R2_BUCKET]);
+  if (r.status === 0) console.log(`R2 桶已创建：${R2_BUCKET}`);
+  else console.log(`R2 桶 create 退出 ${r.status}（桶已存在则可忽略）`);
+}
+
 
 function listDatabases() {
   const out = wrangler(["d1", "list", "--json"], { capture: true });
@@ -122,6 +139,9 @@ function main() {
     if (!dbId) die(`创建后仍未在 d1 list 中找到 ${DB_NAME}`);
   }
   console.log(`D1 就绪：${DB_NAME}（${dbId}）`);
+
+  step("步骤 2b · 确保 R2 桶 dogear-covers 存在");
+  ensureR2();
 
   step("步骤 3/5 · 回填 database_id 到 wrangler.toml（工作副本）");
   stampToml(dbId);

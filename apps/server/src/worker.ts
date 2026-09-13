@@ -14,12 +14,14 @@ import { createApp } from './app.js'
 import { ChannelConfigManager } from './channels/index.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 import { createFetchSnapshotProcessor } from './archive/snapshot-fetch.js'
+import { createR2CoverStore } from './archive/cover-store.js'
 
 export interface Env {
   DB: D1Database
   DOGEAR_PASSWORD?: string
   DOGEAR_SKILL_TOKEN?: string
   DOGEAR_CORS_ORIGIN?: string
+  COVERS?: import('./archive/cover-store.js').R2CoverBucket
 }
 
 type AppInstance = ReturnType<typeof createApp>
@@ -39,6 +41,7 @@ function getApp(env: Env): AppInstance {
     skillToken: env.DOGEAR_SKILL_TOKEN,
     corsOrigin: env.DOGEAR_CORS_ORIGIN,
     snapshotProcessor: createFetchSnapshotProcessor(),
+    coverStore: env.COVERS ? createR2CoverStore(env.COVERS) : undefined,
     metadataWaitMs: 6000,
   })
   cachedApp = { key, app }

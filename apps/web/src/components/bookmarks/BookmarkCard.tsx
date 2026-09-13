@@ -47,15 +47,14 @@ export function BookmarkCard({
   const pendingSuggestions = bookmark.pendingSuggestionCount ?? 0
   const remoteCover = resolveCoverUrl(bookmark.cover, bookmark.url)
   const proxyCover = `/api/bookmarks/${bookmark.id}/cover`
-  // Raindrop 封面常防盗链：有 raindropId 时直接走同源代理
-  const [coverSrc, setCoverSrc] = useState<string | null>(
-    remoteCover ? (bookmark.raindropId ? proxyCover : remoteCover) : null,
-  )
+  // 有封面地址一律走同源 /cover：命中 R2/本地缓存，未命中再回源并落下
+  const [coverSrc, setCoverSrc] = useState<string | null>(remoteCover ? proxyCover : null)
   const [coverBroken, setCoverBroken] = useState(false)
   useEffect(() => {
-    setCoverSrc(remoteCover ? (bookmark.raindropId ? proxyCover : remoteCover) : null)
+    setCoverSrc(remoteCover ? proxyCover : null)
     setCoverBroken(false)
-  }, [remoteCover, proxyCover, bookmark.id, bookmark.raindropId])
+  }, [remoteCover, proxyCover, bookmark.id])
+  const showCover = Boolean(coverSrc) && !coverBroken
 
 
   return (

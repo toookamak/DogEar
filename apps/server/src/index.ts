@@ -8,6 +8,7 @@ import { createBackupRoutes } from './backup/backup-routes.js'
 import { ChannelConfigManager } from './channels/index.js'
 import { extractMetadataWithMetascraper } from './archive/metadata-enhancer.js'
 import { createMonolithSnapshotProcessor } from './archive/snapshot-monolith.js'
+import { createFileCoverStore } from './archive/cover-store-fs.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 
 const dbPath = process.env.DOGEAR_DB_PATH ?? './data/dogear.sqlite'
@@ -25,6 +26,7 @@ const app = createApp(repository, {
   // 元数据增强（metascraper 规则组）：失败自动回退内置轻量提取
   metadataEnhancer: extractMetadataWithMetascraper,
   metadataWaitMs: 6000,
+  coverStore: createFileCoverStore(process.env.DOGEAR_COVERS_DIR ?? join(dirname(dbPath), 'covers')),
   // 快照执行器（monolith 抓公开页）：POST /api/archive/process 消费 pending 快照 Job
   snapshotProcessor: () => createMonolithSnapshotProcessor(repository, {
     snapshotsDir: process.env.DOGEAR_SNAPSHOTS_DIR ?? join(dirname(dbPath), 'snapshots'),

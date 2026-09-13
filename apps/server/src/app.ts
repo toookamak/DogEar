@@ -37,6 +37,8 @@ import { createMetadataRoutes } from './archive/metadata-routes.js'
 import { createNavRoutes } from './nav/nav-routes.js'
 import { extractMetadata } from './archive/metadata.js'
 import { coverFromRaindropExtras, pickCoverUrl, resolveCoverUrl } from './archive/cover-url.js'
+import { coverBodyInit, loadCoverBytes } from './archive/cover-cache.js'
+import type { CoverStore } from './archive/cover-store.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 import { pullFromRaindrop } from './sync/raindrop-pull.js'
 import { generateSkillToken, hashSkillToken, readStoredHash, tokensEqual } from './auth/skill-token.js'
@@ -72,6 +74,8 @@ type AppOptions = {
    * Skill `snapshot=true` 仍只入队，由工作台触发 process。
    */
   snapshotProcessor?: (repository: BookmarkRepository) => Promise<{ processed: number; succeeded: number; failed: number }>
+  /** 封面对象存储：轨 A 注入 R2，轨 B 注入本地目录；未注入时 /cover 仍回源但不落盘 */
+  coverStore?: CoverStore
 }
 
 type SkillLimit = 'read' | 'write' | 'batch'
@@ -572,32 +576,26 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     return record ? c.json(serializeBookmark(record)) : skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
   })
 
-  /** 封面同源代理：Raindrop/站点防盗链时浏览器直链会失败，卡片 onError 再走这里。 */
+  /** 封面：优先 R2/本地缓存，未命中再拉远端并落下（cover 列仍是原 URL，不写进 Raindrop）。 */
   app.get('/api/bookmarks/:bookmarkId/cover', async (c) => {
     const record = await repository.get(c.req.param('bookmarkId'))
     if (!record) return skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
     const cover = serializeBookmark(record).cover as string | null
     if (!cover) return skillError(c, 'NOT_FOUND', 404, 'Cover not found')
-    try {
-      const upstream = await fetch(cover, {
-        headers: { Accept: 'image/*,*/*;q=0.8', 'User-Agent': 'Mozilla/5.0 (compatible; DogEar/1.0)' },
-        signal: AbortSignal.timeout(8000),
-        redirect: 'follow',
-      })
-      const contentType = upstream.headers.get('content-type') ?? ''
-      if (!upstream.ok || (contentType && !contentType.startsWith('image/') && !contentType.startsWith('application/octet-stream'))) {
-        return skillError(c, 'NOT_FOUND', 404, 'Cover fetch failed')
-      }
-      return new Response(upstream.body, {
-        status: 200,
-        headers: {
-          'Content-Type': contentType.startsWith('image/') ? contentType : 'image/jpeg',
-          'Cache-Control': 'private, max-age=86400',
-        },
-      })
-    } catch {
-      return skillError(c, 'NOT_FOUND', 404, 'Cover fetch failed')
-    }
+    const loaded = await loadCoverBytes({
+      bookmarkId: c.req.param('bookmarkId'),
+      sourceUrl: cover,
+      store: options.coverStore,
+    })
+    if (!loaded.ok) return skillError(c, 'NOT_FOUND', 404, loaded.error)
+    return new Response(coverBodyInit(loaded.body), {
+      status: 200,
+      headers: {
+        'Content-Type': loaded.contentType,
+        'Cache-Control': 'private, max-age=86400',
+        'X-Cover-Cache': loaded.cache,
+      },
+    })
   })
 
   app.patch('/api/bookmarks/:bookmarkId', async (c) => {
