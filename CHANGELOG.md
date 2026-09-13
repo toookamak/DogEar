@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-14 / v0.7.36 — **fix(ci)：同步 pnpm-lock（vite 改 devDependencies）**，修复 Workers Builds `frozen-lockfile` 安装失败。
+
 - 2026-09-14 / v0.7.36 — **feat(workbench)：网格卡片预览区显示封面**。有 `cover` URL 时填满 120px 预览（`object-fit: cover`），加载失败回退原来的来源色渐变 + 衬线水印；旧 Raindrop 导入若封面只在 `raindropExtras` 也回填。导航页投影不含 cover，仍走装饰。未改 DESIGN.md（原文写装饰预览）。
 - 2026-09-13 / v0.7.35 — **perf(workers)：轨 A 包体、首屏、缓存与装配**。①S3 AWS SDK / csv 改为动态 import，未用 S3 不进 Worker 主图；②isolate 缓存 `createApp`，CORS 按 Origin 回显；③会话 HMAC 改 Web Crypto；④`minify`、API `no-store`、静态 `_headers`；⑤前端路由 lazy + manualChunks，去掉 Google Fonts；⑥请求/cron 结构化日志。Skill Token 仍 node:crypto，`nodejs_compat` 暂留。文档：`docs/modules/20260913_轨A实际绑定与性能口径.md`。未改 wiki。
 
