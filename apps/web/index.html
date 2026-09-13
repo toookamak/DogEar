@@ -3,12 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#10120f" />
+    <meta name="theme-color" content="#faf9f5" />
     <meta
       name="description"
       content="DogEar · 折耳书签 — 基于 Raindrop.io 的个人书签增强工具"
     />
     <title>DogEar · 折耳书签</title>
+    <script>
+      // 主题防闪烁：渲染前读持久化偏好，解析出浅/深挂到 <html data-theme>。
+      // 与 src/theme/theme.ts 共用键名 dogear.theme 与两份 theme-color 值，改动需同步。
+      ;(function () {
+        try {
+          var pref = localStorage.getItem('dogear.theme')
+          var dark =
+            pref === 'dark' ||
+            ((pref === null || pref === 'system') &&
+              matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+          var meta = document.querySelector('meta[name="theme-color"]')
+          if (meta) meta.setAttribute('content', dark ? '#211e19' : '#faf9f5')
+        } catch (e) {
+          /* localStorage 不可用时保持浅色，React 启动后由 theme.ts 兜底 */
+        }
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

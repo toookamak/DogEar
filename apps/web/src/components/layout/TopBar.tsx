@@ -1,4 +1,5 @@
 import { useLocation } from 'wouter'
+import { useTheme } from '../../theme/useTheme.js'
 
 interface TopBarProps {
   sidebarOpen: boolean
@@ -13,11 +14,17 @@ interface TopBarProps {
  */
 export function TopBar({ sidebarOpen, onToggleSidebar, onLogout }: TopBarProps) {
   const [location, setLocation] = useLocation()
+  const { resolved, setPreference } = useTheme()
   const isWorkbench = location === '/' || location.startsWith('/bookmarks')
 
   /** 到工作台并请求打开指定面板；已在工作台时直接改参数 */
   const openOnWorkbench = (panel: 'palette' | 'save') => {
     setLocation(`/bookmarks?${panel}=1`)
+  }
+
+  /** 快捷明暗切换：写显式偏好；「跟随系统」的细分选择在设置页「外观」 */
+  const toggleTheme = () => {
+    setPreference(resolved === 'dark' ? 'light' : 'dark')
   }
 
   return (
@@ -55,6 +62,15 @@ export function TopBar({ sidebarOpen, onToggleSidebar, onLogout }: TopBarProps) 
       </button>
 
       <div className="topbar-actions">
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label={resolved === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
+          title={resolved === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
+          onClick={toggleTheme}
+        >
+          {resolved === 'dark' ? '☀' : '☾'}
+        </button>
         <button
           type="button"
           className="btn btn--primary"

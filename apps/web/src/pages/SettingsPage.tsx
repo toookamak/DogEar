@@ -6,10 +6,12 @@ import { BackupTab } from '../components/settings/tabs/BackupTab.js'
 import { AgentTab } from '../components/settings/tabs/AgentTab.js'
 import { LogTab } from '../components/settings/tabs/LogTab.js'
 import { TrashTab } from '../components/settings/tabs/TrashTab.js'
+import { AppearanceTab } from '../components/settings/tabs/AppearanceTab.js'
 
 /**
  * 分区沿用原型 SettingsModal 的六分区（状态信息 / 输入源 / 备份 / Agent / 日志 / 回收站），
  * 但落位为独立路由页而非模态：正式工程的 /settings 路由与侧栏入口已存在，改为模态会牵动导航结构。
+ * 深色主题上线后追加「外观」分区，置于末位不打扰既有顺序。
  */
 const TABS = [
   { key: 'status', label: '状态信息' },
@@ -18,6 +20,7 @@ const TABS = [
   { key: 'agent', label: 'Agent 接入' },
   { key: 'log', label: '日志' },
   { key: 'trash', label: '回收站' },
+  { key: 'appearance', label: '外观' },
 ] as const
 
 type TabKey = typeof TABS[number]['key']
@@ -50,6 +53,7 @@ export function SettingsPage() {
           {tab === 'agent' && <AgentTab />}
           {tab === 'log' && <LogTab />}
           {tab === 'trash' && <TrashTab />}
+          {tab === 'appearance' && <AppearanceTab />}
         </div>
       </div>
     </div>

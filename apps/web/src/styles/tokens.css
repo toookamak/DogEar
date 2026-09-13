@@ -72,6 +72,9 @@
   --drawer-shadow: rgba(70, 58, 36, 0.26);
   --modal-shadow: 0 24px 72px rgba(60, 50, 32, 0.3);
 
+  /* 书签卡装饰预览的 45° 斜纹色（原型为白斜纹；深色主题下调弱，见文件末尾） */
+  --preview-stripe: rgba(255, 255, 255, 0.14);
+
   /* ---- 布局外壳（原型尺寸） ---- */
   --topbar-h: 48px;
   --statusbar-h: 28px;
@@ -170,4 +173,67 @@
   --transition-color: color 150ms ease, background-color 150ms ease,
     border-color 150ms ease;
   --transition-shadow: box-shadow 200ms ease;
+}
+
+/* =========================================================
+ * 深色主题「深夜书房」（2026-09-13 新增）
+ * 依据 DESIGN.md §9.7 的主题口径：新增主题复制 :root 按自身重定义色板、
+ * 阴影与部分组件约束（本主题 hover 由「加深」改为「提亮」，即
+ * --amber-strong 取比 --amber 更亮的橙），结构/布局/交互语义不变。
+ * 仅覆盖色值类 token；字体、间距、圆角、布局、z-index 沿用 :root，
+ * 兼容别名全部为 var() 引用，自动随语义层换肤（--shadow-focus 除外，此处重定义）。
+ * 挂载方式：<html data-theme="light|dark">，由 src/theme/theme.ts 管理。
+ * ========================================================= */
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* ---- 纸面：黑咖底 + 略浅一档的暖卡片，层级关系与浅色一致 ---- */
+  --canvas: #211e19;
+  --panel: #2a2721;
+  --panel-raised: #322e27;
+  --panel-hover: #3b362d;
+  --panel-overlay: rgba(33, 30, 25, 0.94);
+
+  /* ---- 线 ---- */
+  --line: #3d382e;
+  --line-strong: #524b3d;
+  --line-soft: rgba(61, 56, 46, 0.6);
+
+  /* ---- 文字：暖纸白（不用纯白），对应浅色的暖墨 ---- */
+  --text: #e9e3d7;
+  --muted: #aba394;
+  --faint: #7d7668;
+  --on-accent: #fff9f1;
+
+  /* ---- 语义色：整体提亮一档保证深底可辨；soft 底透明度由 0.09 加深到可辨档 ---- */
+  --amber: #dd8156;
+  --amber-strong: #e99469;
+  --amber-soft: rgba(221, 129, 86, 0.16);
+  --mint: #5ba37f;
+  --mint-soft: rgba(91, 163, 127, 0.15);
+  --red: #d97263;
+  --red-soft: rgba(217, 114, 99, 0.15);
+  --blue: #7aa5cc;
+  --blue-soft: rgba(122, 165, 204, 0.15);
+  --indigo: #8d89c8;
+  --indigo-soft: rgba(141, 137, 200, 0.15);
+  --rust: #b58a5c;
+  --rust-soft: rgba(181, 138, 92, 0.16);
+  --slate: #8f97a6;
+  --slate-soft: rgba(143, 151, 166, 0.17);
+
+  /* ---- 阴影与遮罩：暖棕在深底不可辨，改纯黑系 ---- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.45);
+
+  --scrim: rgba(0, 0, 0, 0.5);
+  --overlay-dim: rgba(0, 0, 0, 0.5);
+  --drawer-shadow: rgba(0, 0, 0, 0.5);
+  --modal-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
+
+  --preview-stripe: rgba(255, 255, 255, 0.06);
+
+  /* ---- :root 别名区中唯一写死色值的项，此处重定义 ---- */
+  --shadow-focus: 0 0 0 2px rgba(221, 129, 86, 0.3);
 }
