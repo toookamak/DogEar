@@ -6,6 +6,8 @@ export const settingsApi = {
   update: (data: SettingsWhitelist) => api.put<{ items: SettingResponse[] }>('/api/settings', data),
   capabilities: () => api.put<{ read: boolean; write_new: boolean; update_existing: boolean }>('/api/skill/capabilities'),
   usage: () => api.get<SkillUsageResponse>('/api/skill/usage'),
+  tokenStatus: () => api.get<{ configured: boolean; fromEnv: boolean; fromSettings: boolean }>('/api/skill/token'),
+  rotateToken: () => api.post<{ token: string; configured: boolean }>('/api/skill/token'),
   operationLog: (params?: { actor?: string; action?: string }) => api.get<{ items: OperationLogResponse[]; nextCursor: string | null }>('/api/operation-log', params as Record<string, string | undefined>),
   revertOperation: (id: string) => api.post<{ ok: boolean }>(`/api/operation-log/${id}/revert`),
 }

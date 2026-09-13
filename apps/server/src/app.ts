@@ -37,6 +37,7 @@ import { createNavRoutes } from './nav/nav-routes.js'
 import { extractMetadata } from './archive/metadata.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 import { pullFromRaindrop } from './sync/raindrop-pull.js'
+import { generateSkillToken, hashSkillToken, readStoredHash, tokensEqual } from './auth/skill-token.js'
 
 const sessionCookie = 'dogear_session'
 const user = { id: 'user' }
@@ -62,9 +63,9 @@ type AppOptions = {
    */
   metadataEnhancer?: (url: string) => Promise<Record<string, unknown>>
   /**
-   * 快照执行器（Track B 注入，monolith 抓公开页，见 archive/snapshot-monolith.ts）。
-   * 注入后 `POST /api/archive/process` 真实执行 pending 快照 Job 并落文件；
-   * Workers 不注入（保持 queued_pending_browser：等浏览器侧 SingleFile 消费，下一批）。
+   * 快照执行器。注入后 `POST /api/archive/process` 消费 pending 快照 Job。
+   * Track B 注入 monolith；Track A 注入 fetch 轻量抓取（见 archive/snapshot-fetch.ts）。
+   * Skill `snapshot=true` 仍只入队，由工作台触发 process。
    */
   snapshotProcessor?: (repository: BookmarkRepository) => Promise<{ processed: number; succeeded: number; failed: number }>
 }
@@ -151,7 +152,14 @@ function timestamp(value: unknown) {
 }
 
 function serializeBookmark(record: any) {
-  return { ...record, createdAt: timestamp(record.createdAt), updatedAt: timestamp(record.updatedAt) }
+  let excerpt = record?.excerpt ?? null
+  if (!excerpt && record?.raindropExtras) {
+    try {
+      const extras = typeof record.raindropExtras === 'string' ? JSON.parse(record.raindropExtras) : record.raindropExtras
+      if (typeof extras?.excerpt === 'string' && extras.excerpt.trim()) excerpt = extras.excerpt
+    } catch { /* extras 不是 JSON 时忽略 */ }
+  }
+  return { ...record, excerpt, createdAt: timestamp(record.createdAt), updatedAt: timestamp(record.updatedAt) }
 }
 
 function serializeAccessRecord(record: any) {
@@ -468,7 +476,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     '/api/archive', '/api/archive/*', '/api/backup', '/api/backup/*',
     '/api/nav', '/api/nav/*',
     '/api/conflicts', '/api/conflicts/*',
-    '/api/skill/usage', '/api/skill/capabilities',
+    '/api/skill/usage', '/api/skill/capabilities', '/api/skill/token',
   ]
   for (const path of workbenchPaths) app.use(path, requireSession)
 
@@ -669,22 +677,20 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   app.route('/api/channels', createChannelRoutes(repository))
-  app.route('/api/archive', createArchiveRoutes(repository))
-
-  // 快照执行（Track B 注入 monolith 后可用）：消费 pending 的 snapshot Job 并落文件；
-  // Workers 不注入——保持 queued_pending_browser，等浏览器侧 SingleFile 消费（下一批）。
+  // process 必须挂在 archive 子路由之前，避免被 /api/archive/:id 吞掉
   app.post('/api/archive/process', async (c) => {
     if (!options.snapshotProcessor) {
       return c.json({
         error: {
           code: 'NOT_SUPPORTED',
-          message: 'Server-side snapshot processing requires the Docker (Track B) deployment with monolith installed. Browser-side snapshot (SingleFile) is a separate path.',
+          message: 'Server-side snapshot processing is not available on this deployment.',
         },
       }, 501)
     }
     const summary = await options.snapshotProcessor(repository)
     return c.json(summary)
   })
+  app.route('/api/archive', createArchiveRoutes(repository))
   app.route('/api/backup', options.backupRoutes ? options.backupRoutes(repository) : createUnsupportedBackupRoutes())
   app.route('/api/metadata', createMetadataRoutes())
   app.route('/api/nav', createNavRoutes(repository))
@@ -814,8 +820,15 @@ ${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保�
   const requireSkill = async (c: any, next: any) => {
     const name = c.req.param('name')
     if (!name || !skillRouteNames.has(name)) return next()
-    const authorization = c.req.header('Authorization')
-    if (!configuredSkillToken || authorization !== `Bearer ${configuredSkillToken}`) return skillError(c, 'UNAUTHORIZED', 401, 'Unauthorized')
+    const authorization = c.req.header('Authorization') ?? ''
+    const bearer = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
+    const envOk = Boolean(configuredSkillToken) && tokensEqual(bearer, configuredSkillToken)
+    let hashOk = false
+    if (!envOk && bearer && repository.settings && typeof repository.settings.get === 'function') {
+      const stored = readStoredHash(await repository.settings.get('skill.token_hash'))
+      hashOk = Boolean(stored) && tokensEqual(hashSkillToken(bearer), stored)
+    }
+    if (!envOk && !hashOk) return skillError(c, 'UNAUTHORIZED', 401, 'Unauthorized')
     const configured = repository.settings && typeof repository.settings.get === 'function' ? await repository.settings.get('skill.capabilities') : undefined
     let configuredCapabilities = capabilities
     if (configured && typeof configured === 'object' && 'value' in configured) {
@@ -845,6 +858,21 @@ ${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保�
     if (!body.success) return invalidRequest(c, body.error.flatten())
     await repository.settings.set('skill.capabilities', body.data)
     return c.json(body.data)
+  })
+
+  app.get('/api/skill/token', async (c) => {
+    const row = repository.settings && typeof repository.settings.get === 'function'
+      ? await repository.settings.get('skill.token_hash')
+      : undefined
+    const fromSettings = Boolean(readStoredHash(row))
+    const fromEnv = Boolean(configuredSkillToken)
+    return c.json({ configured: fromEnv || fromSettings, fromEnv, fromSettings })
+  })
+  app.post('/api/skill/token', async (c) => {
+    const token = generateSkillToken()
+    await repository.settings.set('skill.token_hash', hashSkillToken(token))
+    await repository.operationLog.append({ actor: 'user', action: 'update', targetType: 'setting', targetId: 'skill.token' })
+    return c.json({ token, configured: true })
   })
 
   app.get('/api/skill/usage', async (c) => {

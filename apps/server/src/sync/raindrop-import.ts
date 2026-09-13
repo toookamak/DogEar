@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { BookmarkRepository } from '@dogear/db'
-import type { RaindropBookmark } from '../channels/raindrop.js'
+import { mapRaindropBookmark, type RaindropBookmark } from '../channels/raindrop.js'
 
 /**
  * Raindrop 按页导入（通道「导入」的服务端核心）。
@@ -62,21 +62,11 @@ export async function importRaindropPage(
   try {
     const records = await repository.createMany(fresh.map((rd) => ({
       id: randomUUID(),
-      url: rd.link,
-      title: rd.title || rd.link,
+      ...mapRaindropBookmark(rd),
       status: intoInbox ? 'unread' as const : 'saved' as const,
       source: 'page' as const,
       private: false,
       syncStatus: 'synced' as const,
-      note: rd.note || null,
-      raindropId: String(rd._id),
-      raindropExtras: JSON.stringify({
-        excerpt: rd.excerpt,
-        type: rd.type,
-        created: rd.created,
-        lastUpdate: rd.lastUpdate,
-        collectionId: rd.collection?.$id,
-      }),
     })))
     summary.imported = records.length
   } catch (e) {

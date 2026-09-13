@@ -14,6 +14,7 @@ import type { D1Database, ExecutionContext } from '@cloudflare/workers-types'
 import { createApp } from './app.js'
 import { ChannelConfigManager } from './channels/index.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
+import { createFetchSnapshotProcessor } from './archive/snapshot-fetch.js'
 
 export interface Env {
   DB: D1Database
@@ -50,6 +51,7 @@ export default {
       password,
       skillToken: env.DOGEAR_SKILL_TOKEN,
       corsOrigin,
+      snapshotProcessor: createFetchSnapshotProcessor(),
     })
 
     return app.fetch(request, env, ctx)

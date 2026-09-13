@@ -18,6 +18,21 @@ export function createArchiveRoutes(repository: BookmarkRepository) {
     return c.json({ jobId: job.id, snapshotStatus: 'queued_pending_browser' }, 201)
   })
 
+  app.get('/:id/content', async (c) => {
+    const archive = await repository.archives?.get(c.req.param('id')) as { status?: string; metadata?: string | null; mimeType?: string | null } | undefined
+    if (!archive) return c.json({ error: { code: 'NOT_FOUND', message: 'Archive not found' } }, 404)
+    if (archive.status !== 'completed') return c.json({ error: { code: 'CONFLICT', message: 'Snapshot is not ready' } }, 409)
+    let html = ''
+    if (archive.metadata) {
+      try {
+        const parsed = JSON.parse(archive.metadata) as { html?: unknown }
+        if (typeof parsed.html === 'string') html = parsed.html
+      } catch { /* ignore */ }
+    }
+    if (!html) return c.json({ error: { code: 'NOT_FOUND', message: 'Snapshot file is not available' } }, 404)
+    return c.newResponse(html, 200, { 'Content-Type': archive.mimeType || 'text/html; charset=utf-8' })
+  })
+
   app.get('/bookmark/:bookmarkId', async (c) => {
     const jobs = await archiveService.getJobsByBookmark(c.req.param('bookmarkId'))
     return c.json({ items: jobs })

@@ -6,6 +6,7 @@ export interface RaindropBookmark {
   title: string
   excerpt?: string
   note?: string
+  cover?: string
   tags?: string[]
   collection: {
     $id: number
@@ -13,6 +14,34 @@ export interface RaindropBookmark {
   created: string
   lastUpdate: string
   type?: string
+}
+
+/** Raindrop 条目 → 本地书签字段（导入与拉回共用，excerpt 写入独立列而不是只塞 extras） */
+export function mapRaindropBookmark(rd: RaindropBookmark) {
+  let domain: string | null = null
+  try { domain = new URL(rd.link).hostname } catch { /* ignore */ }
+  const type: 'link' | 'article' | 'video' | 'image' =
+    rd.type === 'article' || rd.type === 'video' || rd.type === 'image' ? rd.type : 'link'
+  const excerpt = (rd.excerpt || '').trim() || null
+  const note = (rd.note || '').trim() || null
+  return {
+    url: rd.link,
+    title: (rd.title || '').trim() || rd.link,
+    excerpt,
+    note,
+    cover: (rd.cover || '').trim() || null,
+    type,
+    domain,
+    raindropId: String(rd._id),
+    raindropExtras: JSON.stringify({
+      excerpt: rd.excerpt,
+      type: rd.type,
+      created: rd.created,
+      lastUpdate: rd.lastUpdate,
+      collectionId: rd.collection?.$id,
+      cover: rd.cover,
+    }),
+  }
 }
 
 export interface RaindropCollection {

@@ -4,7 +4,7 @@ export const WIZARD_STORAGE_KEY = 'dogear.wizard.done'
 
 /**
  * 首次运行向导。
- * 明确告知「保存不依赖任何外部通道」——这是 PRD 的边界（Raindrop 等不是登录门槛），
+ * 明确告知「添加链接不依赖任何外部通道」——这是 PRD 的边界（Raindrop 等不是登录门槛），
  * 避免新用户以为必须先配置通道才能用。没有遮罩点击关闭：必须显式选择跳过或去设置。
  */
 export function FirstRunWizard({ onDone }: { onDone: () => void }) {
@@ -25,13 +25,13 @@ export function FirstRunWizard({ onDone }: { onDone: () => void }) {
 
         <div className="wizard-body">
           <p className="modal-message modal-message--flush">
-            保存链接<strong>不依赖</strong> Raindrop、S3 或 WebDAV。登录本应用即可开始收藏。
+            添加链接<strong>不依赖</strong> Raindrop、S3 或 WebDAV。登录本应用即可开始收藏。
           </p>
           <p className="modal-message modal-message--flush">
             数据通道是可选的数据出入口，可以以后在设置里再配，也可以一直不配。
           </p>
           <ul className="wizard-list">
-            <li>保存：只存链接，标题与摘要由服务端异步抓取</li>
+            <li>添加：只记链接，标题与摘要由服务端异步抓取</li>
             <li>整理：Scene / 状态 / 文件夹 / 标签，四个维度互不干扰</li>
             <li>找回：搜索、Inbox、最近访问与导航页</li>
           </ul>

@@ -8,9 +8,8 @@ interface TopBarProps {
 }
 
 /**
- * 应用级顶栏（外壳的一部分，所有页面共用）。
- * 品牌、全局搜索入口、保存入口与登出；页面级标题与操作见 PageHeader。
- * 搜索与保存通过 URL 参数交给工作台页执行，避免跨层调用全局状态。
+ * 品牌、全局搜索入口、添加书签入口与登出；页面级标题与操作见 PageHeader。
+ * 搜索与添加通过 URL 参数交给工作台页执行，避免跨层调用全局状态。
  */
 export function TopBar({ sidebarOpen, onToggleSidebar, onLogout }: TopBarProps) {
   const [location, setLocation] = useLocation()
@@ -75,9 +74,9 @@ export function TopBar({ sidebarOpen, onToggleSidebar, onLogout }: TopBarProps) 
           type="button"
           className="btn btn--primary"
           onClick={() => openOnWorkbench('save')}
-          title={isWorkbench ? '保存书签' : '到工作台保存书签'}
+          title={isWorkbench ? '添加书签' : '到工作台添加书签'}
         >
-          + 保存
+          添加书签
         </button>
         <button type="button" className="btn btn--ghost" onClick={onLogout}>
           退出

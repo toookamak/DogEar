@@ -27,7 +27,7 @@ function showErrorHint(text) {
 async function saveCurrentTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.url || !/^https?:/.test(tab.url)) {
-    document.getElementById('page-title').textContent = '当前页面不可保存'
+    document.getElementById('page-title').textContent = '当前页面无法添加'
     return null
   }
   document.getElementById('page-title').textContent = tab.title || tab.url
@@ -52,13 +52,13 @@ async function save() {
       body: JSON.stringify({ url: page.url, note: note || undefined, source: 'extension' }),
     })
     if (response.status === 401 || response.status === 403) {
-      showStatus('err', 'Token 无效或保存能力已关闭。')
+      showStatus('err', 'Token 无效或添加能力已关闭。')
       return
     }
     if (!response.ok) {
       const body = await response.json().catch(() => null)
       const message = body?.error?.message ?? `HTTP ${response.status}`
-      showStatus('err', `保存失败：${message}`)
+      showStatus('err', `添加失败：${message}`)
       return
     }
     const saved = await response.json()
@@ -67,7 +67,7 @@ async function save() {
     const suggestions = Array.isArray(receipt.suggestions) ? receipt.suggestions.length : 0
     showStatus(
       'ok',
-      (saved.replay ? '该链接此前已保存（幂等重放）。' : '已保存。') +
+      (saved.replay ? '该链接此前已添加（幂等重放）。' : '已添加。') +
       (suggestions > 0 ? `${suggestions} 条整理建议待你在工作台确认。` : ''),
     )
   } catch (error) {

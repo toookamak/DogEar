@@ -311,6 +311,36 @@ describe('skill API', () => {
     expect(limited.status).toBe(429)
     expect((await limited.json()).error.code).toBe('RATE_LIMITED')
   })
+
+  it('lets the workbench mint a Skill Token that authenticates Skill requests', async () => {
+    const store = new Map<string, string>()
+    const repo = repository()
+    repo.settings = {
+      list: async () => [],
+      get: async (key: string) => (store.has(key) ? { key, value: store.get(key) } : undefined),
+      set: async (key: string, value: unknown) => {
+        const stored = typeof value === 'string' ? value : JSON.stringify(value)
+        store.set(key, stored)
+        return { key, value: stored }
+      },
+    }
+    const app = createApp(repo, { password: 'secret', skillToken: '' })
+    expect((await app.request('/api/skill/token')).status).toBe(401)
+    const { cookie } = await login(app)
+    expect(await (await app.request('/api/skill/token', { headers: { cookie } })).json()).toMatchObject({
+      configured: false, fromEnv: false, fromSettings: false,
+    })
+    const rotated = await app.request('/api/skill/token', { method: 'POST', headers: { cookie } })
+    expect(rotated.status).toBe(200)
+    const body = await rotated.json() as { token: string }
+    expect(body.token.startsWith('de_')).toBe(true)
+    const saved = await app.request('/api/skill/save_bookmark', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${body.token}` },
+      body: JSON.stringify({ url: 'https://example.com/from-ui-token' }),
+    })
+    expect(saved.status).toBe(201)
+  })
 })
 
 describe('bookmark and access record API', () => {

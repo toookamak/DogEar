@@ -59,6 +59,8 @@ describe('importRaindropPage', () => {
       source: 'page',
       syncStatus: 'synced',
       raindropId: '1',
+      excerpt: '摘 1',
+      domain: 'example.com',
     })
     expect(JSON.parse(bookmarks[0].raindropExtras)).toMatchObject({ excerpt: '摘 1', collectionId: -1 })
   })

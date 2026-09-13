@@ -239,14 +239,14 @@ export function WorkbenchPage() {
           const pending = fresh.pendingSuggestionCount || 0
           if (pending > 0) {
             setSelectedBookmark(fresh)
-            toast.info(`已保存，有 ${pending} 条 AI 整理建议待你确认`)
+            toast.info(`已添加，有 ${pending} 条 AI 整理建议待你确认`)
             return
           }
-        } catch { /* 取回失败不影响「已保存」这一事实 */ }
+        } catch { /* 取回失败不影响「已添加」这一事实 */ }
       }
-      toast.success('已保存到 Inbox')
+      toast.success('已添加到 Inbox')
     } catch (e) {
-      toast.error(errorMessage(e, '保存失败'))
+      toast.error(errorMessage(e, '添加失败'))
     }
   }
 
@@ -371,7 +371,7 @@ export function WorkbenchPage() {
         actions={
           <>
             <button type="button" className="btn btn--primary" onClick={() => setShowSaveForm(true)}>
-              + 保存
+              添加书签
             </button>
             {/* Scene 视图的主操作：文案随该 Scene 的 AERR 原型变化（PRD §2.0.3）。
                 这里只换文案与引导，不伪造独立功能——点击后落到当前筛选结果上。 */}
@@ -514,11 +514,11 @@ export function WorkbenchPage() {
                 : isInbox ? 'Inbox 为空' : '暂无书签'
             }
             // 有筛选时才给「清除筛选」——这才是死胡同的出口；
-            // 真正没数据时给「去保存第一条」，指向页面顶部的保存入口。
+            // 真正没数据时给「添加第一条」，指向页面顶部的添加入口。
             action={
               hasActiveFilters
                 ? { label: '清除筛选', onClick: clearFilters }
-                : { label: '+ 保存第一条', onClick: () => setShowSaveForm(true) }
+                : { label: '添加第一条', onClick: () => setShowSaveForm(true) }
             }
           />
         )}

@@ -78,10 +78,10 @@ function rd(id: number, over: Partial<RaindropBookmark> = {}): RaindropBookmark 
 describe('Raindrop 拉回（L2 双向的远端→本地侧）', () => {
   it('creates new bookmarks into Inbox with source=raindrop', async () => {
     const { repository, bookmarks } = makeRepo()
-    const summary = await pullFromRaindrop(repository, fakeClient([[rd(1), rd(2)]]))
+    const summary = await pullFromRaindrop(repository, fakeClient([[rd(1, { excerpt: '远端简介' }), rd(2)]]))
     expect(summary).toMatchObject({ created: 2, skipped: 0, conflicts: 0, pages: 1 })
     expect(bookmarks).toHaveLength(2)
-    expect(bookmarks[0]).toMatchObject({ source: 'raindrop', status: 'unread', raindropId: '1' })
+    expect(bookmarks[0]).toMatchObject({ source: 'raindrop', status: 'unread', raindropId: '1', excerpt: '远端简介' })
   })
 
   it('skips unchanged bookmarks', async () => {

@@ -35,6 +35,10 @@ type BookmarkInput = {
   private?: boolean
   syncStatus?: 'pending' | 'synced'
   title?: string
+  excerpt?: string | null
+  cover?: string | null
+  type?: 'link' | 'article' | 'video' | 'image'
+  domain?: string | null
   raindropId?: string | null
   raindropExtras?: string | null
   /**
@@ -499,7 +503,7 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   }
   repository.listInbox = async (limit = 50, cursor?: string) => {
     const result = await repository.list({ status: 'unread' }, limit, cursor)
-    return { bookmarks: result.items, nextCursor: result.nextCursor }
+    return { bookmarks: result.items, nextCursor: result.nextCursor, total: result.total }
   }
   repository.listRecycleBin = async (limit = 50, cursor?: string) => {
     const result = await repository.list({ includeDeleted: true }, limit, cursor)

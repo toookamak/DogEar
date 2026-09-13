@@ -6,7 +6,7 @@ interface SaveBookmarkFormProps {
 }
 
 /**
- * 保存书签表单。字段与 POST /api/bookmarks 的契约一致
+ * 添加书签表单。字段与 POST /api/bookmarks 的契约一致
  * （title 不在此处填写——它由服务端异步抓取元数据得到，见 docs/API结构表.md）。
  */
 export function SaveBookmarkForm({ onSave, onClose }: SaveBookmarkFormProps) {
@@ -31,8 +31,8 @@ export function SaveBookmarkForm({ onSave, onClose }: SaveBookmarkFormProps) {
   return (
     <form onSubmit={handleSubmit} className="save-form">
       <div className="manager-head manager-head--flush">
-        <h3 className="section-title section-title--flush">保存书签</h3>
-        <button type="button" className="icon-btn" aria-label="关闭保存表单" onClick={onClose}>×</button>
+        <h3 className="section-title section-title--flush">添加书签</h3>
+        <button type="button" className="icon-btn" aria-label="关闭添加表单" onClick={onClose}>×</button>
       </div>
 
       <input
@@ -59,8 +59,8 @@ export function SaveBookmarkForm({ onSave, onClose }: SaveBookmarkFormProps) {
         value={intent}
         onChange={(e) => setIntent(e.target.value)}
         className="input"
-        placeholder="保存意图（可选，例如：稍后读 / 项目参考）"
-        aria-label="保存意图"
+        placeholder="添加意图（可选，例如：稍后读 / 项目参考）"
+        aria-label="添加意图"
       />
 
       <div className="detail-actions-row">
@@ -75,10 +75,10 @@ export function SaveBookmarkForm({ onSave, onClose }: SaveBookmarkFormProps) {
       </div>
 
       <p className="muted muted--flush">
-        标题、摘要与图标会在保存后由服务端异步抓取。只需存下链接，整理可以以后再做。
+        标题、摘要与图标会在添加后由服务端异步抓取。只需记下链接，整理可以以后再做。
       </p>
 
-      <button type="submit" className="btn btn--primary">保存到 Inbox</button>
+      <button type="submit" className="btn btn--primary">添加到 Inbox</button>
     </form>
   )
 }

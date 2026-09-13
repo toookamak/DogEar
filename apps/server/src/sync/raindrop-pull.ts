@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { BookmarkRepository } from '@dogear/db'
-import type { RaindropBookmark } from '../channels/raindrop.js'
+import { mapRaindropBookmark, type RaindropBookmark } from '../channels/raindrop.js'
 
 /**
  * Raindrop 拉回（双向同步的远端 → 本地侧，同步设计 §3；API 结构表 v1.8）。
@@ -90,14 +90,13 @@ export async function pullFromRaindrop(
       try {
         await repository.createMany(fresh.map((rd) => ({
           id: randomUUID(),
-          url: rd.link,
-          title: rd.title || rd.link,
+          ...mapRaindropBookmark(rd),
+          // 冲突检测仍按 note（含 excerpt 回退）；excerpt 列同时写入供卡片展示
+          note: remoteNote(rd) || null,
           status: intoInbox ? 'unread' as const : 'saved' as const,
           source: 'raindrop' as const,
           private: false,
           syncStatus: 'synced' as const,
-          note: remoteNote(rd) || null,
-          raindropId: String(rd._id),
         })))
         summary.created += fresh.length
       } catch (error) {

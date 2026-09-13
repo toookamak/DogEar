@@ -99,7 +99,9 @@ describe('bookmark repository', () => {
     await new Promise((resolve) => setTimeout(resolve, 2))
     await repository.create({ id: '2', url: 'https://example.com/2', status: 'unread' })
 
-    expect((await repository.listInbox()).bookmarks.map((bookmark: any) => bookmark.id)).toEqual(['2', '1'])
+    const inbox = await repository.listInbox()
+    expect(inbox.bookmarks.map((bookmark: any) => bookmark.id)).toEqual(['2', '1'])
+    expect(inbox.total).toBe(2)
     expect(await repository.countPending()).toBe(2)
   })
 
