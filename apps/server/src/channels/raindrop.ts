@@ -7,6 +7,7 @@ export interface RaindropBookmark {
   excerpt?: string
   note?: string
   cover?: string
+  media?: Array<{ link?: string; type?: string }>
   tags?: string[]
   collection: {
     $id: number
@@ -15,7 +16,6 @@ export interface RaindropBookmark {
   lastUpdate: string
   type?: string
 }
-
 /** Raindrop 条目 → 本地书签字段（导入与拉回共用，excerpt 写入独立列而不是只塞 extras） */
 export function mapRaindropBookmark(rd: RaindropBookmark) {
   let domain: string | null = null
@@ -29,7 +29,7 @@ export function mapRaindropBookmark(rd: RaindropBookmark) {
     title: (rd.title || '').trim() || rd.link,
     excerpt,
     note,
-    cover: (rd.cover || '').trim() || null,
+    cover: (rd.cover || rd.media?.[0]?.link || '').trim() || null,
     type,
     domain,
     raindropId: String(rd._id),
@@ -39,7 +39,8 @@ export function mapRaindropBookmark(rd: RaindropBookmark) {
       created: rd.created,
       lastUpdate: rd.lastUpdate,
       collectionId: rd.collection?.$id,
-      cover: rd.cover,
+      cover: rd.cover || rd.media?.[0]?.link,
+      media: rd.media,
     }),
   }
 }

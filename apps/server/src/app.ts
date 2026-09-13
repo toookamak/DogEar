@@ -36,6 +36,7 @@ import { createChannelRoutes } from './channels-routes.js'
 import { createMetadataRoutes } from './archive/metadata-routes.js'
 import { createNavRoutes } from './nav/nav-routes.js'
 import { extractMetadata } from './archive/metadata.js'
+import { coverFromRaindropExtras, resolveCoverUrl } from './archive/cover-url.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 import { pullFromRaindrop } from './sync/raindrop-pull.js'
 import { generateSkillToken, hashSkillToken, readStoredHash, tokensEqual } from './auth/skill-token.js'
@@ -136,13 +137,14 @@ function timestamp(value: unknown) {
 }
 
 function serializeBookmark(record: any) {
+  const pageUrl = typeof record?.url === 'string' ? record.url : null
   let excerpt = record?.excerpt ?? null
-  let cover = typeof record?.cover === 'string' && record.cover.trim() ? record.cover : null
+  let cover = resolveCoverUrl(typeof record?.cover === 'string' ? record.cover : null, pageUrl)
   if ((!excerpt || !cover) && record?.raindropExtras) {
     try {
       const extras = typeof record.raindropExtras === 'string' ? JSON.parse(record.raindropExtras) : record.raindropExtras
       if (!excerpt && typeof extras?.excerpt === 'string' && extras.excerpt.trim()) excerpt = extras.excerpt
-      if (!cover && typeof extras?.cover === 'string' && extras.cover.trim()) cover = extras.cover
+      if (!cover) cover = coverFromRaindropExtras(extras, pageUrl)
     } catch { /* extras 不是 JSON 时忽略 */ }
   }
   return { ...record, excerpt, cover, createdAt: timestamp(record.createdAt), updatedAt: timestamp(record.updatedAt) }
@@ -500,6 +502,34 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.get('/api/bookmarks/:bookmarkId', async (c) => {
     const record = await repository.get(c.req.param('bookmarkId'))
     return record ? c.json(serializeBookmark(record)) : skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
+  })
+
+  /** 封面同源代理：Raindrop/站点防盗链时浏览器直链会失败，卡片 onError 再走这里。 */
+  app.get('/api/bookmarks/:bookmarkId/cover', async (c) => {
+    const record = await repository.get(c.req.param('bookmarkId'))
+    if (!record) return skillError(c, 'NOT_FOUND', 404, 'Bookmark not found')
+    const cover = serializeBookmark(record).cover as string | null
+    if (!cover) return skillError(c, 'NOT_FOUND', 404, 'Cover not found')
+    try {
+      const upstream = await fetch(cover, {
+        headers: { Accept: 'image/*,*/*;q=0.8', 'User-Agent': 'Mozilla/5.0 (compatible; DogEar/1.0)' },
+        signal: AbortSignal.timeout(8000),
+        redirect: 'follow',
+      })
+      const contentType = upstream.headers.get('content-type') ?? ''
+      if (!upstream.ok || (contentType && !contentType.startsWith('image/') && !contentType.startsWith('application/octet-stream'))) {
+        return skillError(c, 'NOT_FOUND', 404, 'Cover fetch failed')
+      }
+      return new Response(upstream.body, {
+        status: 200,
+        headers: {
+          'Content-Type': contentType.startsWith('image/') ? contentType : 'image/jpeg',
+          'Cache-Control': 'private, max-age=86400',
+        },
+      })
+    } catch {
+      return skillError(c, 'NOT_FOUND', 404, 'Cover fetch failed')
+    }
   })
 
   app.patch('/api/bookmarks/:bookmarkId', async (c) => {

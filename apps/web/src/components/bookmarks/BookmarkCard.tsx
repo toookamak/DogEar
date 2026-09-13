@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { BookmarkResponse } from '../../types/api.js'
+import { resolveCoverUrl } from '../../utils/cover-url.js'
 import {
   STATUS_LABELS,
   SOURCE_LABELS,
@@ -44,12 +45,15 @@ export function BookmarkCard({
   // tags 为 undefined（投影未返回）时不显示标签区；空数组才是真实的「未整理」
   const tags = bookmark.tags
   const pendingSuggestions = bookmark.pendingSuggestionCount ?? 0
-  const coverUrl = (bookmark.cover ?? '').trim() || null
+  const remoteCover = resolveCoverUrl(bookmark.cover, bookmark.url)
+  const proxyCover = `/api/bookmarks/${bookmark.id}/cover`
+  const [coverSrc, setCoverSrc] = useState<string | null>(remoteCover)
   const [coverBroken, setCoverBroken] = useState(false)
   useEffect(() => {
+    setCoverSrc(remoteCover)
     setCoverBroken(false)
-  }, [coverUrl])
-  const showCover = Boolean(coverUrl) && !coverBroken
+  }, [remoteCover, bookmark.id])
+  const showCover = Boolean(coverSrc) && !coverBroken
 
 
   return (
@@ -87,14 +91,17 @@ export function BookmarkCard({
         data-mark={showCover ? undefined : mark}
         aria-hidden="true"
       >
-        {showCover && coverUrl && (
+        {showCover && coverSrc && (
           <img
             className="bm-card-thumb"
-            src={coverUrl}
+            src={coverSrc}
             alt=""
             loading="lazy"
             referrerPolicy="no-referrer"
-            onError={() => setCoverBroken(true)}
+            onError={() => {
+              if (coverSrc !== proxyCover) setCoverSrc(proxyCover)
+              else setCoverBroken(true)
+            }}
           />
         )}
         {selectable && (

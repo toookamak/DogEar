@@ -51,7 +51,9 @@ export async function extractMetadata(url: string): Promise<PageMetadata> {
 
     // Extract image
     const ogImage = html.match(/<meta\s+[^>]*property=["']og:image["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
-    if (ogImage) metadata.image = ogImage[1]
+    if (ogImage) {
+      try { metadata.image = new URL(ogImage[1], url).href } catch { metadata.image = ogImage[1] }
+    }
 
     // Extract author
     const ogAuthor = html.match(/<meta\s+[^>]*property=["']article:author["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
