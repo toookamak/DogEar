@@ -55,7 +55,7 @@ function makeItem(overrides: Partial<SyncQueueItem>): SyncQueueItem {
   } as SyncQueueItem
 }
 
-/** 内存版 sync_queue + 书签仓，覆盖消费器用到的最小面 */
+/** 内存版 sync_queue + 书签仓，覆盖消费器用到的最小面（批量接口） */
 function makeRepo(items: SyncQueueItem[]) {
   const bookmarks = new Map<string, Record<string, unknown>>()
   const repo: SyncQueueRepositoryShape & { bookmarks: Map<string, Record<string, unknown>> } = {
@@ -67,25 +67,35 @@ function makeRepo(items: SyncQueueItem[]) {
       async listFailed(limit = 100) {
         return items.filter((i) => i.status === 'failed').slice(0, limit)
       },
-      async updateStatus(id, status, error) {
-        const item = items.find((i) => i.id === id)
-        if (!item) return undefined
-        item.status = status
-        item.updatedAt = new Date()
-        if (status === 'failed') {
-          item.retryCount += 1
-          item.error = error ?? null
+      async updateStatusMany(entries) {
+        for (const entry of entries) {
+          const item = items.find((i) => i.id === entry.id)
+          if (!item) continue
+          item.status = entry.status
+          item.updatedAt = new Date()
+          if (entry.status === 'failed') {
+            item.retryCount += 1
+            item.error = entry.error ?? null
+          } else {
+            item.error = null
+          }
         }
-        return item
       },
       async countPending() {
         return items.filter((i) => i.status === 'pending').length
       },
     },
-    async update(bookmarkId: string, input: Record<string, unknown>) {
-      const current = bookmarks.get(bookmarkId) ?? {}
-      bookmarks.set(bookmarkId, { ...current, ...input })
-      return current
+    async updateRaindropIds(pairs) {
+      for (const pair of pairs) {
+        const current = bookmarks.get(pair.id) ?? {}
+        bookmarks.set(pair.id, { ...current, raindropId: pair.raindropId, syncStatus: 'synced' })
+      }
+    },
+    async markSyncStatus(bookmarkIds, status) {
+      for (const id of bookmarkIds) {
+        const current = bookmarks.get(id) ?? {}
+        bookmarks.set(id, { ...current, syncStatus: status })
+      }
     },
   }
   return repo

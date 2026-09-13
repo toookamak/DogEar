@@ -4,6 +4,7 @@ import { channelConfigInputSchema } from '@dogear/shared'
 import { ChannelConfigManager, isMaskedSecret, maskConfig, mergeChannelSecrets } from './channels/index.js'
 import { RaindropClient } from './channels/raindrop.js'
 import { importRaindropPage } from './sync/raindrop-import.js'
+import { exportRaindropPage } from './sync/raindrop-export.js'
 import { S3ClientExtended } from './channels/s3.js'
 import { WebDAVClient } from './channels/webdav.js'
 import { randomUUID } from 'node:crypto'
@@ -133,12 +134,14 @@ export function createChannelRoutes(repository: BookmarkRepository) {
   app.post('/:id/export', async (c) => {
     const config = await manager.getChannelConfig(c.req.param('id'))
     if (!config) return skillError(c, 'NOT_FOUND', 404, 'Channel not found')
-    if (config.channel === 'raindrop') return handleRaindropExport(c, config, repository)
+    if (config.channel === 'raindrop') {
+      const body = await c.req.json().catch(() => ({})) as { excludeIds?: string[]; count?: number }
+      return handleRaindropExport(c, config, repository, body)
+    }
     if (config.channel === 's3') return handleS3Export(c, config, repository)
     if (config.channel === 'webdav') return handleWebDavExport(c, config, repository)
     return skillError(c, 'NOT_SUPPORTED', 400, `Channel type "${config.channel}" not supported for export`)
   })
-
   app.post('/:id/test', async (c) => {
     const config = await manager.getChannelConfig(c.req.param('id'))
     if (!config) return skillError(c, 'NOT_FOUND', 404, 'Channel not found')
@@ -219,39 +222,27 @@ async function handleRaindropImport(
   }
 }
 
+/**
+ * Raindrop 按页导出：每次调用只推送一页（20 条），由前端逐轮驱动。
+ * 全库循环不能放进单个请求——Raindrop create 无批量端点（每条 1 次调用是下限），
+ * Workers（轨 A）Free 档单次调用 50 子请求上限内跑不完 397 条。
+ */
 async function handleRaindropExport(
   c: { json: (body: unknown, status?: number) => Response },
   config: { config: Record<string, unknown> },
   repository: BookmarkRepository,
+  body: { excludeIds?: string[]; count?: number },
 ) {
   const token = String(config.config.token || '')
   if (!token) return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Raindrop token is missing' } }, 400)
 
   const client = new RaindropClient(token)
-  let exported = 0
-  let failed = 0
-  const result = await repository.list({ includeDeleted: false }, 1000)
-
-  for (const bookmark of result.items as any[]) {
-    if (bookmark.raindropId || bookmark.deletedAt) continue
-    try {
-      const created = await client.createBookmark({
-        url: bookmark.url,
-        title: bookmark.title || bookmark.url,
-        note: bookmark.note || undefined,
-        tags: [],
-      })
-      await repository.update(bookmark.id, {
-        raindropId: String(created._id),
-        syncStatus: 'synced',
-      })
-      exported++
-    } catch {
-      failed++
-    }
+  try {
+    const summary = await exportRaindropPage(repository, client, body)
+    return c.json(summary)
+  } catch (e) {
+    return c.json({ error: { code: 'VALIDATION_ERROR', message: `Export failed: ${e instanceof Error ? e.message : String(e)}` } }, 500)
   }
-
-  return c.json({ exported, failed })
 }
 
 function bookmarkCsvRows(items: unknown[]) {
@@ -341,13 +332,13 @@ async function handleS3Export(
 
   const exportPrefix = String(config.config.exportPrefix || 'dogear/export/')
   try {
-    const result = await repository.list({ includeDeleted: false }, 1000)
+    // 瘦投影一条查询取全量（替代 list 的逐条关联查询，Workers 上省数千次子请求）
+    const rows = await repository.listExportRows({}, 1000, 0)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const fileName = `${exportPrefix}bookmarks-${timestamp}.csv`
-    const rows = bookmarkCsvRows(result.items)
-    const csvContent = stringify(rows, { header: true, columns: ['url', 'title', 'note', 'status'] })
+    const csvContent = stringify(bookmarkCsvRows(rows), { header: true, columns: ['url', 'title', 'note', 'status'] })
     await s3Client.uploadFile(fileName, Buffer.from(csvContent, 'utf-8'), 'text/csv')
-    return c.json({ exported: rows.length, failed: 0, file: fileName })
+    return c.json({ exported: rows.length, failed: 0, processed: rows.length, total: rows.length, hasMore: false, errors: [], file: fileName })
   } catch (e) {
     return c.json({ error: { code: 'VALIDATION_ERROR', message: `S3 export failed: ${e instanceof Error ? e.message : String(e)}` } }, 500)
   }
@@ -366,13 +357,13 @@ async function handleWebDavExport(
   }
 
   try {
-    const result = await repository.list({ includeDeleted: false }, 1000)
+    // 瘦投影一条查询取全量（替代 list 的逐条关联查询）
+    const rows = await repository.listExportRows({}, 1000, 0)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const fileName = `dogear-export-${timestamp}.csv`
-    const rows = bookmarkCsvRows(result.items)
-    const csvContent = stringify(rows, { header: true, columns: ['url', 'title', 'note', 'status'] })
+    const csvContent = stringify(bookmarkCsvRows(rows), { header: true, columns: ['url', 'title', 'note', 'status'] })
     await client.uploadFile(fileName, csvContent, 'text/csv')
-    return c.json({ exported: rows.length, failed: 0, file: fileName })
+    return c.json({ exported: rows.length, failed: 0, processed: rows.length, total: rows.length, hasMore: false, errors: [], file: fileName })
   } catch (e) {
     return c.json({ error: { code: 'VALIDATION_ERROR', message: `WebDAV export failed: ${e instanceof Error ? e.message : String(e)}` } }, 500)
   }

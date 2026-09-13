@@ -47,11 +47,14 @@ export interface SyncQueueRepositoryShape {
   syncQueue: {
     getPending(limit?: number): Promise<SyncQueueItem[]>
     listFailed(limit?: number): Promise<SyncQueueItem[]>
-    updateStatus(id: string, status: 'pending' | 'processing' | 'succeeded' | 'failed', error?: string | null): Promise<unknown>
+    /** 批量回写状态（failed 整组 retry_count+1，其余清 error）；D1 上 1 次子请求 */
+    updateStatusMany(entries: Array<{ id: string; status: 'pending' | 'processing' | 'succeeded' | 'failed'; error?: string | null }>): Promise<void>
     countPending(): Promise<number>
   }
-  /** 只写 raindropId（推送成功写回）与 syncStatus（pending→synced）；不动关系字段 */
-  update(bookmarkId: string, input: Record<string, unknown>): Promise<unknown>
+  /** create 推送成功：批量写回 raindropId 并标 synced */
+  updateRaindropIds(pairs: Array<{ id: string; raindropId: string }>): Promise<void>
+  /** 其余成功项：批量标 synced */
+  markSyncStatus(bookmarkIds: string[], status: 'pending' | 'synced'): Promise<void>
 }
 
 function parsePayload(item: SyncQueueItem): Record<string, unknown> {
@@ -66,29 +69,33 @@ function parsePayload(item: SyncQueueItem): Record<string, unknown> {
 
 /**
  * 把退避到期的 failed 项重置回 pending。
- * 消费前调用一次；updateStatus('pending') 不会清 retry_count（只有 failed 才累加）。
+ * 消费前调用一次；重置不清 retry_count（只有 failed 才累加）。
  */
 export async function requeueEligibleFailures(
   repository: SyncQueueRepositoryShape,
   now = Date.now(),
 ): Promise<number> {
   const failed = await repository.syncQueue.listFailed(100)
-  let requeued = 0
-  for (const item of failed) {
-    if (item.retryCount >= MAX_RETRIES) continue
+  const eligible = failed.filter((item) => {
+    if (item.retryCount >= MAX_RETRIES) return false
     const dueAt = new Date(item.updatedAt).getTime() + backoffMs(item.retryCount)
-    if (Number.isNaN(dueAt) || dueAt > now) continue
-    await repository.syncQueue.updateStatus(item.id, 'pending')
-    requeued += 1
+    return !Number.isNaN(dueAt) && dueAt <= now
+  })
+  if (eligible.length > 0) {
+    await repository.syncQueue.updateStatusMany(eligible.map((item) => ({ id: item.id, status: 'pending' as const })))
   }
-  return requeued
+  return eligible.length
 }
 
+/**
+ * 处理单个队列项的远端推送（无 D1 写入）。
+ * create 成功时返回远端 _id，由调用方批量写回——逐条写回会把一批 25 条放大成
+ * 100+ 次子请求，超出 Workers Free 档单次调用上限。
+ */
 async function handleRaindropBookmark(
-  repository: SyncQueueRepositoryShape,
   client: RaindropPushClient,
   item: SyncQueueItem,
-): Promise<void> {
+): Promise<{ remoteId?: string }> {
   const payload = parsePayload(item)
   if (item.action === 'create' || item.action === 'update') {
     const url = String(payload.url ?? '')
@@ -100,22 +107,17 @@ async function handleRaindropBookmark(
     const raindropId = typeof payload.raindropId === 'string' ? payload.raindropId : ''
     if (item.action === 'update' && raindropId) {
       await client.updateBookmark(Number(raindropId), data)
-      return
+      return {}
     }
     const created = await client.createBookmark(data)
-    const remoteId = String((created as { _id?: unknown })._id ?? '')
-    if (remoteId) {
-      // 只写回 raindropId：repository.update 对未传入的关系字段（scenes/tags）不动表
-      await repository.update(item.targetId, { raindropId: remoteId })
-    }
-    return
+    return { remoteId: String((created as { _id?: unknown })._id ?? '') }
   }
 
   if (item.action === 'delete') {
     // 本地从未推送过（无 raindropId）就无需远端删除，视为成功
-    if (!raindropIdOf(payload)) return
+    if (!raindropIdOf(payload)) return {}
     await client.deleteBookmark(Number(raindropIdOf(payload)))
-    return
+    return {}
   }
 
   throw new Error(`Unsupported action: ${item.action}`)
@@ -128,6 +130,11 @@ function raindropIdOf(payload: Record<string, unknown>): string {
 /**
  * 消费一批队列项。三处调度共用：Workers Cron（scheduled）、
  * 自托管定时器（index.ts）、工作台触发的 POST /api/sync/process。
+ *
+ * D1 开销与批内条数无关（Workers Free 档单次调用 50 子请求，D1 每条查询都计入）：
+ * 状态回写与书签标位全部批量化，每条队列项只固定消耗 1 次 Raindrop API 调用。
+ * 不再写 processing 中间态：消费中断的条目保持 pending，下个 tick 原样重试
+ * （推送幂等性与旧实现一致）。
  */
 export async function processSyncQueue(
   repository: SyncQueueRepositoryShape,
@@ -137,13 +144,13 @@ export async function processSyncQueue(
   const requeued = await requeueEligibleFailures(repository)
 
   const pending = await repository.syncQueue.getPending(max)
-  let succeeded = 0
-  let failed = 0
   let client: RaindropPushClient | null = null
   let clientResolved = false
+  const succeededItems: SyncQueueItem[] = []
+  const createdPairs: Array<{ id: string; raindropId: string }> = []
+  const failedEntries: Array<{ id: string; status: 'failed'; error: string }> = []
 
   for (const item of pending) {
-    await repository.syncQueue.updateStatus(item.id, 'processing')
     try {
       if (item.channel !== 'raindrop' || item.targetType !== 'bookmark') {
         // 队列当前只承载 Raindrop 书签推送；落到这里的任何条目都是编程错误，
@@ -156,19 +163,27 @@ export async function processSyncQueue(
       }
       if (!client) throw new Error('No enabled raindrop channel; cannot push bookmark')
 
-      await handleRaindropBookmark(repository, client, item)
-      await repository.syncQueue.updateStatus(item.id, 'succeeded')
-      await repository.update(item.targetId, { syncStatus: 'synced' }).catch(() => undefined)
-      succeeded += 1
+      const { remoteId } = await handleRaindropBookmark(client, item)
+      if (remoteId) createdPairs.push({ id: item.targetId, raindropId: remoteId })
+      succeededItems.push(item)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      await repository.syncQueue.updateStatus(item.id, 'failed', message)
-      failed += 1
+      failedEntries.push({ id: item.id, status: 'failed', error: message })
     }
   }
 
+  // 批量回写：队列状态（succeeded 清 error / failed 累加 retry）+ 书签同步位
+  await repository.syncQueue.updateStatusMany([
+    ...succeededItems.map((item) => ({ id: item.id, status: 'succeeded' as const })),
+    ...failedEntries,
+  ])
+  if (createdPairs.length > 0) await repository.updateRaindropIds(createdPairs)
+  const pairedIds = new Set(createdPairs.map((pair) => pair.id))
+  const syncedOnly = succeededItems.map((item) => item.targetId).filter((id) => !pairedIds.has(id))
+  await repository.markSyncStatus(syncedOnly, 'synced')
+
   const remaining = await repository.syncQueue.countPending()
-  return { processed: pending.length, succeeded, failed, requeued, remaining }
+  return { processed: pending.length, succeeded: succeededItems.length, failed: failedEntries.length, requeued, remaining }
 }
 
 /** 从已启用的通道配置里取第一个 Raindrop 通道并构造客户端；无则返回 null */

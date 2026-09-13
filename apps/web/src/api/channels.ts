@@ -29,9 +29,16 @@ export interface ImportPageResponse {
   hasMore: boolean
 }
 
-export interface ExportResponse {
+/** 按页导出的单轮回执（API 结构表 v1.10）：前端逐轮调用，直到 processed=0 */
+export interface ExportPageResponse {
   exported: number
   failed: number
+  processed: number
+  total: number
+  hasMore: boolean
+  errors: string[]
+  /** 本轮失败的本地书签 id：下一轮原样传回 excludeIds */
+  failedIds: string[]
 }
 
 export interface TestResponse {
@@ -66,7 +73,8 @@ export const channelsApi = {
   remove: (id: string) => api.delete<{ ok: boolean }>(`/api/channels/${id}`),
   /** 按页导入：只导指定页（从 0 计），由调用方循环驱动直到 hasMore=false */
   importPage: (id: string, page: number) => api.post<ImportPageResponse>(`/api/channels/${id}/import`, { page }),
-  export: (id: string) => api.post<ExportResponse>(`/api/channels/${id}/export`),
+  /** 按页导出：只推一页（20 条），传回上一轮失败 id 以跳过；直到 processed=0 */
+  exportPage: (id: string, excludeIds: string[]) => api.post<ExportPageResponse>(`/api/channels/${id}/export`, { excludeIds }),
   test: (id: string) => api.post<TestResponse>(`/api/channels/${id}/test`),
   oauthExchange: (req: OAuthExchangeRequest) => api.post<OAuthExchangeResponse>('/api/channels/oauth/exchange', req),
 }

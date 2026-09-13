@@ -114,6 +114,12 @@ export type BookmarkRepository = {
   findByRaindropId: (raindropId: string) => Promise<unknown | undefined>
   findByRaindropIds: (raindropIds: string[]) => Promise<unknown[]>
   createMany: (inputs: BookmarkInput[]) => Promise<unknown[]>
+  /** 导出/同步用的瘦投影：只取推送所需列，一条查询搞定（避免 list 的逐条关联查询） */
+  listExportRows: (opts: { onlyWithoutRaindropId?: boolean }, limit?: number, offset?: number) => Promise<unknown[]>
+  countWithoutRaindropId: () => Promise<number>
+  /** 批量写回远端 raindropId 并标 synced（导出成功 / 队列 create 成功共用） */
+  updateRaindropIds: (pairs: Array<{ id: string; raindropId: string }>) => Promise<void>
+  markSyncStatus: (bookmarkIds: string[], status: 'pending' | 'synced') => Promise<void>
   listRecentOpened: (limit?: number) => Promise<unknown[]>
   search: (filters: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   update: (id: string, input: BookmarkUpdate) => Promise<unknown | undefined>
@@ -188,7 +194,9 @@ type ResourceRepositories = {
     list: (resolution?: string) => Promise<unknown[]>
     get: (id: string) => Promise<unknown | undefined>
     findByRaindropId: (raindropId: string, resolution?: string) => Promise<unknown | undefined>
+    findByRaindropIds: (raindropIds: string[], resolution?: string) => Promise<unknown[]>
     create: (data: { id: string; bookmarkId: string | null; raindropId: string; localSnapshot?: string | null; remoteSnapshot?: string | null }) => Promise<unknown>
+    createMany: (data: Array<{ id: string; bookmarkId: string | null; raindropId: string; localSnapshot?: string | null; remoteSnapshot?: string | null }>) => Promise<unknown[]>
     resolve: (id: string, resolution: 'kept_local' | 'kept_remote' | 'merged') => Promise<unknown | undefined>
     resolveAll: (resolution: 'kept_local' | 'kept_remote' | 'merged') => Promise<number>
     countPending: () => Promise<number>
@@ -198,7 +206,9 @@ type ResourceRepositories = {
     getPending: (limit?: number) => Promise<SyncQueueItem[]>
     /** failed 项（供消费器按指数退避判断后重置回 pending） */
     listFailed: (limit?: number) => Promise<SyncQueueItem[]>
-    updateStatus: (id: string, status: string, error?: string | null) => Promise<SyncQueueItem | undefined>
+    updateStatus: (id: string, status: 'pending' | 'processing' | 'succeeded' | 'failed', error?: string | null) => Promise<SyncQueueItem | undefined>
+    /** 消费器批量回写：failed 整组 retry_count+1，其余清 error */
+    updateStatusMany: (entries: Array<{ id: string; status: 'pending' | 'processing' | 'succeeded' | 'failed'; error?: string | null }>) => Promise<void>
     remove: (id: string) => Promise<boolean>
     countPending: () => Promise<number>
   }
@@ -366,6 +376,26 @@ function buildBookmarkRecord(input: BookmarkInput, timestamp: Date) {
   return { ...input, source: input.source ?? 'page', note: input.note ?? null, intent: input.intent ?? null, important: input.important ?? false, private: input.private ?? false, syncStatus: input.syncStatus ?? 'pending', version: 1, deletedAt: null, createdAt: input.createdAt ?? timestamp, updatedAt: timestamp }
 }
 
+/**
+ * 批量执行写语句：D1 走 db.batch（N 条语句 1 次子请求）——Workers 单次调用有
+ * 50 子请求上限且 D1 每条查询都计入，逐条执行必超；SQLite（Bun / better-sqlite3）
+ * 无子请求概念，顺序执行即可。
+ */
+async function runBatched(db: Db, statements: Array<{ run: () => Promise<unknown> }>): Promise<void> {
+  if (!statements.length) return
+  const batch = (db as { batch?: (items: unknown[]) => Promise<unknown> }).batch
+  if (typeof batch === 'function') await batch.call(db, statements)
+  else for (const statement of statements) await statement.run()
+}
+
+/** D1 单条语句最多 100 个绑定参数：多行 VALUES 插入按列数分片（留余量） */
+function chunkByParamBudget(records: Array<Record<string, unknown>>): Array<Array<Record<string, unknown>>> {
+  const perChunk = Math.max(1, Math.floor(90 / Math.max(1, Object.keys(records[0]).length)))
+  const chunks: Array<Array<Record<string, unknown>>> = []
+  for (let i = 0; i < records.length; i += perChunk) chunks.push(records.slice(i, i + perChunk))
+  return chunks
+}
+
 export function createD1BookmarkRepository(database: D1Database): BookmarkRepository {
   // D1 无 SQL 事务能力，显式关闭，避免写路径抛 500
   return createBookmarkRepository(drizzleD1(database), { sqlTransactions: false })
@@ -385,11 +415,8 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     if (!inputs.length) return []
     const timestamp = now()
     const records = inputs.map((input) => buildBookmarkRecord(input, timestamp))
-    // D1 单条语句最多 100 个绑定参数：按列数分片（留余量），SQLite 侧照常执行
-    const perChunk = Math.max(1, Math.floor(90 / Object.keys(records[0]).length))
     const created: unknown[] = []
-    for (let i = 0; i < records.length; i += perChunk) {
-      const chunk = records.slice(i, i + perChunk)
+    for (const chunk of chunkByParamBudget(records)) {
       await db.insert(bookmarks).values(chunk).run()
       created.push(...chunk)
     }
@@ -459,6 +486,38 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   repository.findByRaindropIds = async (raindropIds) => {
     if (!raindropIds.length) return []
     return db.select().from(bookmarks).where(and(inArray(bookmarks.raindropId, raindropIds), isNull(bookmarks.deletedAt))).all()
+  }
+  repository.listExportRows = async (opts = {}, limit = 50, offset = 0) => {
+    const conditions: any[] = [isNull(bookmarks.deletedAt)]
+    if (opts.onlyWithoutRaindropId) conditions.push(isNull(bookmarks.raindropId))
+    // 排序键与 list 一致（createdAt desc + id 兜底），保证分页导出时顺序稳定
+    return db.select({ id: bookmarks.id, url: bookmarks.url, title: bookmarks.title, note: bookmarks.note, status: bookmarks.status })
+      .from(bookmarks).where(and(...conditions))
+      .orderBy(desc(bookmarks.createdAt), desc(bookmarks.id))
+      .limit(limit).offset(offset).all()
+  }
+  repository.countWithoutRaindropId = async () => {
+    const result = await db.select({ count: count() }).from(bookmarks).where(and(isNull(bookmarks.deletedAt), isNull(bookmarks.raindropId))).all()
+    return Number(result[0]?.count ?? 0)
+  }
+  repository.updateRaindropIds = async (pairs) => {
+    const timestamp = now()
+    await runBatched(db, pairs.map((pair) => db.update(bookmarks).set({
+      raindropId: pair.raindropId,
+      syncStatus: 'synced',
+      version: sql`${bookmarks.version} + 1`,
+      updatedAt: timestamp,
+    }).where(eq(bookmarks.id, pair.id))))
+  }
+  repository.markSyncStatus = async (bookmarkIds, status) => {
+    const ids = [...new Set(bookmarkIds)].filter(Boolean)
+    if (!ids.length) return
+    const timestamp = now()
+    await runBatched(db, ids.map((id) => db.update(bookmarks).set({
+      syncStatus: status,
+      version: sql`${bookmarks.version} + 1`,
+      updatedAt: timestamp,
+    }).where(eq(bookmarks.id, id))))
   }
   repository.listRecentOpened = async (limit = 20) => {
     const rows = await db.select({
@@ -683,6 +742,10 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     get: async (id) => (await db.select().from(conflicts).where(eq(conflicts.id, id)).all())[0],
     findByRaindropId: async (raindropId, resolution) =>
       (await db.select().from(conflicts).where(and(eq(conflicts.raindropId, raindropId), resolution ? eq(conflicts.resolution, resolution) : undefined)).all())[0],
+    findByRaindropIds: async (raindropIds, resolution) => {
+      if (!raindropIds.length) return []
+      return db.select().from(conflicts).where(and(inArray(conflicts.raindropId, raindropIds), resolution ? eq(conflicts.resolution, resolution) : undefined)).all()
+    },
     create: async (data) => {
       const timestamp = now()
       const record = {
@@ -697,6 +760,24 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
       }
       await db.insert(conflicts).values(record).run()
       return record
+    },
+    createMany: async (data) => {
+      if (!data.length) return []
+      const timestamp = now()
+      const records = data.map((row) => ({
+        id: row.id,
+        bookmarkId: row.bookmarkId,
+        raindropId: row.raindropId,
+        localSnapshot: row.localSnapshot ?? null,
+        remoteSnapshot: row.remoteSnapshot ?? null,
+        resolution: 'pending',
+        createdAt: timestamp,
+        resolvedAt: null,
+      }))
+      for (const chunk of chunkByParamBudget(records)) {
+        await db.insert(conflicts).values(chunk).run()
+      }
+      return records
     },
     resolve: async (id, resolution) => {
       await db.update(conflicts).set({ resolution, resolvedAt: now() }).where(eq(conflicts.id, id)).run()
@@ -739,6 +820,16 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
       await db.update(syncQueue).set(setData).where(eq(syncQueue.id, id)).run()
       const row = (await db.select().from(syncQueue).where(eq(syncQueue.id, id)).all())[0]
       return row as SyncQueueItem | undefined
+    },
+    updateStatusMany: async (entries) => {
+      const clean = entries.filter((entry) => entry && entry.id)
+      if (!clean.length) return
+      const timestamp = now()
+      // failed 与非 failed 分组：整条语句统一 retry_count+1 只适用于 failed
+      await runBatched(db, [
+        ...clean.filter((entry) => entry.status !== 'failed').map((entry) => db.update(syncQueue).set({ status: entry.status, error: entry.error ?? null, updatedAt: timestamp }).where(eq(syncQueue.id, entry.id))),
+        ...clean.filter((entry) => entry.status === 'failed').map((entry) => db.update(syncQueue).set({ status: 'failed', error: entry.error ?? null, retryCount: sql`${syncQueue.retryCount} + 1`, updatedAt: timestamp }).where(eq(syncQueue.id, entry.id))),
+      ])
     },
     remove: async (id) => {
       await db.delete(syncQueue).where(eq(syncQueue.id, id)).run()

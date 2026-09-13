@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { RaindropBookmark } from '../channels/raindrop.js'
 import { pullFromRaindrop, type RaindropPullClient } from './raindrop-pull.js'
 
-/** 内存仓：只实现拉回路径用到的面 */
+/** 内存仓：只实现拉回路径用到的面（批量接口） */
 function makeRepo(existing: Array<Record<string, any>> = []) {
   const bookmarks = existing
   const conflicts: Array<Record<string, any>> = []
@@ -13,10 +13,18 @@ function makeRepo(existing: Array<Record<string, any>> = []) {
       get: async (id: string) => conflicts.find((c) => c.id === id),
       findByRaindropId: async (raindropId: string, resolution?: string) =>
         conflicts.find((c) => c.raindropId === raindropId && (!resolution || c.resolution === resolution)),
+      findByRaindropIds: async (raindropIds: string[], resolution?: string) =>
+        conflicts.filter((c) => raindropIds.includes(String(c.raindropId)) && (!resolution || c.resolution === resolution)),
       create: async (data: Record<string, any>) => {
         const row = { resolution: 'pending', ...data, resolvedAt: null }
         conflicts.push(row)
         return row
+      },
+      createMany: async (rows: Array<Record<string, any>>) => {
+        for (const data of rows) {
+          conflicts.push({ resolution: 'pending', ...data, resolvedAt: null })
+        }
+        return rows
       },
       resolve: async (id: string, resolution: string) => {
         const row = conflicts.find((c) => c.id === id)
@@ -35,15 +43,10 @@ function makeRepo(existing: Array<Record<string, any>> = []) {
       },
       countPending: async () => conflicts.filter((c) => c.resolution === 'pending').length,
     },
-    findByRaindropId: async (raindropId: string) => bookmarks.find((b) => b.raindropId === raindropId),
-    create: async (record: Record<string, any>) => {
-      bookmarks.push(record)
-      return record
-    },
-    update: async (id: string, input: Record<string, any>) => {
-      const row = bookmarks.find((b) => b.id === id)
-      if (row) Object.assign(row, input)
-      return row
+    findByRaindropIds: async (raindropIds: string[]) => bookmarks.filter((b) => raindropIds.includes(String(b.raindropId))),
+    createMany: async (records: Array<Record<string, any>>) => {
+      bookmarks.push(...records)
+      return records
     },
     get: async (id: string) => bookmarks.find((b) => b.id === id),
   }

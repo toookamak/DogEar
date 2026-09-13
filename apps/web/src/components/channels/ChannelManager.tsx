@@ -3,7 +3,7 @@ import { useLocation } from 'wouter'
 import { channelsApi } from '../../api/channels.js'
 import { syncApi } from '../../api/sync.js'
 import type { ChannelConfigItem } from '../../api/channels.js'
-import { getImportProgress, startChannelImport, subscribeImportProgress, type ImportProgress } from '../../import-runner.js'
+import { getExportProgress, getImportProgress, startChannelExport, startChannelImport, subscribeExportProgress, subscribeImportProgress, type TaskState } from '../../channel-tasks.js'
 import { ChannelConfig } from './ChannelConfig.js'
 import { S3Config } from './S3Config.js'
 import { ConfirmDialog } from '../feedback/ConfirmDialog.js'
@@ -23,27 +23,22 @@ const CHANNEL_TABS = [
 
 type ChannelKey = typeof CHANNEL_TABS[number]['key']
 
-/** 导出结果就地展示（导入进度走全局 import-runner，切页不丢） */
-interface ExportOutcome {
-  channelId: string
-  exported: number
-  failed: number
-  error?: string
-}
-
-/** 导入进度在行内展示用的汇总文案（running / done / error 三态） */
-function importMeta(progress: ImportProgress, channelId: string): string | null {
+/** 任务进度在行内展示的汇总文案（running / done / error 三态；切页再回来仍可见） */
+function importMeta(progress: TaskState, channelId: string): string | null {
   if (progress.channelId !== channelId) return null
   const totalText = progress.total ? ` / ${progress.total}` : ''
-  if (progress.status === 'running') {
-    return ` · 导入中 ${progress.imported}${totalText} 条（第 ${progress.page + 1} 页）`
-  }
-  if (progress.status === 'done') {
-    return ` · 上次导入 新增 ${progress.imported} 条，跳过 ${progress.skipped} 条`
-  }
-  if (progress.status === 'error') {
-    return ` · 上次导入中断（已入库 ${progress.imported} 条）：${progress.error ?? '发生错误'}`
-  }
+  if (progress.status === 'running') return ` · 导入中 ${progress.okCount}${totalText} 条（第 ${progress.rounds + 1} 页）`
+  if (progress.status === 'done') return ` · 上次导入 新增 ${progress.okCount} 条，跳过 ${progress.skipped} 条`
+  if (progress.status === 'error') return ` · 上次导入中断（已入库 ${progress.okCount} 条）：${progress.error ?? '发生错误'}`
+  return null
+}
+
+function exportMeta(progress: TaskState, channelId: string): string | null {
+  if (progress.channelId !== channelId) return null
+  const totalText = progress.total ? ` / ${progress.total}` : ''
+  if (progress.status === 'running') return ` · 导出中 ${progress.okCount}${totalText} 条`
+  if (progress.status === 'done') return ` · 上次导出 ${progress.okCount} 条${progress.failed ? `，失败 ${progress.failed} 条` : ''}`
+  if (progress.status === 'error') return ` · 上次导出中断（已推送 ${progress.okCount} 条）：${progress.error ?? '发生错误'}`
   return null
 }
 
@@ -58,11 +53,12 @@ export function ChannelManager() {
   const [editing, setEditing] = useState<ChannelConfigItem | null>(null)
   const [adding, setAdding] = useState(false)
   const [channelTab, setChannelTab] = useState<ChannelKey>('raindrop')
-  const [busy, setBusy] = useState<{ id: string; kind: 'pull' | 'export' } | null>(null)
-  const [exportOutcome, setExportOutcome] = useState<ExportOutcome | null>(null)
+  const [busy, setBusy] = useState<{ id: string; kind: 'pull' } | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<ChannelConfigItem | null>(null)
   const importProgress = useSyncExternalStore(subscribeImportProgress, getImportProgress)
+  const exportProgress = useSyncExternalStore(subscribeExportProgress, getExportProgress)
   const importRunning = importProgress.status === 'running'
+  const exportRunning = exportProgress.status === 'running'
 
   // 导入在设置页进行中完成 → 跳结果页看明细；用户已切走则只靠 toast，不打扰
   useEffect(() => {
@@ -99,7 +95,7 @@ export function ChannelManager() {
   }
 
   const handleImport = (channel: ChannelConfigItem) => {
-    // 按页导入由全局 import-runner 驱动，进度与结果不随本组件卸载而丢失
+    // 按页导入由全局 channel-tasks 驱动，进度与结果不随本组件卸载而丢失
     startChannelImport(channel.id, channel.label)
   }
 
@@ -119,20 +115,9 @@ export function ChannelManager() {
     setBusy(null)
   }
 
-  const handleExport = async (id: string) => {
-    setBusy({ id, kind: 'export' })
-    setExportOutcome(null)
-    try {
-      const result = await channelsApi.export(id)
-      setExportOutcome({ channelId: id, exported: result.exported, failed: result.failed })
-      if (result.failed > 0) toast.info(`导出完成，${result.failed} 条失败`)
-      else toast.success(`已导出 ${result.exported} 条`)
-    } catch (e) {
-      // 导出失败此前被静默吞掉，只露出 exported/failed 两个 0，用户看不出原因
-      setExportOutcome({ channelId: id, exported: 0, failed: 0, error: errorMessage(e, '导出失败') })
-      toast.error(errorMessage(e, '导出失败'))
-    }
-    setBusy(null)
+  const handleExport = (channel: ChannelConfigItem) => {
+    // 按页导出由全局 channel-tasks 驱动，进度与结果不随本组件卸载而丢失
+    startChannelExport(channel.id, channel.label)
   }
 
   const handleSaved = () => {
@@ -204,7 +189,8 @@ export function ChannelManager() {
       ) : (
         <div className="list-stack">
           {channels.map((channel) => {
-            const outcome = exportOutcome?.channelId === channel.id ? exportOutcome : null
+            const sameChannelImporting = importRunning && importProgress.channelId === channel.id
+            const sameChannelExporting = exportRunning && exportProgress.channelId === channel.id
             return (
               <div key={channel.id} className="list-row">
                 <div className="list-row-main">
@@ -214,45 +200,46 @@ export function ChannelManager() {
                       {CHANNEL_LABELS[channel.channel] ?? channel.channel}
                     </span>
                   </div>
-        <div className="list-row-meta">
-          {channel.enabled ? '已启用' : '已禁用'}
-          {channel.channel === 'raindrop' && (String(channel.config?.token || '') ? ' · 已授权' : ' · 未授权')}
-          {importMeta(importProgress, channel.id)}
-          {outcome && !outcome.error && ` · 上次导出 ${outcome.exported} 条${outcome.failed ? `，失败 ${outcome.failed} 条` : ''}`}
-          {outcome?.error && ` · ${outcome.error}`}
-        </div>
-      </div>
+                  <div className="list-row-meta">
+                    {channel.enabled ? '已启用' : '已禁用'}
+                    {channel.channel === 'raindrop' && (String(channel.config?.token || '') ? ' · 已授权' : ' · 未授权')}
+                    {importMeta(importProgress, channel.id)}
+                    {exportMeta(exportProgress, channel.id)}
+                  </div>
+                </div>
 
-      <div className="list-row-actions">
-        <button
-          type="button"
-          className="btn btn--pill"
-          disabled={importRunning || busy?.id === channel.id}
-          onClick={() => handleImport(channel)}
-        >
-          {importRunning && importProgress.channelId === channel.id
-            ? `导入中 ${importProgress.imported}${importProgress.total ? ` / ${importProgress.total}` : ''}…`
-            : '导入'}
-        </button>
-        {/* 拉取 = 低频单页同步（每次 50 条，防 Raindrop 风控）；「导入」是显式全量（按页驱动） */}
-        {channel.channel === 'raindrop' && (
-          <button
-            type="button"
-            className="btn btn--pill"
-            disabled={busy?.id === channel.id || (importRunning && importProgress.channelId === channel.id)}
-            onClick={() => handlePull(channel.id)}
-          >
-            {busy?.id === channel.id && busy.kind === 'pull' ? '拉取中…' : '拉取'}
-          </button>
-        )}
-        <button
-          type="button"
-          className="btn btn--pill"
-          disabled={busy?.id === channel.id || (importRunning && importProgress.channelId === channel.id)}
-          onClick={() => handleExport(channel.id)}
-        >
-          {busy?.id === channel.id && busy.kind === 'export' ? '导出中…' : '导出'}
-        </button>
+                <div className="list-row-actions">
+                  <button
+                    type="button"
+                    className="btn btn--pill"
+                    disabled={importRunning || sameChannelExporting || busy?.id === channel.id}
+                    onClick={() => handleImport(channel)}
+                  >
+                    {sameChannelImporting
+                      ? `导入中 ${importProgress.okCount}${importProgress.total ? ` / ${importProgress.total}` : ''}…`
+                      : '导入'}
+                  </button>
+                  {/* 拉取 = 低频单页同步（每次 50 条，防 Raindrop 风控）；「导入」是显式全量（按页驱动） */}
+                  {channel.channel === 'raindrop' && (
+                    <button
+                      type="button"
+                      className="btn btn--pill"
+                      disabled={busy?.id === channel.id || sameChannelImporting || sameChannelExporting}
+                      onClick={() => handlePull(channel.id)}
+                    >
+                      {busy?.id === channel.id && busy.kind === 'pull' ? '拉取中…' : '拉取'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn--pill"
+                    disabled={exportRunning || sameChannelImporting || busy?.id === channel.id}
+                    onClick={() => handleExport(channel)}
+                  >
+                    {sameChannelExporting
+                      ? `导出中 ${exportProgress.okCount}${exportProgress.total ? ` / ${exportProgress.total}` : ''}…`
+                      : '导出'}
+                  </button>
                   <button type="button" className="btn btn--pill" onClick={() => handleStartEdit(channel)}>
                     编辑
                   </button>
