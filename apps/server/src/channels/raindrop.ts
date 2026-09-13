@@ -1,3 +1,4 @@
+import { pickCoverUrl } from '../archive/cover-url.js'
 const BASE_URL = 'https://api.raindrop.io/rest/v1'
 
 export interface RaindropBookmark {
@@ -29,7 +30,7 @@ export function mapRaindropBookmark(rd: RaindropBookmark) {
     title: (rd.title || '').trim() || rd.link,
     excerpt,
     note,
-    cover: (rd.cover || rd.media?.[0]?.link || '').trim() || null,
+    cover: pickCoverUrl([rd.cover, ...(rd.media ?? []).map((item) => item.link)], rd.link),
     type,
     domain,
     raindropId: String(rd._id),

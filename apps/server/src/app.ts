@@ -36,7 +36,7 @@ import { createChannelRoutes } from './channels-routes.js'
 import { createMetadataRoutes } from './archive/metadata-routes.js'
 import { createNavRoutes } from './nav/nav-routes.js'
 import { extractMetadata } from './archive/metadata.js'
-import { coverFromRaindropExtras, resolveCoverUrl } from './archive/cover-url.js'
+import { coverFromRaindropExtras, pickCoverUrl, resolveCoverUrl } from './archive/cover-url.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
 import { pullFromRaindrop } from './sync/raindrop-pull.js'
 import { generateSkillToken, hashSkillToken, readStoredHash, tokensEqual } from './auth/skill-token.js'
@@ -64,6 +64,8 @@ type AppOptions = {
    * 注入后保存书签的元数据提取先用它，失败自动回退内置轻量提取；Workers 不注入、行为不变。
    */
   metadataEnhancer?: (url: string) => Promise<Record<string, unknown>>
+  /** 保存接口最多等抓页多少毫秒再 201；缺省 0（单测不挡）。线上入口注入 6000。 */
+  metadataWaitMs?: number
   /**
    * 快照执行器。注入后 `POST /api/archive/process` 消费 pending 快照 Job。
    * Track B 注入 monolith；Track A 注入 fetch 轻量抓取（见 archive/snapshot-fetch.ts）。
@@ -139,7 +141,7 @@ function timestamp(value: unknown) {
 function serializeBookmark(record: any) {
   const pageUrl = typeof record?.url === 'string' ? record.url : null
   let excerpt = record?.excerpt ?? null
-  let cover = resolveCoverUrl(typeof record?.cover === 'string' ? record.cover : null, pageUrl)
+  let cover = pickCoverUrl([typeof record?.cover === 'string' ? record.cover : null], pageUrl)
   if ((!excerpt || !cover) && record?.raindropExtras) {
     try {
       const extras = typeof record.raindropExtras === 'string' ? JSON.parse(record.raindropExtras) : record.raindropExtras
@@ -177,6 +179,7 @@ function hasFetchedPageMeta(meta: Record<string, unknown>): boolean {
  * Workers 在返回响应后会冻结 isolate；必须 waitUntil 才能把事后抓页做完。
  * Node / Bun / 单测没有 ExecutionContext，退回 fire-and-forget。
  */
+
 function scheduleBackground(
   c: { executionCtx: { waitUntil: (promise: Promise<unknown>) => void } },
   task: Promise<unknown>,
@@ -186,6 +189,25 @@ function scheduleBackground(
   } catch {
     void task
   }
+}
+
+/** 先等抓页最多 6 秒，让 201 尽量带上标题/简介；没跑完的继续 waitUntil。 */
+async function completeMetadata(
+  c: { executionCtx: { waitUntil: (promise: Promise<unknown>) => void } },
+  repository: BookmarkRepository,
+  options: AppOptions,
+  bookmarkId: string,
+  url: string,
+  existing: ExistingPageMeta = {},
+): Promise<void> {
+  const task = extractMetadataInto(repository, options, bookmarkId, url, existing)
+  scheduleBackground(c, task)
+  const waitMs = options.metadataWaitMs ?? 0
+  if (waitMs <= 0) return
+  await Promise.race([
+    task,
+    new Promise<void>((resolve) => setTimeout(resolve, waitMs)),
+  ])
 }
 
 /**
@@ -211,9 +233,18 @@ async function extractMetadataInto(
     if (meta.favicon && !existing.favicon) updates.favicon = meta.favicon
     if (meta.publishedAt) {
       const d = new Date(String(meta.publishedAt))
-      if (!Number.isNaN(d.getTime())) updates.publishedAt = d.getTime()
+      if (!Number.isNaN(d.getTime())) updates.publishedAt = d
     }
-    if (Object.keys(updates).length > 0) await repository.update(bookmarkId, updates)
+    if (Object.keys(updates).length > 0) {
+      try {
+        await repository.update(bookmarkId, updates)
+      } catch {
+        const { publishedAt: _publishedAt, ...rest } = updates
+        if (Object.keys(rest).length > 0) {
+          try { await repository.update(bookmarkId, rest) } catch { /* 回填失败不阻断保存 */ }
+        }
+      }
+    }
   }
   if (options.metadataEnhancer) {
     try {
@@ -360,6 +391,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       id, url: input.data.url, status: 'unread',
       note: input.data.note ?? null, intent: input.data.intent ?? null,
       important: input.data.important ?? false, private: input.data.private ?? false,
+      domain: domainFromUrl(input.data.url) ?? null,
       syncStatus: 'synced',
     })
     if (idempotencyKey) {
@@ -378,13 +410,10 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     }
 
     // Async metadata extraction - don't block the response
-    const recordWithId = record as { id: string; url: string; title?: string | null; excerpt?: string | null }
-    scheduleBackground(c, extractMetadataInto(repository, options, recordWithId.id, recordWithId.url, {
-      title: recordWithId.title,
-      excerpt: recordWithId.excerpt,
-    }))
+    await completeMetadata(c, repository, options, id, input.data.url)
+    const filled = (await repository.get(id)) ?? record
 
-    return c.json(serializeBookmark(record), 201)
+    return c.json(serializeBookmark(filled), 201)
   })
 
   app.get('/api/inbox', async (c) => {
@@ -978,13 +1007,16 @@ ${bullet('收集方式', sourceLabel)}${bullet('域名', domain)}${bullet('保�
     await enqueueRaindropSync('create', saved as { id: string; url: string; title?: string | null; note?: string | null })
 
     // Async metadata extraction - don't block the response
-    scheduleBackground(c, extractMetadataInto(repository, options, saved.id, saved.url, {
+    await completeMetadata(c, repository, options, saved.id, saved.url, {
       title: saved.title,
       excerpt: saved.excerpt,
       favicon: saved.favicon,
-    }))
+    })
+    const filled = (await repository.get(saved.id)) ?? record
+    const receipt = { ...serializeBookmark(filled), snapshotStatus: saved.snapshotStatus, suggestions: saved.suggestions } as Record<string, unknown>
+    if (saved.jobId) receipt.jobId = saved.jobId
 
-    return c.json(saved, 201)
+    return c.json(receipt, 201)
   })
 
   app.post('/api/skill/search_bookmarks', async (c) => {

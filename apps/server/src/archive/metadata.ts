@@ -3,85 +3,86 @@ export interface PageMetadata {
   description?: string
   image?: string
   author?: string
-  publishedAt?: string // ISO date
+  publishedAt?: string
   favicon?: string
   domain?: string
 }
 
-export async function extractMetadata(url: string): Promise<PageMetadata> {
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+/** property/name 与 content 谁先谁后都能匹配（不少站点 content 写在前面）。 */
+function metaContent(html: string, attr: 'property' | 'name', key: string): string | undefined {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(
+    `<meta\\s+[^>]*(?:${attr}=["']${escaped}["'][^>]*content=["']([^"']*)["']|content=["']([^"']*)["'][^>]*${attr}=["']${escaped}["'])[^>]*>`,
+    'i',
+  )
+  const match = html.match(re)
+  const value = (match?.[1] || match?.[2] || '').trim()
+  return value ? decodeHtmlEntities(value) : undefined
+}
+
+export function parseHtmlMetadata(html: string, url: string): PageMetadata {
   const metadata: PageMetadata = {}
-
   try {
-    // Extract domain
-    try {
-      const urlObj = new URL(url)
-      metadata.domain = urlObj.hostname
-    } catch { /* ignore */ }
+    metadata.domain = new URL(url).hostname
+  } catch { /* ignore */ }
 
-    // Fetch the page
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; DogEar/1.0; +https://dogear.app)',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-      signal: AbortSignal.timeout(10000), // 10 second timeout
-    })
+  const ogTitle = metaContent(html, 'property', 'og:title')
+  const titleTag = html.match(/<title>([^<]*)<\/title>/i)
+  if (ogTitle) metadata.title = ogTitle
+  else if (titleTag) metadata.title = decodeHtmlEntities(titleTag[1]).trim()
 
-    if (!response.ok) return metadata
+  const ogDesc = metaContent(html, 'property', 'og:description')
+  const metaDesc = metaContent(html, 'name', 'description')
+  if (ogDesc) metadata.description = ogDesc
+  else if (metaDesc) metadata.description = metaDesc
 
-    const html = await response.text()
+  const ogImage = metaContent(html, 'property', 'og:image')
+  if (ogImage) {
+    try { metadata.image = new URL(ogImage, url).href } catch { metadata.image = ogImage }
+  }
 
-    // Extract Open Graph title
-    const ogTitle = html.match(/<meta\s+[^>]*property=["']og:title["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
-    if (ogTitle) metadata.title = decodeHtmlEntities(ogTitle[1])
+  const ogAuthor = metaContent(html, 'property', 'article:author')
+  const metaAuthor = metaContent(html, 'name', 'author')
+  if (ogAuthor) metadata.author = ogAuthor
+  else if (metaAuthor) metadata.author = metaAuthor
 
-    // Extract regular title (fallback)
-    if (!metadata.title) {
-      const titleTag = html.match(/<title>([^<]*)<\/title>/i)
-      if (titleTag) metadata.title = decodeHtmlEntities(titleTag[1]).trim()
-    }
+  const ogDate = metaContent(html, 'property', 'article:published_time')
+  if (ogDate) metadata.publishedAt = ogDate
 
-    // Extract description (OG first, then meta)
-    const ogDesc = html.match(/<meta\s+[^>]*property=["']og:description["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
-    if (ogDesc) metadata.description = decodeHtmlEntities(ogDesc[1])
-    if (!metadata.description) {
-      const metaDesc = html.match(/<meta\s+[^>]*name=["']description["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
-      if (metaDesc) metadata.description = decodeHtmlEntities(metaDesc[1])
-    }
-
-    // Extract image
-    const ogImage = html.match(/<meta\s+[^>]*property=["']og:image["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
-    if (ogImage) {
-      try { metadata.image = new URL(ogImage[1], url).href } catch { metadata.image = ogImage[1] }
-    }
-
-    // Extract author
-    const ogAuthor = html.match(/<meta\s+[^>]*property=["']article:author["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
-    if (ogAuthor) metadata.author = decodeHtmlEntities(ogAuthor[1])
-    if (!metadata.author) {
-      const metaAuthor = html.match(/<meta\s+[^>]*name=["']author["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
-      if (metaAuthor) metadata.author = decodeHtmlEntities(metaAuthor[1])
-    }
-
-    // Extract published date
-    const ogDate = html.match(/<meta\s+[^>]*property=["']article:published_time["'][^>]*content=["']([^"']*)["'][^>]*\/?>/i)
-    if (ogDate) metadata.publishedAt = ogDate[1]
-
-    // Extract favicon
-    const favicon = html.match(/<link\s+[^>]*rel=["'](?:shortcut )?icon["'][^>]*href=["']([^"']*)["'][^>]*\/?>/i)
-    if (favicon) {
-      try {
-        metadata.favicon = new URL(favicon[1], url).href
-      } catch {
-        metadata.favicon = favicon[1]
-      }
-    }
-
-  } catch {
-    // Timeout or fetch error - return partial metadata
+  const favicon = html.match(/<link\s+[^>]*rel=["'](?:shortcut )?icon["'][^>]*href=["']([^"']*)["'][^>]*>/i)
+    || html.match(/<link\s+[^>]*href=["']([^"']*)["'][^>]*rel=["'](?:shortcut )?icon["'][^>]*>/i)
+  if (favicon) {
+    try { metadata.favicon = new URL(favicon[1], url).href } catch { metadata.favicon = favicon[1] }
   }
 
   return metadata
+}
+
+export async function extractMetadata(url: string): Promise<PageMetadata> {
+  const metadata: PageMetadata = {}
+  try {
+    metadata.domain = new URL(url).hostname
+  } catch { /* ignore */ }
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!response.ok) return metadata
+    const html = (await response.text()).slice(0, 512_000)
+    return { ...metadata, ...parseHtmlMetadata(html, url) }
+  } catch {
+    return metadata
+  }
 }
 
 function decodeHtmlEntities(text: string): string {

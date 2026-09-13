@@ -39,6 +39,7 @@ function getApp(env: Env): AppInstance {
     skillToken: env.DOGEAR_SKILL_TOKEN,
     corsOrigin: env.DOGEAR_CORS_ORIGIN,
     snapshotProcessor: createFetchSnapshotProcessor(),
+    metadataWaitMs: 6000,
   })
   cachedApp = { key, app }
   return app

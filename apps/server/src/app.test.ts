@@ -320,6 +320,24 @@ describe('skill API', () => {
     expect(repo.records[0].excerpt).toBe('插件简介')
   })
 
+  it('fills title/excerpt on save_bookmark 201 when the caller omitted them', async () => {
+    const repo = repository()
+    const app = createApp(repo, {
+      password: 'secret',
+      skillToken: 'skill-secret',
+      metadataWaitMs: 1000,
+      metadataEnhancer: async () => ({ title: '抓取标题', description: '抓取简介', image: 'https://cdn.example.com/c.jpg' }),
+    })
+    const response = await app.request('/api/skill/save_bookmark', {
+      method: 'POST',
+      body: JSON.stringify({ url: 'https://example.com/meta', source: 'agent' }),
+      headers: { 'content-type': 'application/json', authorization: 'Bearer skill-secret' },
+    })
+    const saved = await response.json()
+    expect(response.status).toBe(201)
+    expect(saved).toMatchObject({ title: '抓取标题', excerpt: '抓取简介', cover: 'https://cdn.example.com/c.jpg', domain: 'example.com' })
+  })
+
   it('queues snapshots, returns supported reads, rejects disabled updates, and never writes suggestions to structure', async () => {
     const repo = repository()
     const app = createApp(repo, { password: 'secret', skillToken: 'skill-secret' })

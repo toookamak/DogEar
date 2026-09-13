@@ -24,6 +24,7 @@ const app = createApp(repository, {
   backupRoutes: (repo) => createBackupRoutes(repo, dbPath),
   // 元数据增强（metascraper 规则组）：失败自动回退内置轻量提取
   metadataEnhancer: extractMetadataWithMetascraper,
+  metadataWaitMs: 6000,
   // 快照执行器（monolith 抓公开页）：POST /api/archive/process 消费 pending 快照 Job
   snapshotProcessor: () => createMonolithSnapshotProcessor(repository, {
     snapshotsDir: process.env.DOGEAR_SNAPSHOTS_DIR ?? join(dirname(dbPath), 'snapshots'),
