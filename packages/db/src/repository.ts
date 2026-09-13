@@ -65,11 +65,14 @@ type Timestamped = { createdAt?: Date; updatedAt?: Date }
 export type PageResult<T> = {
   items: T[]
   nextCursor: string | null
+  /** 当前筛选条件下的总数（分页器「共 y 页」用）；listRecycleBin 等衍生分页可能缺省 */
+  total?: number
 }
 
 export type InboxPageResult<T> = {
   bookmarks: T[]
   nextCursor: string | null
+  total?: number
 }
 
 export type IdempotencyRecord = {
@@ -277,6 +280,13 @@ function keysetCondition(cursor: Cursor) {
   )
 }
 
+/** 仅当游标的排序键与本次请求一致时才应用 keyset；否则视为无效游标，回到首页，
+ *  避免用另一套排序的边界值去过滤当前排序，产生漏项或重复。 */
+function keysetConditionOf(sort: CursorSort, cursor: string) {
+  const decoded = decodeCursor(cursor)
+  return decoded && decoded.sort === sort ? keysetCondition(decoded) : undefined
+}
+
 function paginatedQuery<T>(
   sort: CursorSort,
   rows: T[],
@@ -328,6 +338,47 @@ async function readRelations(db: Db, bookmarkId: string) {
     ? (await db.select({ id: folders.id, name: folders.name }).from(folders).where(eq(folders.id, folderId)).all())[0] ?? null
     : null
   return { scenes: sceneRows, tags: tagRows, folder, pendingSuggestionCount: Number(suggestionRows[0]?.count ?? 0) }
+}
+
+/**
+ * 整页关联批量读取：4 条查询拿回一页所有书签的 Scene/标签/待确认建议数/文件夹，
+ * 替代逐条 readRelations（每条 4~5 次查询——50 条一页就是 200+ 次子请求，
+ * Workers（轨 A）Free 档单次调用 50 子请求内必炸，列表页整体打不开）。
+ * inArray 每条查询 ≤50 个绑定参数，在 D1 单语句 100 参数上限内。
+ */
+async function readRelationsBatch(db: Db, bookmarkIds: string[]) {
+  if (!bookmarkIds.length) return new Map()
+  const [sceneRows, tagRows, suggestionRows, folderRows] = await Promise.all([
+    db.select({ bookmarkId: bookmarkScenes.bookmarkId, id: scenes.id, name: scenes.name })
+      .from(bookmarkScenes).innerJoin(scenes, eq(bookmarkScenes.sceneId, scenes.id))
+      .where(inArray(bookmarkScenes.bookmarkId, bookmarkIds)).all(),
+    db.select({ bookmarkId: bookmarkTags.bookmarkId, id: tags.id, name: tags.name })
+      .from(bookmarkTags).innerJoin(tags, eq(bookmarkTags.tagId, tags.id))
+      .where(inArray(bookmarkTags.bookmarkId, bookmarkIds)).all(),
+    db.select({ bookmarkId: suggestions.bookmarkId })
+      .from(suggestions)
+      .where(and(inArray(suggestions.bookmarkId, bookmarkIds), eq(suggestions.status, 'pending'))).all(),
+    db.select({ id: bookmarks.id, folderId: folders.id, name: folders.name })
+      .from(bookmarks).leftJoin(folders, eq(bookmarks.folderId, folders.id))
+      .where(inArray(bookmarks.id, bookmarkIds)).all(),
+  ])
+  const relationMap = new Map<string, { scenes: unknown[]; tags: unknown[]; folder: unknown; pendingSuggestionCount: number }>()
+  for (const id of bookmarkIds) relationMap.set(id, { scenes: [], tags: [], folder: null, pendingSuggestionCount: 0 })
+  for (const row of sceneRows as Array<{ bookmarkId: string; id: string; name: string }>) {
+    relationMap.get(row.bookmarkId)?.scenes.push({ id: row.id, name: row.name })
+  }
+  for (const row of tagRows as Array<{ bookmarkId: string; id: string; name: string }>) {
+    relationMap.get(row.bookmarkId)?.tags.push({ id: row.id, name: row.name })
+  }
+  for (const row of suggestionRows as Array<{ bookmarkId: string }>) {
+    const entry = relationMap.get(row.bookmarkId)
+    if (entry) entry.pendingSuggestionCount += 1
+  }
+  for (const row of folderRows as Array<{ id: string; folderId: string | null; name: string | null }>) {
+    const entry = relationMap.get(row.id)
+    if (entry && row.folderId && row.name) entry.folder = { id: row.folderId, name: row.name }
+  }
+  return relationMap
 }
 
 /**
@@ -424,14 +475,7 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   }
   repository.list = async (filters = {}, limit = 50, cursor?: string, opts?: { orderBy?: string; sort?: CursorSort }) => {
     const sort: CursorSort = opts?.sort ?? 'recent'
-    const conditions = [filterCondition(filters)]
-    if (cursor) {
-      const decoded = decodeCursor(cursor)
-      // 仅当游标的排序键与本次请求一致时才应用 keyset；否则视为无效游标，回到首页，
-      // 避免用另一套排序的边界值去过滤当前排序，产生漏项或重复。
-      if (decoded && decoded.sort === sort) conditions.push(keysetCondition(decoded))
-    }
-    const whereClause = conditions.length > 1 ? and(...conditions.filter(Boolean)) : conditions[0]
+    const filterOnly = filterCondition(filters)
     // 只查 bookmarks 一张表：关联维度的过滤已由 filterCondition 用 EXISTS 表达，
     // 不再 JOIN 多对多表，因此结果里不会有重复行，也无需 DISTINCT。
     const query = db.select().from(bookmarks)
@@ -441,13 +485,17 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
         ? desc(bookmarks.createdAt)
         : asc(sortColumn(sort))
     const tiebreak = sort === 'recent' || opts?.orderBy === 'lastOpenedAt' ? desc(bookmarks.id) : asc(bookmarks.id)
-    const rows = await query.where(whereClause).orderBy(orderBy, tiebreak).limit(limit + 1).all()
+    const rows = await query.where(cursor ? and(filterOnly, keysetConditionOf(sort, cursor)) : filterOnly)
+      .orderBy(orderBy, tiebreak).limit(limit + 1).all()
     const page = paginatedQuery(sort, rows, limit, (row: any) => ({ value: sortValueOf(sort, row), id: row.id ?? row.bookmarks?.id }))
-    const items = await Promise.all(page.items.map(async (row: any) => {
+    // 总数按「仅筛选条件」统计（不含游标键），供前端分页器显示「共 y 页」
+    const totalRows = await db.select({ count: count() }).from(bookmarks).where(filterOnly).all()
+    const relationMap = await readRelationsBatch(db, page.items.map((row: any) => row.id ?? row.bookmarks?.id))
+    const items = page.items.map((row: any) => {
       const base = row.bookmarks ?? row
-      return { ...base, ...(await readRelations(db, base.id)) }
-    }))
-    return { items, nextCursor: page.nextCursor }
+      return { ...base, ...(relationMap.get(String(base.id)) ?? { scenes: [], tags: [], folder: null, pendingSuggestionCount: 0 }) }
+    })
+    return { items, nextCursor: page.nextCursor, total: Number(totalRows[0]?.count ?? 0) }
   }
   repository.listInbox = async (limit = 50, cursor?: string) => {
     const result = await repository.list({ status: 'unread' }, limit, cursor)

@@ -25,6 +25,9 @@ import { onOrgChanged } from '../org-events.js'
 
 const VIEW_STORAGE_KEY = 'dogear.workbench.view'
 
+/** 分页大小：与服务端列表默认一致；397 条 ≈ 8 页 */
+const PAGE_SIZE = 50
+
 /** 视图 → 骨架屏形态：标签视图的形状与图标卡一致，列表视图即表格行 */
 const SKELETON_VARIANT: Record<ViewMode, 'grid' | 'tiles' | 'table' | 'board'> = {
   grid: 'grid',
@@ -59,9 +62,10 @@ export function WorkbenchPage() {
   const meta = NAV_META[location] ?? { title: '工作台', description: '' }
 
   const [bookmarks, setBookmarks] = useState<BookmarkResponse[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState<number | null>(null)
+  const [hasNext, setHasNext] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedBookmark, setSelectedBookmark] = useState<BookmarkResponse | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -74,6 +78,11 @@ export function WorkbenchPage() {
   const [tags, setTags] = useState<TagResponse[]>([])
   const [filters, setFilters] = useState({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
   const [searchParams, setSearchParams] = useSearchParams()
+  // 每页的入口游标（keyset）：stack[i] = 第 i 页的取数游标（第 0 页为 null）。
+  // 上一页 = 退回上一格游标，避免为「页码跳转」改用 offset 牺牲排序稳定性。
+  const cursorStackRef = useRef<Array<string | null>>([null])
+  const pageRef = useRef(0)
+  const loadSeqRef = useRef(0)
 
   // 当前处于哪个 Scene 视图：决定标题、说明与 AERR 呈现（PRD §2.0.3）
   const activeScene = filters.sceneId ? scenes.find((scene) => scene.id === filters.sceneId) ?? null : null
@@ -133,29 +142,48 @@ export function WorkbenchPage() {
     return params
   }, [filters, isInbox, sort])
 
-  const loadBookmarks = useCallback(async (cursor?: string) => {
-    if (!cursor) setLoading(true)
+  /**
+   * 取指定页（缺省刷新当前页）。游标来自 cursorStackRef——只有真正访问过的页
+   * 才有游标，故分页器提供上一页/下一页而非任意跳页（keyset 排序稳定，代价是
+   * 不能跳页；要跳页需改 offset 分页，见屏稿的备选方案）。
+   */
+  const loadBookmarks = useCallback(async (targetPage?: number) => {
+    const idx = Math.max(0, targetPage ?? pageRef.current)
+    const seq = ++loadSeqRef.current
+    pageRef.current = idx
+    setPage(idx)
+    setLoading(true)
     setError(null)
     try {
-      const params = { ...queryParams(), cursor }
+      const cursor = cursorStackRef.current[idx] ?? null
+      const params = { ...queryParams(), cursor: cursor ?? undefined, limit: PAGE_SIZE }
       const result = isInbox
-        ? await bookmarksApi.inbox({ cursor })
+        ? await bookmarksApi.inbox({ cursor: cursor ?? undefined, limit: PAGE_SIZE })
         : filters.q.trim()
           ? await bookmarksApi.search(params)
           : await bookmarksApi.list(params)
+      if (seq !== loadSeqRef.current) return // 已有更新的取数，丢弃旧回执
       const items = isInbox ? (result as { bookmarks?: BookmarkResponse[] }).bookmarks ?? [] : (result as { items?: BookmarkResponse[] }).items ?? []
       const next = result.nextCursor ?? null
-      setBookmarks((prev) => cursor ? [...prev, ...items] : items)
-      setNextCursor(next)
+      setBookmarks(items)
+      cursorStackRef.current[idx + 1] = next
+      setHasNext(next !== null)
+      setTotal(typeof result.total === 'number' ? result.total : null)
     } catch (e) {
+      if (seq !== loadSeqRef.current) return
       setError(e instanceof Error ? e.message : '加载失败')
     }
     setLoading(false)
-    setLoadingMore(false)
   }, [isInbox, queryParams, filters.q])
 
-  // 外壳中的撤销成功后通知刷新列表（替代先前的整页 reload）
+  // 外壳中的撤销成功后通知刷新列表（刷新当前页，替代先前的整页 reload）
   useEffect(() => onDataChanged(() => { void loadBookmarks() }), [loadBookmarks])
+
+  // 筛选/排序/入口变化（loadBookmarks 身份随之变化）：重置到第 1 页
+  useEffect(() => {
+    cursorStackRef.current = [null]
+    void loadBookmarks(0)
+  }, [loadBookmarks])
 
   const loadOrganization = useCallback(async () => {
     try {
@@ -287,11 +315,7 @@ export function WorkbenchPage() {
 
   const clearFilters = () => setFilters({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
 
-  const loadMore = () => {
-    if (!nextCursor || loadingMore) return
-    setLoadingMore(true)
-    void loadBookmarks(nextCursor)
-  }
+  const pageCount = total !== null ? Math.ceil(total / PAGE_SIZE) : null
 
   const openBookmark = (bookmark: BookmarkResponse) => setSelectedBookmark(bookmark)
 
@@ -342,7 +366,7 @@ export function WorkbenchPage() {
     <div className="workbench">
       <ContentHead
         title={activeScene ? activeScene.name : meta.title}
-        count={bookmarks.length}
+        count={total ?? bookmarks.length}
         description={activeScene?.description || meta.description}
         actions={
           <>
@@ -474,7 +498,7 @@ export function WorkbenchPage() {
 
       <section className="bookmark-area" data-density={presentation.density}>
         <div className="bookmark-summary">
-          <span>显示 {bookmarks.length} 条{nextCursor ? '（还有更多）' : ''}</span>
+          <span>共 {total ?? bookmarks.length} 条</span>
           {hasActiveFilters && (
             <button type="button" className="clear-btn" onClick={clearFilters}>清除筛选</button>
           )}
@@ -500,12 +524,26 @@ export function WorkbenchPage() {
         )}
         {!loading && !error && bookmarks.length > 0 && renderView()}
 
-        {nextCursor && (
-          <div className="load-more">
-            <button type="button" className="btn btn--pill" disabled={loadingMore} onClick={loadMore}>
-              {loadingMore ? '加载中…' : '加载更多'}
+        {(hasNext || page > 0) && !loading && (
+          <nav className="pager" aria-label="分页">
+            <button
+              type="button"
+              className="btn btn--pill"
+              disabled={page === 0 || loading}
+              onClick={() => void loadBookmarks(page - 1)}
+            >
+              上一页
             </button>
-          </div>
+            <span className="pager-indicator">第 {page + 1}{pageCount ? ` / ${pageCount}` : ''} 页</span>
+            <button
+              type="button"
+              className="btn btn--pill"
+              disabled={!hasNext || loading}
+              onClick={() => void loadBookmarks(page + 1)}
+            >
+              下一页
+            </button>
+          </nav>
         )}
       </section>
 

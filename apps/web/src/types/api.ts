@@ -11,11 +11,14 @@ export interface ApiError {
 export interface PageResult<T> {
   items: T[]
   nextCursor: string | null
+  /** 当前筛选条件下的总数（分页器用）；部分衍生接口可能缺省 */
+  total?: number
 }
 
 export interface InboxResult<T> {
   bookmarks: T[]
   nextCursor: string | null
+  total?: number
 }
 
 export interface BookmarkResponse {

@@ -575,6 +575,10 @@ input[type="radio"] {
   color: var(--red);
 }
 
+.statusbar-item--accent {
+  color: var(--amber);
+}
+
 .statusbar-undo {
   height: 20px;
   padding: 0 var(--space-2);
@@ -2077,6 +2081,22 @@ input[type="radio"] {
   display: flex;
   justify-content: center;
   padding: var(--space-4);
+}
+
+/* 分页器（替代旧「加载更多」）：居中胶囊 + mono 页码指示 */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.pager-indicator {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 /* 详情浮层：覆盖式右浮层（对齐原型 detail-panel：右缘滑入 + 抽屉投影） */

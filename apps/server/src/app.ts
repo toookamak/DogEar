@@ -312,7 +312,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       important: importantQuery === 'true' ? true : importantQuery === 'false' ? false : undefined,
       source: c.req.query('source'),
     }, limit, cursor, { sort })
-    return c.json({ items: result.items.map(serializeBookmark), nextCursor: result.nextCursor })
+    return c.json({ items: result.items.map(serializeBookmark), nextCursor: result.nextCursor, total: result.total })
   })
 
   app.post('/api/bookmarks', async (c) => {
@@ -363,7 +363,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     if (!query.success) return invalidRequest(c)
     const { limit, cursor } = query.data
     const result = await repository.listInbox(limit, cursor)
-    return c.json({ bookmarks: result.bookmarks.map(serializeBookmark), nextCursor: result.nextCursor })
+    return c.json({ bookmarks: result.bookmarks.map(serializeBookmark), nextCursor: result.nextCursor, total: result.total })
   })
 
   app.get('/api/sync/pending-count', async (c) => {
@@ -482,7 +482,7 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       tagId: c.req.query('tagId'), important: c.req.query('important') === undefined ? undefined : c.req.query('important') === 'true',
       source: c.req.query('source'), includeDeleted: false,
     }, limit, cursor)
-    return c.json({ items: items.items.map(serializeBookmark), nextCursor: items.nextCursor })
+    return c.json({ items: items.items.map(serializeBookmark), nextCursor: items.nextCursor, total: items.total })
   })
 
   app.patch('/api/bookmarks/batch', async (c) => {

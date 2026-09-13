@@ -1,14 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { syncApi } from '../../api/sync.js'
 import { bookmarksApi } from '../../api/bookmarks.js'
+import { getExportProgress, getImportProgress, subscribeExportProgress, subscribeImportProgress } from '../../channel-tasks.js'
 import { onUndoOffered, notifyDataChanged, type UndoNotice } from '../../undo.js'
 
 /**
- * 状态栏：同步状态与撤销入口。
+ * 状态栏：同步状态、通道任务进度与撤销入口。
  * 「待同步 N」取自 /api/sync/pending-count（sync_queue 的 pending 计数）——正式后端里
  * 「未推送数」与「队列长度」是同一数据源，故合并为一项，不重复展示。
  * 条/秒、时延、成功率、429 等指标后端暂无接口，本轮不展示
  * （见 docs/modules/20260910_工作台外壳屏稿.md §4）。
+ *
+ * 通道任务（导入/导出）进行中时在此常驻显示进度：任务由全局 channel-tasks
+ * 驱动，切到任何页面都看得到「导到多少了」，不必回设置页。
  *
  * 失败不再静默：取数失败时显式提示并可重试（原型 StatusBar 有同样的重试入口）。
  * 此前失败被 catch 吞掉，用户只看到「待同步 0」，会把「取不到」误读成「没有待同步」。
@@ -18,6 +22,10 @@ export function StatusBar() {
   const [syncError, setSyncError] = useState(false)
   const [loading, setLoading] = useState(false)
   const [undo, setUndo] = useState<UndoNotice | null>(null)
+  const importProgress = useSyncExternalStore(subscribeImportProgress, getImportProgress)
+  const exportProgress = useSyncExternalStore(subscribeExportProgress, getExportProgress)
+  const importRunning = importProgress.status === 'running'
+  const exportRunning = exportProgress.status === 'running'
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,6 +83,21 @@ export function StatusBar() {
           </span>
         )}
       </div>
+
+      {(importRunning || exportRunning) && (
+        <div className="statusbar-group statusbar-spacer">
+          {importRunning && (
+            <span className="statusbar-item statusbar-item--accent">
+              导入中 {importProgress.okCount}{importProgress.total ? ` / ${importProgress.total}` : ''} 条（第 {importProgress.rounds + 1} 页）
+            </span>
+          )}
+          {exportRunning && (
+            <span className="statusbar-item statusbar-item--accent">
+              导出中 {exportProgress.okCount}{exportProgress.total ? ` / ${exportProgress.total}` : ''} 条
+            </span>
+          )}
+        </div>
+      )}
 
       {undo && (
         <div className="statusbar-group statusbar-spacer">
