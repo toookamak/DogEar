@@ -3,6 +3,7 @@ import type { BookmarkRepository } from '@dogear/db'
 import { channelConfigInputSchema } from '@dogear/shared'
 import { ChannelConfigManager, isMaskedSecret, maskConfig, mergeChannelSecrets } from './channels/index.js'
 import { RaindropClient } from './channels/raindrop.js'
+import { importRaindropPage } from './sync/raindrop-import.js'
 import { S3ClientExtended } from './channels/s3.js'
 import { WebDAVClient } from './channels/webdav.js'
 import { randomUUID } from 'node:crypto'
@@ -121,10 +122,10 @@ export function createChannelRoutes(repository: BookmarkRepository) {
   app.post('/:id/import', async (c) => {
     const config = await manager.getChannelConfig(c.req.param('id'))
     if (!config) return skillError(c, 'NOT_FOUND', 404, 'Channel not found')
-    const body = await c.req.json().catch(() => ({})) as { intoInbox?: boolean }
+    const body = await c.req.json().catch(() => ({})) as { intoInbox?: boolean; page?: number }
     const intoInbox = body.intoInbox !== false
 
-    if (config.channel === 'raindrop') return handleRaindropImport(c, config, repository, intoInbox)
+    if (config.channel === 'raindrop') return handleRaindropImport(c, config, repository, intoInbox, body.page)
     if (config.channel === 's3') return handleS3Import(c, config, repository, intoInbox)
     return skillError(c, 'NOT_SUPPORTED', 400, 'WebDAV import is not supported in this version; use test or export')
   })
@@ -194,66 +195,25 @@ export function createChannelRoutes(repository: BookmarkRepository) {
   return app
 }
 
+/**
+ * Raindrop 按页导入：每次调用只处理一页（50 条），由前端逐页驱动并展示进度。
+ * 全量循环不能再放进单个请求——Workers（轨 A）单次调用有 50 子请求（D1 每条
+ * 查询都计入）/ 10ms CPU 的硬上限，397 条的库实测会在第一页后被杀。
+ */
 async function handleRaindropImport(
   c: { json: (body: unknown, status?: number) => Response },
   config: { config: Record<string, unknown> },
   repository: BookmarkRepository,
   intoInbox: boolean,
+  page?: number,
 ) {
   const token = String(config.config.token || '')
   if (!token) return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Raindrop token is missing' } }, 400)
 
   const client = new RaindropClient(token)
-  let imported = 0
-  let skipped = 0
-  const errors: string[] = []
-  let page = 0
-  let hasMore = true
-
   try {
-    while (hasMore) {
-      const result = await client.fetchBookmarks(page, 50)
-      if (result.items.length === 0) break
-
-      for (const rd of result.items) {
-        try {
-          const raindropId = String(rd._id)
-          const existing = await repository.findByRaindropId(raindropId)
-          if (existing) {
-            skipped++
-            continue
-          }
-
-          const bookmarkId = randomUUID()
-          await repository.create({
-            id: bookmarkId,
-            url: rd.link,
-            title: rd.title || rd.link,
-            status: intoInbox ? 'unread' : 'saved',
-            source: 'page',
-            private: false,
-            syncStatus: 'synced',
-            note: rd.note || null,
-            raindropId,
-            raindropExtras: JSON.stringify({
-              excerpt: rd.excerpt,
-              type: rd.type,
-              created: rd.created,
-              lastUpdate: rd.lastUpdate,
-              collectionId: rd.collection?.$id,
-            }),
-          })
-          imported++
-        } catch (e) {
-          errors.push(`Failed to import bookmark ${rd._id}: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      }
-
-      if (result.items.length < 50) hasMore = false
-      else page++
-    }
-
-    return c.json({ imported, skipped, errors })
+    const summary = await importRaindropPage(repository, client, { page, intoInbox })
+    return c.json(summary)
   } catch (e) {
     return c.json({ error: { code: 'VALIDATION_ERROR', message: `Import failed: ${e instanceof Error ? e.message : String(e)}` } }, 500)
   }

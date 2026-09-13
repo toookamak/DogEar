@@ -18,6 +18,17 @@ export interface ImportResponse {
   errors: string[]
 }
 
+/** 按页导入的单页回执（API 结构表 v1.9）：前端逐页调用，直到 hasMore=false */
+export interface ImportPageResponse {
+  page: number
+  imported: number
+  skipped: number
+  errors: string[]
+  /** Raindrop 侧书签总数；不可知为 0 */
+  total: number
+  hasMore: boolean
+}
+
 export interface ExportResponse {
   exported: number
   failed: number
@@ -53,7 +64,8 @@ export const channelsApi = {
       ? api.patch<ChannelConfigItem>(`/api/channels/${id}`, config)
       : api.post<{ ok: boolean; id: string }>('/api/channels', config),
   remove: (id: string) => api.delete<{ ok: boolean }>(`/api/channels/${id}`),
-  import: (id: string) => api.post<ImportResponse>(`/api/channels/${id}/import`),
+  /** 按页导入：只导指定页（从 0 计），由调用方循环驱动直到 hasMore=false */
+  importPage: (id: string, page: number) => api.post<ImportPageResponse>(`/api/channels/${id}/import`, { page }),
   export: (id: string) => api.post<ExportResponse>(`/api/channels/${id}/export`),
   test: (id: string) => api.post<TestResponse>(`/api/channels/${id}/test`),
   oauthExchange: (req: OAuthExchangeRequest) => api.post<OAuthExchangeResponse>('/api/channels/oauth/exchange', req),

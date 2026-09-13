@@ -112,6 +112,8 @@ export type BookmarkRepository = {
   listAccessRecords: (bookmarkId: string) => Promise<unknown[]>
   get: (id: string, includeDeleted?: boolean) => Promise<unknown | undefined>
   findByRaindropId: (raindropId: string) => Promise<unknown | undefined>
+  findByRaindropIds: (raindropIds: string[]) => Promise<unknown[]>
+  createMany: (inputs: BookmarkInput[]) => Promise<unknown[]>
   listRecentOpened: (limit?: number) => Promise<unknown[]>
   search: (filters: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   update: (id: string, input: BookmarkUpdate) => Promise<unknown | undefined>
@@ -359,6 +361,11 @@ export type RepositoryOptions = {
   sqlTransactions?: boolean
 }
 
+/** create/createMany 共用的字段缺省，保证两条路径落库形状一致 */
+function buildBookmarkRecord(input: BookmarkInput, timestamp: Date) {
+  return { ...input, source: input.source ?? 'page', note: input.note ?? null, intent: input.intent ?? null, important: input.important ?? false, private: input.private ?? false, syncStatus: input.syncStatus ?? 'pending', version: 1, deletedAt: null, createdAt: input.createdAt ?? timestamp, updatedAt: timestamp }
+}
+
 export function createD1BookmarkRepository(database: D1Database): BookmarkRepository {
   // D1 无 SQL 事务能力，显式关闭，避免写路径抛 500
   return createBookmarkRepository(drizzleD1(database), { sqlTransactions: false })
@@ -370,10 +377,23 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   const tx = (action: (t: Db) => Promise<any>) => transaction(db, action, useSqlTransaction)
   const repository = {} as BookmarkRepository
   repository.create = async (input) => {
-    const timestamp = now()
-    const record = { ...input, source: input.source ?? 'page', note: input.note ?? null, intent: input.intent ?? null, important: input.important ?? false, private: input.private ?? false, syncStatus: input.syncStatus ?? 'pending', version: 1, deletedAt: null, createdAt: input.createdAt ?? timestamp, updatedAt: timestamp }
+    const record = buildBookmarkRecord(input, now())
     await db.insert(bookmarks).values(record).run()
     return record
+  }
+  repository.createMany = async (inputs) => {
+    if (!inputs.length) return []
+    const timestamp = now()
+    const records = inputs.map((input) => buildBookmarkRecord(input, timestamp))
+    // D1 单条语句最多 100 个绑定参数：按列数分片（留余量），SQLite 侧照常执行
+    const perChunk = Math.max(1, Math.floor(90 / Object.keys(records[0]).length))
+    const created: unknown[] = []
+    for (let i = 0; i < records.length; i += perChunk) {
+      const chunk = records.slice(i, i + perChunk)
+      await db.insert(bookmarks).values(chunk).run()
+      created.push(...chunk)
+    }
+    return created
   }
   repository.list = async (filters = {}, limit = 50, cursor?: string, opts?: { orderBy?: string; sort?: CursorSort }) => {
     const sort: CursorSort = opts?.sort ?? 'recent'
@@ -435,6 +455,10 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   repository.findByRaindropId = async (raindropId) => {
     const rows = await db.select().from(bookmarks).where(and(eq(bookmarks.raindropId, raindropId), isNull(bookmarks.deletedAt))).all()
     return rows[0]
+  }
+  repository.findByRaindropIds = async (raindropIds) => {
+    if (!raindropIds.length) return []
+    return db.select().from(bookmarks).where(and(inArray(bookmarks.raindropId, raindropIds), isNull(bookmarks.deletedAt))).all()
   }
   repository.listRecentOpened = async (limit = 20) => {
     const rows = await db.select({
