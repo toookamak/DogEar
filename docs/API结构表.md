@@ -1,12 +1,12 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.8
-> **应用版本**：v0.7.30
+> **文档版本**：v1.9
+> **应用版本**：v0.7.31
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
 > **配套**：[数据库结构表](./数据库结构表.md) · [API 设计](./modules/20260904_API设计.md)
-> **最后更新日期**：2026-09-12
+> **最后更新日期**：2026-09-13
 > **修改记录**：
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
@@ -22,6 +22,7 @@
 | v1.6 | v0.7.30 | 2026-09-12 | **开放导航规则求值**：新增 `GET /api/nav/feed`（按 nav_rules 逐步圈定，语义见 evaluator）；`GET /api/nav/bookmarks` 标注**已过时**（保留兼容，勿新增依赖）。`POST/PATCH /api/nav/rules` 收紧 rule 形状校验（对象/字符串均可，PATCH 传对象此前会落库报错，一并修复） | glm-5.3-flash |
 | v1.7 | v0.7.30 | 2026-09-12 | **本地导出/导入（备份设计 §3）**：`GET /api/backup/export-zip`（ZIP：bookmarks.csv + meta.json）与 `POST /api/backup/import`（multipart 上传 CSV/ZIP，25MB 上限，显式 confirm，ZIP 内 snapshots/ 暂跳过）。两路径均限 Track B（依赖文件备份回滚点），Workers 501。依赖新增 `fflate`（用户批准，记录见 TODO） | glm-5.3-flash |
 | v1.8 | v0.7.30 | 2026-09-12 | **双向拉回侧**：`POST /api/sync/pull`（单页拉回，默认 50 条，防风控）；`GET /api/conflicts`、`GET /api/conflicts/pending-count`、`POST /api/conflicts/:id/resolve`、`POST /api/conflicts/resolve-all`。`bookmarks.source` 契约枚举扩展 `raindrop`（向后兼容）。`/api/channels/:id/import` 增加 `maxPages` 提示：自动拉取一律单页，全量导入走显式 import | glm-5.3-flash |
+| v1.9 | v0.7.31 | 2026-09-13 | **导入改按页契约**：`POST /api/channels/:id/import`（Raindrop）请求改 `{page?:0, intoInbox?:true}`，回执改 `{page,imported,skipped,errors,total,hasMore}`——每次只导一页（50 条），由前端逐页驱动；全量循环在 Workers 上会撞单次调用 50 子请求（D1 每查一次都计入）/10ms CPU 上限（实测 397 条只进 50 条）。按 raindropId 去重，重导续传。破坏性：旧一次性全量回执 `{imported,skipped,errors}` 不再返回 | glm-5.3-flash |
 
 # API 结构表
 
@@ -502,7 +503,7 @@ Job 回执固定包含 `id`、`bookmarkId`、`type`、`status`、`retryCount`、
 | DELETE | `/api/channels/:id` | — | `{ok:true}` | 真删行，不要写成 `settings` 空字符串 |
 | POST | `/api/channels/:id/test` | — | `{ok:true,message?}` | **本版必做**。Raindrop：调用户信息或等价轻量接口。S3：HeadBucket 或列举。WebDAV：PROPFIND/OPTIONS 目标 URL。失败 400 `VALIDATION_ERROR` 或 502 用 `NOT_SUPPORTED` 以外的明确 message，不要空成功 |
 | POST | `/api/channels/:id/export` | 可选 `{limit?}` | `{exported,failed,errors?}` | **一次上传冒烟**。S3/WebDAV：上传一份书签 CSV 或小对象。Raindrop：按 Link 级创建，不写 Scene/Status，跳过回收站。未测通允许失败，不得把失败标成 exported |
-| POST | `/api/channels/:id/import` | 可选 `{intoInbox?:true}` | `{imported,skipped,errors}` | **一次下载冒烟**。Raindrop 按 `raindrop_id` 去重，禁止用远端 `_id` 当本应用 `bookmarks.id`。`intoInbox` 默认 true（`status=unread`）。WebDAV 本版可返回 400 `NOT_SUPPORTED` 并写明「仅导出/测试」 |
+| POST | `/api/channels/:id/import` | 可选 `{page?:0, intoInbox?:true}` | `{page,imported,skipped,errors,total,hasMore}` | **v1.9 起按页**：每次只导一页（50 条），调用方循环驱动直到 `hasMore=false`（Workers 单次调用 50 子请求/10ms CPU 上限，禁止在请求内循环全量）。Raindrop 按 `raindrop_id` 去重，重导续传；`total` 为 Raindrop 侧总数（不可知为 0）；`intoInbox` 默认 true（`status=unread`）。WebDAV 本版可返回 400 `NOT_SUPPORTED` 并写明「仅导出/测试」 |
 
 未配置通道时，`POST /api/bookmarks` 与 Skill `save_bookmark` 行为与 v1.1 完全相同。
 
