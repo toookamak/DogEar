@@ -1,15 +1,16 @@
-> **文档版本**：v0.4
-> **应用版本**：v0.7.26
+> **文档版本**：v0.5
+> **应用版本**：v0.7.39
 > **文档状态**：草案（待用户按真实 Cloudflare 账号执行一次验证）
 > **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。默认口径：**前后端同域合并部署**——前端工作台（apps/web）作为静态资源随 Worker 一起发布（Workers Builds 零 Token，建库/迁移/构建/部署由 `apps/server/scripts/ci-deploy.mjs` 一体完成）；GitHub Actions 为备用口径。以本文为准配置部署；不改 wiki。
 > **权威级别**：模块规则。服从需求总纲与技术总纲；冲突时以需求总纲的产品对错为准。
 > **配套文档**：[技术总纲](../../wiki/DogEar-技术总纲.md)（§3 部署双轨、§11 T-1~T-12）· [API 结构表](../API结构表.md) · [数据库结构表](../数据库结构表.md) · [待办清单](../TODO.md)
 > **唯一需求源**：[需求总纲](../../wiki/DogEar-需求总纲.md)
-> **最后更新日期**：2026-09-12
+> **最后更新日期**：2026-09-14
 > **修改记录**：
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
 > | --- | --- | --- | --- | --- |
+| v0.5 | v0.7.39 | 2026-09-14 | 封面 R2：binding `COVERS` / 桶 `dogear-covers`；ci-deploy 确保桶存在；`/api/bookmarks/:id/cover` 命中缓存出图 | composer |
 > | v0.4 | v0.7.26 | 2026-09-12 | 前端并入 Worker 同域部署（`[assets]` + `run_worker_first` + SPA 回退）：ci-deploy.mjs 增前端构建步骤、Actions 补构建步骤；**取消 Pages 项目与 CORS 配置**（前端相对路径 `/api` 同域零改动，跨域方案需改前端+Cookie 成本高，经用户拍板合并） | GLM-5.3-Flash |
 > | v0.3 | v0.7.25 | 2026-09-12 | 默认路径改为 Workers Builds（Cloudflare 自带凭据，零 Token、零 GitHub Secrets）：新增 `ci-deploy.mjs` 一体完成建库/回填/迁移/部署；Actions 降为备用口径；补前端 Pages 与口令 Secret 的面板配置 | GLM-5.3-Flash |
 > | v0.2 | v0.7.24 | 2026-09-12 | 部署改全自动口径：CI 自动建 D1 并回填 id（不再要求手动建库/回填）、口令与 Skill Token 从仓库 Secret 自动同步；preflight 仅查凭据；wrangler.toml 注释同步 | GLM-5.3-Flash |
@@ -24,7 +25,7 @@
 | 文件 | 作用 |
 | --- | --- |
 | `apps/server/src/worker.ts` | Workers 入口。与自托管入口 `src/index.ts` 共用同一份 `createApp` 与业务逻辑，差异只在运行时装配（D1 替代 SQLite 文件、不注入文件备份） |
-| `apps/server/wrangler.toml` | Workers 配置：入口、`nodejs_compat`、D1 binding、`migrations_dir`、`[assets]`（前端同域静态资源） |
+| `apps/server/wrangler.toml` | Workers 配置：入口、`nodejs_compat`、D1 binding、R2 `COVERS`（`dogear-covers`）、`migrations_dir`、`[assets]`（前端同域静态资源） |
 | `packages/db/drizzle/0004_m5_m7_tables.sql` | 补齐迁移链（见 §4） |
 | `.github/workflows/deploy-cloudflare.yml` | 备用路径（Actions）：校验 → 构建前端 → 自动建 D1（无则创建并回填 id）→ 应用迁移 → 部署 Worker →（可选）同步密钥；需配置 API Token |
 | `apps/server/scripts/ci-deploy.mjs` | 默认路径（Workers Builds）的一体部署脚本：构建前端工作台 → 确保 D1 存在（无则创建）→ 回填 database_id 到工作副本 → 应用迁移 → `wrangler deploy`（含前端静态资源） |
@@ -42,7 +43,7 @@
 | 2. 登录口令 | 同项目 → Settings → Variables and Secrets | 添加 Secret `DOGEAR_PASSWORD`（工作台登录口令，如 `admin123`；弱口令+公网域名有被猜到的风险，介意请换强口令） |
 | 3. （可选）Skill Token | 同上 | 添加 Secret `DOGEAR_SKILL_TOKEN`（Agent(Skill) 调用鉴权） |
 
-部署脚本会自动完成：D1 数据库 `dogear_prod` 不存在则创建 → 把真实 `database_id` 回填到构建机上的 `wrangler.toml` 工作副本（仓库保留占位符）→ 应用迁移（建表与默认数据）→ 部署。之后每次推 main 自动重建部署。
+部署脚本会自动完成：D1 数据库 `dogear_prod` 不存在则创建 → 把真实 `database_id` 回填到构建机上的 `wrangler.toml` 工作副本（仓库保留占位符）→ 确保 R2 桶 `dogear-covers` 存在（封面本体，D1 只记原 URL）→ 应用迁移（建表与默认数据）→ 部署。之后每次推 main 自动重建部署。
 
 ### 2.2 工作台（apps/web 前端）——已并入 Worker，无需单独部署
 

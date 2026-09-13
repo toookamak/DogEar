@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-14 / v0.7.39 — **feat：封面落到 R2（轨 A）/ 本地目录（轨 B）**。D1 仍只存原 URL；`GET /api/bookmarks/:id/cover` 命中缓存直接出图，未命中再回源并写入。卡片一律走该接口。部署脚本会确保 R2 桶 `dogear-covers` 存在。
+
 - 2026-09-14 / v0.7.38 — **fix：工作台添加后回填标题/简介，Raindrop 封面可显示**。保存会等抓页最多 6 秒再 201（没跑完仍 waitUntil）；OG 标签 content 在前也能解析。Raindrop 丢掉 rdl.ink/render 假封面、改用 media 真图，有 raindropId 的卡片直接走同源封面代理。
 
 - 2026-09-14 / v0.7.37 — **fix(extension)：保存时带上网页标题、简介和图标**。插件此前只传 URL；`save_bookmark` 现接受可选 `title`/`excerpt`/`favicon` 并立即落库，事后抓页不覆盖已有标题。Workers 用 `waitUntil` 把封面等补抓跑完。需在 `chrome://extensions` 重新加载扩展（新增 scripting 权限）。
