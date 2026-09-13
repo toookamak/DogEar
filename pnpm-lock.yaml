@@ -102,9 +102,6 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
-      vite:
-        specifier: ^6.0.5
-        version: 6.4.3(@types/node@22.20.1)
       wouter:
         specifier: ^3.3.5
         version: 3.10.0(react@19.2.8)
@@ -121,6 +118,9 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vite:
+        specifier: ^6.0.5
+        version: 6.4.3(@types/node@22.20.1)
 
   packages/db:
     dependencies:
