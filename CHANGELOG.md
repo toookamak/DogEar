@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-09-14 / v0.7.38 — **fix：工作台添加后回填标题/简介，Raindrop 封面可显示**。保存会等抓页最多 6 秒再 201（没跑完仍 waitUntil）；OG 标签 content 在前也能解析。Raindrop 丢掉 rdl.ink/render 假封面、改用 media 真图，有 raindropId 的卡片直接走同源封面代理。
+
 - 2026-09-14 / v0.7.37 — **fix(extension)：保存时带上网页标题、简介和图标**。插件此前只传 URL；`save_bookmark` 现接受可选 `title`/`excerpt`/`favicon` 并立即落库，事后抓页不覆盖已有标题。Workers 用 `waitUntil` 把封面等补抓跑完。需在 `chrome://extensions` 重新加载扩展（新增 scripting 权限）。
 
 - 2026-09-14 / v0.7.36 — **fix(web)：补回 `.bm-card-thumb` 选择器**，修复 Vite/postcss `Unexpected }` 导致 Workers 构建失败。
