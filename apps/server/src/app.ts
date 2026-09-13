@@ -27,7 +27,8 @@ import {
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { BookmarkRepository } from '@dogear/db'
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
+import { hasValidSession, signSession } from './auth/session-crypto.js'
 import { createArchiveRoutes } from './archive/archive-routes.js'
 import { ChannelConfigManager } from './channels/index.js'
 import { RaindropClient } from './channels/raindrop.js'
@@ -126,23 +127,6 @@ function cookieValue(header: string | undefined) {
   return header?.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${sessionCookie}=`))?.slice(sessionCookie.length + 1)
 }
 
-function signSession(timestamp: number, password: string) {
-  const payload = `${timestamp}`
-  const signature = createHmac('sha256', password).update(payload).digest('base64url')
-  return `${payload}.${signature}`
-}
-
-function hasValidSession(value: string | undefined, password: string, now: () => number, ttl: number, revoked: Set<string>) {
-  if (!value || revoked.has(value)) return false
-  const [timestampValue, signature] = value.split('.')
-  const timestamp = Number(timestampValue)
-  if (!Number.isSafeInteger(timestamp) || !signature || now() - timestamp < 0 || now() - timestamp > ttl * 1000) return false
-  const expected = createHmac('sha256', password).update(timestampValue).digest('base64url')
-  const actualBytes = Buffer.from(signature)
-  const expectedBytes = Buffer.from(expected)
-  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes)
-}
-
 function setSessionCookie(value: string, maxAge: number) {
   return `${sessionCookie}=${value}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax`
 }
@@ -153,13 +137,15 @@ function timestamp(value: unknown) {
 
 function serializeBookmark(record: any) {
   let excerpt = record?.excerpt ?? null
-  if (!excerpt && record?.raindropExtras) {
+  let cover = typeof record?.cover === 'string' && record.cover.trim() ? record.cover : null
+  if ((!excerpt || !cover) && record?.raindropExtras) {
     try {
       const extras = typeof record.raindropExtras === 'string' ? JSON.parse(record.raindropExtras) : record.raindropExtras
-      if (typeof extras?.excerpt === 'string' && extras.excerpt.trim()) excerpt = extras.excerpt
+      if (!excerpt && typeof extras?.excerpt === 'string' && extras.excerpt.trim()) excerpt = extras.excerpt
+      if (!cover && typeof extras?.cover === 'string' && extras.cover.trim()) cover = extras.cover
     } catch { /* extras 不是 JSON 时忽略 */ }
   }
-  return { ...record, excerpt, createdAt: timestamp(record.createdAt), updatedAt: timestamp(record.updatedAt) }
+  return { ...record, excerpt, cover, createdAt: timestamp(record.createdAt), updatedAt: timestamp(record.updatedAt) }
 }
 
 function serializeAccessRecord(record: any) {
@@ -222,7 +208,13 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   const now = options.now ?? Date.now
   const revokedSessions = new Set<string>()
   const app = new Hono()
-  app.use('/api/*', cors({ origin: options.corsOrigin ?? 'http://localhost:5173', credentials: true }))
+  app.use('/api/*', cors({
+    origin: (origin) => {
+      const allowed = (options.corsOrigin ?? 'http://localhost:5173').split(',').map((s) => s.trim()).filter(Boolean)
+      return origin && allowed.includes(origin) ? origin : ''
+    },
+    credentials: true,
+  }))
 
   // ---- 通道同步入队（L2）：书签写操作成功后，按已启用的 Raindrop 通道入队推送 ----
   // 队列只承载 Raindrop 书签级推送；S3/WebDAV 是文件级导出，保持手动触发（见同步设计 §3.1）。
@@ -265,12 +257,12 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     const body = await c.req.json().catch(() => undefined)
     const input = loginRequestSchema.safeParse(body)
     if (!password || !input.success || input.data.password !== password) return unauthorized(c)
-    c.header('Set-Cookie', setSessionCookie(signSession(now(), password), sessionTtlSeconds))
+    c.header('Set-Cookie', setSessionCookie(await signSession(now(), password), sessionTtlSeconds))
     return c.json({ user })
   })
 
-  app.get('/api/auth/me', (c) => {
-    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
+  app.get('/api/auth/me', async (c) => {
+    if (!await hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
     return c.json({ user })
   })
 
@@ -284,27 +276,15 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   })
 
   const requireSession = async (c: Parameters<NonNullable<Parameters<typeof app.use>[1]>>[0], next: Parameters<NonNullable<Parameters<typeof app.use>[1]>>[1]) => {
-    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
+    if (!await hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
     await next()
   }
 
   app.use('/api/bookmarks', requireSession)
   app.use('/api/bookmarks/*', requireSession)
-
-  app.use('/api/inbox', async (c, next) => {
-    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
-    await next()
-  })
-
-  app.use('/api/sync/*', async (c, next) => {
-    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
-    await next()
-  })
-
-  app.use('/api/metadata/*', async (c, next) => {
-    if (!hasValidSession(cookieValue(c.req.header('Cookie')), password, now, sessionTtlSeconds, revokedSessions)) return unauthorized(c)
-    await next()
-  })
+  app.use('/api/inbox', requireSession)
+  app.use('/api/sync/*', requireSession)
+  app.use('/api/metadata/*', requireSession)
 
   app.get('/api/bookmarks', async (c) => {
     const query = bookmarkListQuerySchema.safeParse(c.req.query())

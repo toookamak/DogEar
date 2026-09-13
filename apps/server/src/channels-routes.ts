@@ -5,11 +5,9 @@ import { ChannelConfigManager, isMaskedSecret, maskConfig, mergeChannelSecrets }
 import { RaindropClient } from './channels/raindrop.js'
 import { importRaindropPage } from './sync/raindrop-import.js'
 import { exportRaindropPage } from './sync/raindrop-export.js'
-import { S3ClientExtended } from './channels/s3.js'
+import { newId } from './auth/session-crypto.js'
+import type { S3ClientExtended } from './channels/s3.js'
 import { WebDAVClient } from './channels/webdav.js'
-import { randomUUID } from 'node:crypto'
-import { parse } from 'csv-parse/sync'
-import { stringify } from 'csv-stringify/sync'
 
 function parseConfigPayload(raw: string | Record<string, unknown>): Record<string, unknown> {
   if (raw && typeof raw === 'object') return raw
@@ -22,7 +20,8 @@ function parseConfigPayload(raw: string | Record<string, unknown>): Record<strin
   throw new Error('config must be a JSON object')
 }
 
-function createS3Client(config: Record<string, unknown>): S3ClientExtended {
+async function createS3Client(config: Record<string, unknown>): Promise<S3ClientExtended> {
+  const { S3ClientExtended: S3 } = await import('./channels/s3.js')
   const endpoint = String(config.endpoint || '')
   const region = String(config.region || '')
   const accessKeyId = String(config.accessKeyId || '')
@@ -36,7 +35,7 @@ function createS3Client(config: Record<string, unknown>): S3ClientExtended {
     throw new Error('S3 secretAccessKey is masked; save a real secret first')
   }
 
-  return new S3ClientExtended({ endpoint, region, accessKeyId, secretAccessKey, bucket })
+  return new S3({ endpoint, region, accessKeyId, secretAccessKey, bucket })
 }
 
 function createWebDavClient(config: Record<string, unknown>): WebDAVClient {
@@ -81,7 +80,7 @@ export function createChannelRoutes(repository: BookmarkRepository) {
       return invalidRequest(c, { config: e instanceof Error ? e.message : 'Invalid config' })
     }
 
-    const id = randomUUID()
+    const id = newId()
     const saved = await manager.setChannelConfig(id, {
       channel: input.data.channel,
       label: input.data.label,
@@ -151,7 +150,7 @@ export function createChannelRoutes(repository: BookmarkRepository) {
         if (!token) return invalidRequest(c, { token: 'Raindrop token is missing' })
         await new RaindropClient(token).testConnection()
       } else if (config.channel === 's3') {
-        await createS3Client(config.config).testConnection()
+        await (await createS3Client(config.config)).testConnection()
       } else if (config.channel === 'webdav') {
         await createWebDavClient(config.config).testConnection()
       } else {
@@ -262,7 +261,7 @@ async function handleS3Import(
 ) {
   let s3Client: S3ClientExtended
   try {
-    s3Client = createS3Client(config.config)
+    s3Client = await createS3Client(config.config)
   } catch (e) {
     return c.json({ error: { code: 'VALIDATION_ERROR', message: e instanceof Error ? e.message : 'Invalid S3 configuration' } }, 400)
   }
@@ -278,6 +277,7 @@ async function handleS3Import(
       return c.json({ imported: 0, skipped: 0, errors: ['No CSV files found in S3 at the configured prefix'] })
     }
 
+    const { parse } = await import('csv-parse/sync')
     for (const file of files) {
       try {
         const records = parse((await s3Client.downloadFile(file)).toString('utf-8'), {
@@ -291,7 +291,7 @@ async function handleS3Import(
             skipped++
             continue
           }
-          const bookmarkId = randomUUID()
+          const bookmarkId = newId()
           await repository.create({
             id: bookmarkId,
             url,
@@ -325,7 +325,7 @@ async function handleS3Export(
 ) {
   let s3Client: S3ClientExtended
   try {
-    s3Client = createS3Client(config.config)
+    s3Client = await createS3Client(config.config)
   } catch (e) {
     return c.json({ error: { code: 'VALIDATION_ERROR', message: e instanceof Error ? e.message : 'Invalid S3 configuration' } }, 400)
   }
@@ -336,6 +336,7 @@ async function handleS3Export(
     const rows = await repository.listExportRows({}, 1000, 0)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const fileName = `${exportPrefix}bookmarks-${timestamp}.csv`
+    const { stringify } = await import('csv-stringify/sync')
     const csvContent = stringify(bookmarkCsvRows(rows), { header: true, columns: ['url', 'title', 'note', 'status'] })
     await s3Client.uploadFile(fileName, Buffer.from(csvContent, 'utf-8'), 'text/csv')
     return c.json({ exported: rows.length, failed: 0, processed: rows.length, total: rows.length, hasMore: false, errors: [], file: fileName })
@@ -361,6 +362,7 @@ async function handleWebDavExport(
     const rows = await repository.listExportRows({}, 1000, 0)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
     const fileName = `dogear-export-${timestamp}.csv`
+    const { stringify } = await import('csv-stringify/sync')
     const csvContent = stringify(bookmarkCsvRows(rows), { header: true, columns: ['url', 'title', 'note', 'status'] })
     await client.uploadFile(fileName, csvContent, 'text/csv')
     return c.json({ exported: rows.length, failed: 0, processed: rows.length, total: rows.length, hasMore: false, errors: [], file: fileName })

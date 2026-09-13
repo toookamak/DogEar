@@ -9,6 +9,17 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/react') || id.includes('react-dom')) return 'react'
+          if (id.includes('minisearch')) return 'search'
+          if (id.includes('dexie')) return 'dexie'
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': {

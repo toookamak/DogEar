@@ -47,10 +47,10 @@
   --slate: #636c7c;
   --slate-soft: rgba(99, 108, 124, 0.11);
 
-  /* ---- 字体（与原型 index.html 同源：Google Fonts，缺字回退系统栈） ---- */
-  --font-sans: "Manrope", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-serif: "Newsreader", Georgia, "Songti SC", serif;
-  --font-mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  /* 专有字体走系统栈（不再外链 Google Fonts，减少首屏 RTT；与 DESIGN 回退一致） */
+  --font-sans: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: Georgia, "Songti SC", "Noto Serif SC", serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
 
   /* ---- 圆角 / 间距 / 阴影（原型尺度：5 / 8 / 12） ---- */
   --radius-sm: 5px;
