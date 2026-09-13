@@ -1391,6 +1391,7 @@ input[type="radio"] {
   display: none;
 }
 
+.bm-card-thumb {
   position: absolute;
   z-index: 0;
   inset: 0;
