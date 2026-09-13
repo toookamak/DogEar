@@ -121,6 +121,8 @@ export type BookmarkRepository = {
   get: (id: string, includeDeleted?: boolean) => Promise<unknown | undefined>
   findByRaindropId: (raindropId: string) => Promise<unknown | undefined>
   findByRaindropIds: (raindropIds: string[]) => Promise<unknown[]>
+  findByUrls: (urls: string[]) => Promise<unknown[]>
+  updateMany: (patches: Array<{ id: string } & Record<string, unknown>>) => Promise<void>
   createMany: (inputs: BookmarkInput[]) => Promise<unknown[]>
   /** 导出/同步用的瘦投影：只取推送所需列，一条查询搞定（避免 list 的逐条关联查询） */
   listExportRows: (opts: { onlyWithoutRaindropId?: boolean }, limit?: number, offset?: number) => Promise<unknown[]>
@@ -539,6 +541,21 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   repository.findByRaindropIds = async (raindropIds) => {
     if (!raindropIds.length) return []
     return db.select().from(bookmarks).where(and(inArray(bookmarks.raindropId, raindropIds), isNull(bookmarks.deletedAt))).all()
+  }
+  repository.findByUrls = async (urls) => {
+    const unique = [...new Set(urls.filter(Boolean))]
+    if (!unique.length) return []
+    return db.select().from(bookmarks).where(and(inArray(bookmarks.url, unique), isNull(bookmarks.deletedAt))).all()
+  }
+  repository.updateMany = async (patches) => {
+    if (!patches.length) return
+    const timestamp = now()
+    const allowed = new Set(['title', 'excerpt', 'cover', 'note', 'intent', 'important', 'private', 'status', 'raindropId', 'raindropExtras', 'syncStatus', 'author', 'favicon', 'domain', 'publishedAt', 'broken'])
+    await runBatched(db, patches.map((patch) => {
+      const { id, ...input } = patch
+      const changes = Object.fromEntries(Object.entries(input).filter(([key]) => allowed.has(key)))
+      return db.update(bookmarks).set({ ...changes, version: sql`${bookmarks.version} + 1`, updatedAt: timestamp }).where(eq(bookmarks.id, id))
+    }))
   }
   repository.listExportRows = async (opts = {}, limit = 50, offset = 0) => {
     const conditions: any[] = [isNull(bookmarks.deletedAt)]

@@ -8,6 +8,13 @@ function makeRepo(existing: Array<Record<string, any>> = []) {
   const repository: any = {
     bookmarks,
     findByRaindropIds: async (ids: string[]) => bookmarks.filter((b) => ids.includes(String(b.raindropId))),
+    findByUrls: async (urls: string[]) => bookmarks.filter((b) => urls.includes(String(b.url))),
+    updateMany: async (patches: Array<Record<string, any>>) => {
+      for (const patch of patches) {
+        const row = bookmarks.find((b) => b.id === patch.id)
+        if (row) Object.assign(row, patch)
+      }
+    },
     createMany: async (records: Array<Record<string, any>>) => {
       bookmarks.push(...records)
       return records
@@ -127,5 +134,19 @@ describe('importRaindropPage', () => {
     expect(summary.imported).toBe(0)
     expect(summary.errors).toHaveLength(1)
     expect(summary.errors[0]).toContain('D1 broken')
+  })
+
+  it('same URL without raindropId is not imported twice; empty cover is filled', async () => {
+    const { repository, bookmarks } = makeRepo([{ id: 'old', url: 'https://example.com/1', raindropId: null, cover: null }])
+    const client = fakeClient([[{
+      _id: 1, link: 'https://example.com/1', title: '页 1', excerpt: '', note: '', tags: [],
+      collection: { $id: -1 }, created: '2026-09-01T00:00:00Z', lastUpdate: '2026-09-01T00:00:00Z', type: 'link',
+      cover: 'https://rd-bg.b-cdn.net/c.jpg',
+    }]])
+    const summary = await importRaindropPage(repository, client, { page: 0 })
+    expect(summary.imported).toBe(0)
+    expect(summary.skipped).toBe(1)
+    expect(bookmarks).toHaveLength(1)
+    expect(bookmarks[0]).toMatchObject({ id: 'old', raindropId: '1', cover: 'https://rd-bg.b-cdn.net/c.jpg' })
   })
 })

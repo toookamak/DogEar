@@ -44,6 +44,13 @@ function makeRepo(existing: Array<Record<string, any>> = []) {
       countPending: async () => conflicts.filter((c) => c.resolution === 'pending').length,
     },
     findByRaindropIds: async (raindropIds: string[]) => bookmarks.filter((b) => raindropIds.includes(String(b.raindropId))),
+    findByUrls: async (urls: string[]) => bookmarks.filter((b) => urls.includes(String(b.url))),
+    updateMany: async (patches: Array<Record<string, any>>) => {
+      for (const patch of patches) {
+        const row = bookmarks.find((b) => b.id === patch.id)
+        if (row) Object.assign(row, patch)
+      }
+    },
     createMany: async (records: Array<Record<string, any>>) => {
       bookmarks.push(...records)
       return records
@@ -126,5 +133,25 @@ describe('Raindrop 拉回（L2 双向的远端→本地侧）', () => {
     expect(summary.pages).toBe(1)
     expect(summary.created).toBe(1)
     expect(summary.scanned).toBe(1)
+  })
+
+  it('does not duplicate a bookmark that already exists by URL, and fills empty cover', async () => {
+    const { repository, bookmarks } = makeRepo([
+      { id: 'b-old', url: 'https://rd-1.example.com/', title: '先存的', cover: null, raindropId: null },
+    ])
+    const summary = await pullFromRaindrop(repository, fakeClient([[rd(1, { cover: 'https://rd-bg.b-cdn.net/a.jpg' })]]))
+    expect(summary.created).toBe(0)
+    expect(bookmarks).toHaveLength(1)
+    expect(bookmarks[0]).toMatchObject({ id: 'b-old', raindropId: '1', cover: 'https://rd-bg.b-cdn.net/a.jpg' })
+  })
+
+  it('fills cover on an existing raindropId row instead of creating another', async () => {
+    const { repository, bookmarks } = makeRepo([
+      { id: 'b-1', raindropId: '1', title: 'Remote 1', url: 'https://rd-1.example.com/', cover: null, updatedAt: new Date('2026-09-11T00:00:00Z') },
+    ])
+    const summary = await pullFromRaindrop(repository, fakeClient([[rd(1, { cover: 'https://rd-bg.b-cdn.net/b.jpg' })]]))
+    expect(summary.created).toBe(0)
+    expect(bookmarks).toHaveLength(1)
+    expect(bookmarks[0].cover).toBe('https://rd-bg.b-cdn.net/b.jpg')
   })
 })
