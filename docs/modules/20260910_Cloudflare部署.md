@@ -1,15 +1,16 @@
-> **文档版本**：v0.5
-> **应用版本**：v0.7.39
-> **文档状态**：草案（待用户按真实 Cloudflare 账号执行一次验证）
+> **文档版本**：v0.6
+> **应用版本**：v0.7.40
+> **文档状态**：生效（轨 A 默认路径已真实部署验证，2026-09-12 起线上运行）
 > **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。默认口径：**前后端同域合并部署**——前端工作台（apps/web）作为静态资源随 Worker 一起发布（Workers Builds 零 Token，建库/迁移/构建/部署由 `apps/server/scripts/ci-deploy.mjs` 一体完成）；GitHub Actions 为备用口径。以本文为准配置部署；不改 wiki。
 > **权威级别**：模块规则。服从需求总纲与技术总纲；冲突时以需求总纲的产品对错为准。
 > **配套文档**：[技术总纲](../../wiki/DogEar-技术总纲.md)（§3 部署双轨、§11 T-1~T-12）· [API 结构表](../API结构表.md) · [数据库结构表](../数据库结构表.md) · [待办清单](../TODO.md)
 > **唯一需求源**：[需求总纲](../../wiki/DogEar-需求总纲.md)
-> **最后更新日期**：2026-09-14
+> **最后更新日期**：2026-09-26
 > **修改记录**：
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
 > | --- | --- | --- | --- | --- |
+| v0.6 | v0.7.40 | 2026-09-26 | 复核更正过时记录：Cron 已配置（v0.7.35）、真实部署已跑通（2026-09-12）、R2 已绑定（v0.7.39，仅封面）；§6 验收清单同步勾选，文档状态草案→生效 | deepseek-v4.1-flash |
 | v0.5 | v0.7.39 | 2026-09-14 | 封面 R2：binding `COVERS` / 桶 `dogear-covers`；ci-deploy 确保桶存在；`/api/bookmarks/:id/cover` 命中缓存出图 | composer |
 > | v0.4 | v0.7.26 | 2026-09-12 | 前端并入 Worker 同域部署（`[assets]` + `run_worker_first` + SPA 回退）：ci-deploy.mjs 增前端构建步骤、Actions 补构建步骤；**取消 Pages 项目与 CORS 配置**（前端相对路径 `/api` 同域零改动，跨域方案需改前端+Cookie 成本高，经用户拍板合并） | GLM-5.3-Flash |
 > | v0.3 | v0.7.25 | 2026-09-12 | 默认路径改为 Workers Builds（Cloudflare 自带凭据，零 Token、零 GitHub Secrets）：新增 `ci-deploy.mjs` 一体完成建库/回填/迁移/部署；Actions 降为备用口径；补前端 Pages 与口令 Secret 的面板配置 | GLM-5.3-Flash |
@@ -135,15 +136,17 @@ pnpm --filter @dogear/server dev:workers
 - [x] `/api/backup` 返回 501 `NOT_SUPPORTED`（符合 §5 预期）
 - [x] 全仓 typecheck 通过、48 个测试全绿
 
-待人工验证（需真实 Cloudflare 账号，本次未执行）：
+真实平台验证（2026-09-26 复核更新）：
 
-- [ ] 真实首次部署（路径一）：按 §2.1 面板配置推 main，确认 `ci-deploy.mjs` 自动建库/迁移/部署跑通，`DOGEAR_PASSWORD` 登录可用
-- [ ] （可选）路径二 Actions 在真实 Secrets 下跑通（workflow 变更后需重验）
-- [ ] 打开 Worker 域名根路径即见工作台登录页（前端同域），`DOGEAR_PASSWORD` 登录后列表可读、保存可用
+- [x] 真实首次部署（路径一）：2026-09-12 推 main 后 Workers Builds 自动建库/迁移/部署跑通，线上工作台为新版视觉（用户确认），`DOGEAR_PASSWORD` 登录可用
+- [ ] （可选）路径二 Actions 在真实 Secrets 下跑通（workflow 变更后需重验）——本仓库为私有仓库，Actions 结果与 badge 需登录查看，仍待仓库拥有者核对
+- [x] 打开 Worker 域名根路径即见工作台登录页（前端同域），登录后列表可读、保存可用。2026-09-26 复核：根路径 200 出登录页、`/health` 200、未鉴权 `/api/*` 401、`/.well-known/capabilities` 返回 JSON；线上前端资源哈希与本仓库 HEAD 重建产物**逐字节一致**（应用版本 v0.7.40）
 
-## 7. 未做的事
+## 7. 未做的事（2026-09-26 复核）
 
-- **Cron Trigger 未配置**：总纲 §3 提到轻量定时任务可用 Cron（≥1min）。当前 Worker 没有 `[triggers]`，同步队列的后台消费在 Workers 上尚无调度（自托管侧也是「队列消费顺延」，见 `docs/TODO.md` 的 L2）。
-- **R2 未接入**：总纲 §9 提到快照内容入 R2。当前 Worker 未绑定 R2；快照本身在 `docs/TODO.md` L3 仍是未完成项。
-- **KV 未启用**：按总纲 §11 T-9，本期不启用。
-- **未在真实 Cloudflare 上部署过**：上述「本地已通过」均为 wrangler 的本地模拟（Miniflare），真实平台行为（尤其 D1 迁移的远程执行与兼容日期）需人工跑一次确认。
+- **快照内容入 R2 仍未做**：R2 桶 `dogear-covers`（binding `COVERS`）已绑定，但**只存封面**（v0.7.39）。总纲 §9 提到的「快照内容入 R2」尚未实现——轨 A 无文件系统，快照走浏览器侧 `queued_pending_browser`，轨 B 仍落本地 `data/snapshots/`（见 `docs/TODO.md` L3）。不要为了快照去动 `COVERS` 这个 binding。
+- **KV / Queues / Durable Objects 未启用**：按总纲 §11 T-9，本期不启用。
+- **Cron、R2、真实部署已不再是「未做」**（原文记在此，2026-09-26 更正）：
+  - **Cron Trigger 已配置**（v0.7.35）：`[triggers] crons = ["*/5 * * * *"]`，`worker.ts` 的 `scheduled` 每 5 分钟消费 `sync_queue`；自托管侧由入口定时器承担。5 分钟比总纲「≥ 1min」更疏，是为换 Free 档 CPU / 50 子请求余量。
+  - **R2 已绑定**（v0.7.39）：`COVERS` / `dogear-covers`，用途见上一条。
+  - **真实部署已跑通**（2026-09-12）：推 main 后 Workers Builds 自动建库/迁移/部署成功，线上工作台为新版视觉（用户确认）——§2.1 的零 Token 默认路径全链路实证可用，见 `docs/TODO.md`「已知小缺口」。

@@ -1,9 +1,9 @@
 # DogEar 待办清单
 
 > 文档状态：生效  
-> 最后更新：2026-09-12  
+> 最后更新：2026-09-26  
 > 用途：未完成项与下一轮待办。已完成的主线不列在这里；文末「已完成」区只保留**值得记住、否则会被误改**的条目（如有意为之的设计不对称）。  
-> 对照：`docs/TODO/20260904_后续补齐计划.md`、结构表 / API 结构表 v1.4。
+> 对照：`docs/TODO/20260904_后续补齐计划.md`、数据库结构表 v1.3 / API 结构表 v1.13。
 
 用 `- [ ]` / `- [x]` 勾选。做完一项就勾上，并在本文件或 CHANGELOG 记一句。条目过时（尤其写成「待决策/勿改」但实际已完成）会误导后来者，发现即修。**搁置项必须写明原因与重启条件**，避免无记录的悬空。
 
@@ -64,8 +64,9 @@
 - [x] **Track A 真实部署已跑通（2026-09-12）**：推 main 后 Workers Builds 自动构建部署成功，线上工作台为新版视觉（用户确认「配色好了」）——零 Token 默认路径（面板 root directory=`apps/server`、Deploy command=`node scripts/ci-deploy.mjs`）全链路实证可用，本条闭环
 - [ ] **CI 是否跑通未经确认**：部署已成功即间接证明 workflow 可用；如需核对每次运行的日志与耗时，到仓库 Actions 页查看。**待用户可选确认**
 - [x] **线上 Skill Token 可在设置页生成（2026-09-13，v0.7.34）**：设置 → Agent 接入「生成 Token」（明文只显示一次，库内 sha256）。环境变量 `DOGEAR_SKILL_TOKEN` 仍可用。扩展保存需同时开启「新建」
-- [ ] Cron Trigger 未配置（Workers 上同步队列无调度；自托管侧队列消费仍顺延）。**依赖 L2 队列真消费，先做 L2**
-- [ ] R2 未接入（快照内容存储）。**依赖 L3，先做 L3**
+- [x] **Cron Trigger 已配置（2026-09-13，v0.7.35）**：`apps/server/wrangler.toml` 的 `[triggers] crons = ["*/5 * * * *"]`，`worker.ts` 的 `scheduled` 每 5 分钟消费 `sync_queue`（消费器见 L2）；自托管侧仍由入口定时器承担。**注意**：5 分钟比总纲「≥ 1 分钟」更疏，是为换 Free 档 CPU / 50 子请求余量，不要顺手改密（口径见 `docs/modules/20260913_轨A实际绑定与性能口径.md`）
+- [x] **R2 已绑定（2026-09-14，v0.7.39）**：`[[r2_buckets]]` binding `COVERS` / 桶 `dogear-covers`，`GET /api/bookmarks/:id/cover` 命中缓存直接出图（D1 仍只存原 URL）；`ci-deploy.mjs` 部署时会确保桶存在
+- [ ] **快照内容入 R2 仍未做**：当前 R2 **仅**存封面；快照（L3）在轨 A 无文件系统，走浏览器侧 `queued_pending_browser`，轨 B 仍落本地 `data/snapshots/`。**依赖 L3；不得借 `COVERS` 这个 binding 顺手存快照或其他对象**
 - [x] **`docs/Draft/README.md` 失效索引已收口（2026-09-12）**：整体移入 `docs/archive/Draft-README-失效索引.md` 并在文首加废弃说明；`docs/Draft/` 仅剩 `sync-card-showcase.html` 演示素材
 - [x] **浏览器插件（Chrome）已落地（2026-09-12，v0.7.28 / `91b5999`）**：`apps/extension` MV3 扩展（填地址 + Skill Token 即可连通），`save_bookmark` 扩展可选 `source: 'extension'`（API 结构表 v1.4）；接入说明见 `docs/modules/20260912_浏览器扩展与Agent接入.md`。**未验证**：Chrome 真机加载后的端到端点击（本环境无扩展加载自动化），按 `apps/extension/README.md` 手动加载即可
 - [ ] 本地 `apps/server/backups/` 不入库（已加入 gitignore）
