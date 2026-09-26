@@ -1,4 +1,5 @@
-import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, like, lt, ne, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, like, lt, lte, ne, notInArray, or, sql } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1'
 import {
   accessRecords,
@@ -61,10 +62,33 @@ type BookmarkFilters = {
   includeDeleted?: boolean
   private?: boolean
   excludeStatus?: string
+  /** 时间范围筛选（created_at 落索引列；闭区间端点由调用方换算） */
+  createdFrom?: Date
+  createdTo?: Date
+  /**
+   * 「是否在导航页展示」筛选（API 结构表 v1.14）：展示集不是字段而是 nav_rules
+   * 求值结果，由路由层先跑 evaluateNavFeed 得到 id 集再传入。
+   * id 集按 D1 单语句 100 绑定参数上限分片成多个 IN 组（AND/OR 连接），
+   * 600 条基线内代价可接受；不做反向缓存。
+   */
+  navVisibleIds?: string[]
+  navExcludedIds?: string[]
 }
 type BookmarkUpdate = Record<string, unknown> & { folderId?: string | null; tagIds?: string[]; sceneIds?: string[] }
 type BatchUpdate = BookmarkUpdate & { ids: string[]; addSceneIds?: string[]; removeSceneIds?: string[]; addTagIds?: string[]; removeTagIds?: string[]; deleted?: boolean }
 type BatchUpdateSkippedItem = { id: string; reason: 'not_found' | 'deleted' }
+type TagRenameResult = { ok: true; record: unknown } | { ok: false; reason: 'not_found' | 'name_conflict' }
+type TagMergeResult = { ok: true; moved: number; target: unknown } | { ok: false; reason: 'not_found' | 'same_tag' }
+export type BookmarkStats = {
+  total: number
+  byStatus: Record<string, number>
+  bySource: Record<string, number>
+  byFolder: Array<{ id: string; name: string; count: number }>
+  byScene: Array<{ id: string; name: string; count: number }>
+  byTag: Array<{ id: string; name: string; count: number }>
+  importantCount: number
+  recycleCount: number
+}
 type Timestamped = { createdAt?: Date; updatedAt?: Date }
 
 export type PageResult<T> = {
@@ -112,7 +136,7 @@ export type SyncQueueItem = {
 
 export type BookmarkRepository = {
   create: (input: BookmarkInput) => Promise<unknown>
-  list: (filters?: BookmarkFilters, limit?: number, cursor?: string, opts?: { orderBy?: string; sort?: 'recent' | 'title' | 'domain' }) => Promise<PageResult<unknown>>
+  list: (filters?: BookmarkFilters, limit?: number, cursor?: string, opts?: { orderBy?: string; sort?: CursorSort }) => Promise<PageResult<unknown>>
   listInbox: (limit?: number, cursor?: string) => Promise<InboxPageResult<unknown>>
   listRecycleBin: (limit?: number, cursor?: string) => Promise<PageResult<unknown>>
   countPending: () => Promise<number>
@@ -131,7 +155,9 @@ export type BookmarkRepository = {
   updateRaindropIds: (pairs: Array<{ id: string; raindropId: string }>) => Promise<void>
   markSyncStatus: (bookmarkIds: string[], status: 'pending' | 'synced') => Promise<void>
   listRecentOpened: (limit?: number) => Promise<unknown[]>
-  search: (filters: BookmarkFilters, limit?: number, cursor?: string) => Promise<PageResult<unknown>>
+  search: (filters: BookmarkFilters, limit?: number, cursor?: string, opts?: { orderBy?: string; sort?: CursorSort }) => Promise<PageResult<unknown>>
+  /** 侧栏计数 / 统计聚合（不含回收站；口径见实现注释） */
+  stats: () => Promise<BookmarkStats>
   update: (id: string, input: BookmarkUpdate) => Promise<unknown | undefined>
   batchUpdate: (input: BatchUpdate) => Promise<{ updated: unknown[]; skipped: BatchUpdateSkippedItem[] }>
   softDelete: (id: string) => Promise<unknown | undefined>
@@ -169,7 +195,7 @@ export type BookmarkRepository = {
 type ResourceRepositories = {
   scenes: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
   folders: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
-  tags: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; remove: (id: string) => Promise<boolean> }
+  tags: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; remove: (id: string) => Promise<boolean>; rename: (id: string, input: { name: string }) => Promise<TagRenameResult>; merge: (sourceId: string, targetId: string) => Promise<TagMergeResult> }
   suggestions: { list: (bookmarkId: string, status?: string) => Promise<PageResult<unknown>>; create: (input: Record<string, unknown>) => Promise<unknown>; resolve: (id: string, status: string) => Promise<unknown | undefined>; accept: (id: string, actor?: string) => Promise<unknown | undefined> }
   operationLog: {
     list: (filters?: Record<string, unknown>) => Promise<unknown[]>
@@ -234,7 +260,7 @@ function now() {
   return new Date()
 }
 
-type CursorSort = 'recent' | 'title' | 'domain'
+type CursorSort = 'recent' | 'title' | 'domain' | 'important'
 type Cursor = { sort: CursorSort; value: string; id: string }
 
 // 游标格式：`<sort>~<encodeURIComponent(value)>~<id>`。value 的语义随 sort 变化：
@@ -249,7 +275,7 @@ function decodeCursor(cursor: string): Cursor | null {
   const last = cursor.lastIndexOf('~')
   if (first < 0 || last <= first) return null
   const sort = cursor.slice(0, first)
-  if (sort !== 'recent' && sort !== 'title' && sort !== 'domain') return null
+  if (sort !== 'recent' && sort !== 'title' && sort !== 'domain' && sort !== 'important') return null
   try {
     return { sort, value: decodeURIComponent(cursor.slice(first + 1, last)), id: cursor.slice(last + 1) }
   } catch {
@@ -268,8 +294,14 @@ function sortValueOf(sort: CursorSort, row: any): string {
   const base = row?.bookmarks ?? row
   if (sort === 'title') return String(base?.title ?? '')
   if (sort === 'domain') return String(base?.domain ?? '')
+  if (sort === 'important') return `${base?.important ? 1 : 0}:${toCursorMs(base?.createdAt)}`
   const createdAt = base?.createdAt
   return String(createdAt instanceof Date ? createdAt.getTime() : createdAt)
+}
+
+function toCursorMs(value: unknown): string {
+  if (value instanceof Date) return String(value.getTime())
+  return String(Number(value ?? 0))
 }
 
 function keysetCondition(cursor: Cursor) {
@@ -278,6 +310,23 @@ function keysetCondition(cursor: Cursor) {
     return or(
       lt(bookmarks.createdAt, value),
       and(eq(bookmarks.createdAt, value), lt(bookmarks.id, cursor.id)),
+    )
+  }
+  if (cursor.sort === 'important') {
+    // 排序口径：important DESC → createdAt DESC → id DESC。
+    // 游标值形如 `${important}:${createdAtMs}`（"1:1700…" / "0:1700…"），逐级比较取「严格小于游标」的下一页。
+    const separator = cursor.value.indexOf(':')
+    const cursorImportant = separator === 1 && cursor.value[0] === '1' ? 1 : 0
+    const cursorCreatedAt = new Date(Number(cursor.value.slice(separator + 1)))
+    return or(
+      sql`${bookmarks.important} < ${cursorImportant}`,
+      and(
+        eq(bookmarks.important, cursorImportant === 1),
+        or(
+          lt(bookmarks.createdAt, cursorCreatedAt),
+          and(eq(bookmarks.createdAt, cursorCreatedAt), lt(bookmarks.id, cursor.id)),
+        ),
+      ),
     )
   }
   const col = sortColumn(cursor.sort)
@@ -395,6 +444,18 @@ async function readRelationsBatch(db: Db, bookmarkIds: string[]) {
  * （已实测复现）。EXISTS 结构上不可能产生重复行，且无需 DISTINCT
  * （DISTINCT 会破坏 keyset 分页的边界值），也能用上 bookmark_scenes/tags 的既有索引。
  */
+/** id 集条件：≤90 个 id 一片（bookmarkTags 插入同款参数预算口径），包含集 OR 连接、排除集 AND 连接 */
+function idSetCondition(ids: string[], mode: 'include' | 'exclude') {
+  if (!ids.length) return mode === 'include' ? sql`1 = 0` : undefined
+  const chunks: string[][] = []
+  for (let i = 0; i < ids.length; i += 90) chunks.push(ids.slice(i, i + 90))
+  if (chunks.length === 1) {
+    return mode === 'include' ? inArray(bookmarks.id, chunks[0]) : notInArray(bookmarks.id, chunks[0])
+  }
+  const parts = chunks.map((chunk) => (mode === 'include' ? inArray(bookmarks.id, chunk) : notInArray(bookmarks.id, chunk)))
+  return mode === 'include' ? or(...parts) : and(...parts)
+}
+
 function filterCondition(filters: BookmarkFilters = {}) {
   const conditions: any[] = []
   if (!filters.includeDeleted) conditions.push(isNull(bookmarks.deletedAt))
@@ -405,6 +466,16 @@ function filterCondition(filters: BookmarkFilters = {}) {
   if (filters.source) conditions.push(eq(bookmarks.source, filters.source))
   if (filters.private !== undefined) conditions.push(eq(bookmarks.private, filters.private))
   if (filters.excludeStatus) conditions.push(ne(bookmarks.status, filters.excludeStatus))
+  if (filters.createdFrom) conditions.push(gte(bookmarks.createdAt, filters.createdFrom))
+  if (filters.createdTo) conditions.push(lte(bookmarks.createdAt, filters.createdTo))
+  // 导航展示集过滤：id 集分片成多个 IN 组（D1 单语句 100 绑定参数上限）。
+  // 包含集 = 片间 OR；排除集 = 片间 AND NOT IN。空集语义：「在导航展示」恒为空。
+  if (filters.navVisibleIds !== undefined) {
+    conditions.push(idSetCondition(filters.navVisibleIds, 'include'))
+  }
+  if (filters.navExcludedIds !== undefined) {
+    conditions.push(idSetCondition(filters.navExcludedIds, 'exclude'))
+  }
   if (filters.sceneId) {
     conditions.push(sql`exists (select 1 from ${bookmarkScenes} where ${bookmarkScenes.bookmarkId} = ${bookmarks.id} and ${bookmarkScenes.sceneId} = ${filters.sceneId})`)
   }
@@ -486,14 +557,17 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     // 只查 bookmarks 一张表：关联维度的过滤已由 filterCondition 用 EXISTS 表达，
     // 不再 JOIN 多对多表，因此结果里不会有重复行，也无需 DISTINCT。
     const query = db.select().from(bookmarks)
-    const orderBy = opts?.orderBy === 'lastOpenedAt'
-      ? desc(bookmarks.lastOpenedAt)
-      : sort === 'recent'
-        ? desc(bookmarks.createdAt)
-        : asc(sortColumn(sort))
-    const tiebreak = sort === 'recent' || opts?.orderBy === 'lastOpenedAt' ? desc(bookmarks.id) : asc(bookmarks.id)
+    const orderColumns: SQL[] = (opts?.orderBy === 'lastOpenedAt'
+      ? [desc(bookmarks.lastOpenedAt)]
+      : sort === 'important'
+        // important 排序：important DESC → createdAt DESC（标星优先，组内按时间倒序）
+        ? [desc(bookmarks.important), desc(bookmarks.createdAt)]
+        : sort === 'recent'
+          ? [desc(bookmarks.createdAt)]
+          : [asc(sortColumn(sort))])
+    const tiebreak: SQL = sort === 'recent' || sort === 'important' || opts?.orderBy === 'lastOpenedAt' ? desc(bookmarks.id) : asc(bookmarks.id)
     const rows = await query.where(cursor ? and(filterOnly, keysetConditionOf(sort, cursor)) : filterOnly)
-      .orderBy(orderBy, tiebreak).limit(limit + 1).all()
+      .orderBy(...orderColumns, tiebreak).limit(limit + 1).all()
     const page = paginatedQuery(sort, rows, limit, (row: any) => ({ value: sortValueOf(sort, row), id: row.id ?? row.bookmarks?.id }))
     // 总数按「仅筛选条件」统计（不含游标键），供前端分页器显示「共 y 页」
     const totalRows = await db.select({ count: count() }).from(bookmarks).where(filterOnly).all()
@@ -517,6 +591,40 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   repository.countPending = async () => {
     const result = await db.select({ count: count() }).from(bookmarks).where(eq(bookmarks.syncStatus, 'pending')).all()
     return Number(result[0]?.count ?? 0)
+  }
+  /**
+   * 侧栏计数 / 统计面板共用的聚合接口（API 结构表 v1.14）。
+   * 口径与 list 一致：不含回收站（deletedAt 非空）；含私密（侧栏是用户自己的视角）。
+   * D1 每条聚合算 1 次子请求，共 8 条，Free 档 50 上限内。
+   */
+  repository.stats = async () => {
+    const alive = isNull(bookmarks.deletedAt)
+    const [totalRows, statusRows, sourceRows, folderRows, sceneRows, tagRows, importantRows, recycleRows] = await Promise.all([
+      db.select({ count: count() }).from(bookmarks).where(alive).all(),
+      db.select({ key: bookmarks.status, count: count() }).from(bookmarks).where(alive).groupBy(bookmarks.status).all(),
+      db.select({ key: bookmarks.source, count: count() }).from(bookmarks).where(alive).groupBy(bookmarks.source).all(),
+      db.select({ id: bookmarks.folderId, name: folders.name, count: count() })
+        .from(bookmarks).innerJoin(folders, eq(bookmarks.folderId, folders.id))
+        .where(alive).groupBy(bookmarks.folderId, folders.name).all(),
+      db.select({ id: bookmarkScenes.sceneId, name: scenes.name, count: count() })
+        .from(bookmarkScenes).innerJoin(scenes, eq(bookmarkScenes.sceneId, scenes.id)).innerJoin(bookmarks, eq(bookmarkScenes.bookmarkId, bookmarks.id))
+        .where(alive).groupBy(bookmarkScenes.sceneId, scenes.name).all(),
+      db.select({ id: bookmarkTags.tagId, name: tags.name, count: count() })
+        .from(bookmarkTags).innerJoin(tags, eq(bookmarkTags.tagId, tags.id)).innerJoin(bookmarks, eq(bookmarkTags.bookmarkId, bookmarks.id))
+        .where(alive).groupBy(bookmarkTags.tagId, tags.name).all(),
+      db.select({ count: count() }).from(bookmarks).where(and(alive, eq(bookmarks.important, true))).all(),
+      db.select({ count: count() }).from(bookmarks).where(isNotNull(bookmarks.deletedAt)).all(),
+    ])
+    return {
+      total: Number(totalRows[0]?.count ?? 0),
+      byStatus: Object.fromEntries(statusRows.map((row: any) => [String(row.key), Number(row.count)])),
+      bySource: Object.fromEntries(sourceRows.map((row: any) => [String(row.key), Number(row.count)])),
+      byFolder: folderRows.map((row: any) => ({ id: String(row.id), name: String(row.name), count: Number(row.count) })),
+      byScene: sceneRows.map((row: any) => ({ id: String(row.id), name: String(row.name), count: Number(row.count) })),
+      byTag: tagRows.map((row: any) => ({ id: String(row.id), name: String(row.name), count: Number(row.count) })),
+      importantCount: Number(importantRows[0]?.count ?? 0),
+      recycleCount: Number(recycleRows[0]?.count ?? 0),
+    }
   }
   repository.createAccessRecord = async (input) => {
     const timestamp = now()
@@ -613,7 +721,7 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     }
     return items
   }
-  repository.search = async (filters, limit = 50, cursor?: string) => repository.list(filters, limit, cursor)
+  repository.search = async (filters, limit = 50, cursor?: string, opts?: { orderBy?: string; sort?: CursorSort }) => repository.list(filters, limit, cursor, opts)
   repository.update = async (id, input) => tx(async (tx) => {
     const existing = await tx.select().from(bookmarks).where(and(eq(bookmarks.id, id), isNull(bookmarks.deletedAt))).all()
     if (!existing[0]) return undefined
@@ -688,6 +796,39 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     list: async () => db.select().from(tags).orderBy(tags.name).all(),
     create: async (input) => { const name = String(input.name); const nameKey = String(input.nameKey ?? name.toLowerCase()); const found = await db.select().from(tags).where(eq(tags.nameKey, nameKey)).all(); if (found[0]) return found[0]; const record = { id: input.id, name, nameKey, createdAt: now() }; await db.insert(tags).values(record).run(); return record },
     remove: async (id) => { await db.delete(bookmarkTags).where(eq(bookmarkTags.tagId, id)).run(); await db.delete(tags).where(eq(tags.id, id)).run(); return true },
+    /** 改名（API 结构表 v1.14）：name_key 唯一，撞名返回 name_conflict；标签按 id 挂载，改名对所有书签即时生效 */
+    rename: async (id, input) => tx(async (t) => {
+      const name = String(input.name).trim()
+      if (!name) return { ok: false as const, reason: 'not_found' as const }
+      const nameKey = name.toLowerCase()
+      const conflict = await t.select().from(tags).where(and(eq(tags.nameKey, nameKey), ne(tags.id, id))).all()
+      if (conflict[0]) return { ok: false as const, reason: 'name_conflict' as const }
+      await t.update(tags).set({ name, nameKey }).where(eq(tags.id, id)).run()
+      const record = (await t.select().from(tags).where(eq(tags.id, id)).all())[0]
+      return record ? { ok: true as const, record } : { ok: false as const, reason: 'not_found' as const }
+    }),
+    /**
+     * 合并到目标标签（API 结构表 v1.14）：源标签挂载转移到目标（主键去重，已挂目标的保留原状），
+     * 随后删除源挂载与源标签。D1 无事务，按序执行；插入走 runBatched 分片（4 列 ≤22 行/片）。
+     */
+    merge: async (sourceId, targetId) => tx(async (t) => {
+      if (sourceId === targetId) return { ok: false as const, reason: 'same_tag' as const }
+      const [sourceRows, targetRows] = await Promise.all([
+        t.select().from(tags).where(eq(tags.id, sourceId)).all(),
+        t.select().from(tags).where(eq(tags.id, targetId)).all(),
+      ])
+      const source = sourceRows[0]
+      const target = targetRows[0]
+      if (!source || !target) return { ok: false as const, reason: 'not_found' as const }
+      const mountings = await t.select().from(bookmarkTags).where(eq(bookmarkTags.tagId, sourceId)).all()
+      if (mountings.length) {
+        const remapped = mountings.map((row: any) => ({ bookmarkId: row.bookmarkId, tagId: targetId, source: row.source, createdAt: row.createdAt }))
+        await runBatched(t, remapped.map((row: { bookmarkId: string; tagId: string; source: string; createdAt: unknown }) => t.insert(bookmarkTags).values(row).onConflictDoNothing()))
+      }
+      await t.delete(bookmarkTags).where(eq(bookmarkTags.tagId, sourceId)).run()
+      await t.delete(tags).where(eq(tags.id, sourceId)).run()
+      return { ok: true as const, moved: mountings.length, target }
+    }),
   }
   repository.suggestions = {
     list: async (bookmarkId, status) => {

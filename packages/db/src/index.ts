@@ -16,4 +16,4 @@ export {
 } from './schema.js'
 export { createBookmarkRepository, createD1BookmarkRepository } from './repository.js'
 export { initializeSqliteSchema } from './sqlite.js'
-export type { BookmarkRepository, SyncQueueItem } from './repository.js'
+export type { BookmarkRepository, BookmarkStats, SyncQueueItem } from './repository.js'

@@ -19,6 +19,8 @@ import {
   skillUsageResponseSchema,
   suggestSceneSkillInputSchema,
   tagCreateInputSchema,
+  tagMergeInputSchema,
+  tagRenameInputSchema,
   triggerArchiveSkillInputSchema,
   updateBookmarkSkillInputSchema,
   workbenchCreateBookmarkInputSchema,
@@ -35,6 +37,7 @@ import { RaindropClient } from './channels/raindrop.js'
 import { createChannelRoutes } from './channels-routes.js'
 import { createMetadataRoutes } from './archive/metadata-routes.js'
 import { createNavRoutes } from './nav/nav-routes.js'
+import { evaluateNavFeed } from './nav/evaluator.js'
 import { extractMetadata } from './archive/metadata.js'
 import { coverFromRaindropExtras, pickCoverUrl, resolveCoverUrl } from './archive/cover-url.js'
 import { coverBodyInit, loadCoverBytes } from './archive/cover-cache.js'
@@ -361,11 +364,23 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   app.use('/api/sync/*', requireSession)
   app.use('/api/metadata/*', requireSession)
 
+/**
+ * 「是否在导航页展示」筛选（API 结构表 v1.14）：展示集不是字段而是 nav_rules
+ * 求值结果，先跑 evaluateNavFeed 得到 id 集，再交由仓储以分片 IN 过滤。
+ * 求值器候选上限 1000 条（既有口径），600 条基线内即全集。
+ */
+async function navVisibilityFilter(repository: BookmarkRepository, visible: boolean): Promise<{ navVisibleIds?: string[]; navExcludedIds?: string[] }> {
+  const feed = await evaluateNavFeed(repository)
+  const ids = feed.map((row) => String((row as Record<string, unknown>)?.id ?? '')).filter(Boolean)
+  return visible ? { navVisibleIds: ids } : { navExcludedIds: ids }
+}
+
   app.get('/api/bookmarks', async (c) => {
     const query = bookmarkListQuerySchema.safeParse(c.req.query())
     if (!query.success) return invalidRequest(c)
-    const { limit, cursor, sort } = query.data
+    const { limit, cursor, sort, createdFrom, createdTo, navVisible } = query.data
     const importantQuery = c.req.query('important')
+    const navFilter = navVisible !== undefined ? await navVisibilityFilter(repository, navVisible === 'true') : {}
     const result = await repository.list({
       q: c.req.query('q'),
       status: c.req.query('status'),
@@ -374,6 +389,9 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       tagId: c.req.query('tagId'),
       important: importantQuery === 'true' ? true : importantQuery === 'false' ? false : undefined,
       source: c.req.query('source'),
+      createdFrom,
+      createdTo,
+      ...navFilter,
     }, limit, cursor, { sort })
     return c.json({ items: result.items.map(serializeBookmark), nextCursor: result.nextCursor, total: result.total })
   })
@@ -530,20 +548,23 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     '/api/archive', '/api/archive/*', '/api/backup', '/api/backup/*',
     '/api/nav', '/api/nav/*',
     '/api/conflicts', '/api/conflicts/*',
+    '/api/stats',
     '/api/skill/usage', '/api/skill/capabilities', '/api/skill/token',
   ]
   for (const path of workbenchPaths) app.use(path, requireSession)
 
   app.get('/api/bookmarks/search', async (c) => {
-    const query = paginationQuerySchema.safeParse(c.req.query())
+    const query = bookmarkListQuerySchema.safeParse(c.req.query())
     if (!query.success) return invalidRequest(c)
-    const { limit, cursor } = query.data
+    const { limit, cursor, sort, createdFrom, createdTo, navVisible } = query.data
+    const navFilter = navVisible !== undefined ? await navVisibilityFilter(repository, navVisible === 'true') : {}
     const items = await repository.search({
       q: c.req.query('q'), status: c.req.query('status'), sceneId: c.req.query('sceneId'),
       folderId: c.req.query('folderId') === 'none' ? 'none' : c.req.query('folderId'),
       tagId: c.req.query('tagId'), important: c.req.query('important') === undefined ? undefined : c.req.query('important') === 'true',
       source: c.req.query('source'), includeDeleted: false,
-    }, limit, cursor)
+      createdFrom, createdTo, ...navFilter,
+    }, limit, cursor, { sort })
     return c.json({ items: items.items.map(serializeBookmark), nextCursor: items.nextCursor, total: items.total })
   })
 
@@ -716,6 +737,42 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
       return c.json({ ok: true })
     })
   }
+
+  // 标签改名 / 合并（API 结构表 v1.14）：此前标签只有新建与删除，
+  // 打错名只能删了重建并丢失全部挂载。改名按 id 挂载天然同步；合并不可撤销。
+  app.patch('/api/tags/:id', async (c) => {
+    const parsed = tagRenameInputSchema.safeParse(await c.req.json().catch(() => undefined))
+    if (!parsed.success) return invalidRequest(c)
+    const result = await repository.tags.rename(c.req.param('id'), parsed.data)
+    if (!result.ok) {
+      return result.reason === 'name_conflict'
+        ? skillError(c, 'CONFLICT', 409, 'A tag with this name already exists')
+        : skillError(c, 'NOT_FOUND', 404, 'Tag not found')
+    }
+    const record = result.record as { id: string; name: string; nameKey: string }
+    await repository.operationLog.append({ actor: 'user', action: 'rename_tag', targetType: 'tag', targetId: c.req.param('id'), detail: record.name })
+    return c.json(record)
+  })
+
+  app.post('/api/tags/:id/merge', async (c) => {
+    const parsed = tagMergeInputSchema.safeParse(await c.req.json().catch(() => undefined))
+    if (!parsed.success) return invalidRequest(c)
+    const result = await repository.tags.merge(c.req.param('id'), parsed.data.targetId)
+    if (!result.ok) {
+      return result.reason === 'same_tag'
+        ? skillError(c, 'VALIDATION_ERROR', 400, 'Cannot merge a tag into itself')
+        : skillError(c, 'NOT_FOUND', 404, 'Tag not found')
+    }
+    const target = result.target as { id: string; name: string }
+    await repository.operationLog.append({ actor: 'user', action: 'merge_tag', targetType: 'tag', targetId: c.req.param('id'), detail: `合并到「${target.name}」，迁移 ${result.moved} 条挂载` })
+    return c.json({ ok: true, moved: result.moved, target: { id: target.id, name: target.name } })
+  })
+
+  // 侧栏计数 / 统计聚合（API 结构表 v1.14）：一次返回全部分维度计数
+  app.get('/api/stats', async (c) => {
+    const stats = await repository.stats()
+    return c.json(stats)
+  })
 
   app.get('/api/bookmarks/:bookmarkId/suggestions', async (c) => {
     const result = await repository.suggestions.list(c.req.param('bookmarkId'), c.req.query('status'))

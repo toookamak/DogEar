@@ -261,11 +261,23 @@ export const tagCreateInputSchema = z.object({
   name: nonBlankName,
 }).strict()
 
+/** 标签改名（API 结构表 v1.14）：name_key 唯一，撞名服务端返回 409 CONFLICT */
+export const tagRenameInputSchema = z.object({
+  name: nonBlankName,
+}).strict()
+
+/** 标签合并到目标标签（API 结构表 v1.14）：源标签挂载转移后删除源标签，不可撤销 */
+export const tagMergeInputSchema = z.object({
+  targetId: z.string().uuid(),
+}).strict()
+
 export type SceneCreateInput = z.infer<typeof sceneCreateInputSchema>
 export type SceneUpdateInput = z.infer<typeof sceneUpdateInputSchema>
 export type FolderCreateInput = z.infer<typeof folderCreateInputSchema>
 export type FolderUpdateInput = z.infer<typeof folderUpdateInputSchema>
 export type TagCreateInput = z.infer<typeof tagCreateInputSchema>
+export type TagRenameInput = z.infer<typeof tagRenameInputSchema>
+export type TagMergeInput = z.infer<typeof tagMergeInputSchema>
 
 export const archiveTierSchema = z.enum(['snapshot', 'reader', 'metadata'])
 export const archiveStatusSchema = z.enum(['pending', 'completed', 'failed'])

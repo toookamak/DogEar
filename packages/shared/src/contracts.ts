@@ -15,14 +15,20 @@ export const paginationQuerySchema = z.object({
 /**
  * 列表排序键。recent 为默认（createdAt 倒序，与既有行为一致）。
  * title / domain 由数据库层排序，避免「读全量再内存排序」——见 docs/API结构表.md 第 316 行。
+ * important（v1.14）：收藏标星优先（important DESC → createdAt DESC）。
  * 均以 id 作为同值次级键，保证分页稳定。
  */
-export const bookmarkSortSchema = z.enum(['recent', 'title', 'domain'])
+export const bookmarkSortSchema = z.enum(['recent', 'title', 'domain', 'important'])
 export type BookmarkSort = z.infer<typeof bookmarkSortSchema>
 
-/** 书签列表 / 搜索的查询参数：分页 + 排序 */
+/** 书签列表 / 搜索的查询参数：分页 + 排序 + 时间范围 / 导航展示筛选（v1.14） */
 export const bookmarkListQuerySchema = paginationQuerySchema.extend({
   sort: bookmarkSortSchema.optional(),
+  /** ISO 日期时间；闭区间端点 */
+  createdFrom: z.coerce.date().optional(),
+  createdTo: z.coerce.date().optional(),
+  /** 是否在导航页展示（按 nav_rules 求值集过滤） */
+  navVisible: z.enum(['true', 'false']).optional(),
 })
 
 export const paginationResponseSchema = z.object({

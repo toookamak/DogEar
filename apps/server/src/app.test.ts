@@ -569,3 +569,145 @@ describe('bookmark and access record API', () => {
     }
   })
 })
+
+describe('tag rename/merge and stats API (v1.14)', () => {
+  function tagRepo(tags: Record<string, unknown>, logs: unknown[] = []) {
+    const repo = repository()
+    repo.tags = {
+      list: async () => [],
+      create: async (input: Record<string, unknown>) => input,
+      remove: async () => true,
+      ...tags,
+    }
+    repo.operationLog = {
+      list: async () => [],
+      get: async () => undefined,
+      append: async (input: Record<string, unknown>) => {
+        logs.push(input)
+        return input
+      },
+      consumeRevert: async () => undefined,
+    }
+    return { repo, logs }
+  }
+
+  it('requires a session for tag rename/merge and stats', async () => {
+    const app = createApp(repository(), { password: 'secret' })
+
+    expect((await app.request('/api/tags/tag-1', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'x' }) })).status).toBe(401)
+    expect((await app.request('/api/tags/tag-1/merge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ targetId: '00000000-0000-4000-8000-000000000001' }) })).status).toBe(401)
+    expect((await app.request('/api/stats')).status).toBe(401)
+  })
+
+  it('renames a tag, records the log, and rejects conflicts / missing tags / invalid bodies', async () => {
+    const { repo, logs } = tagRepo({
+      rename: async (id: string, input: { name: string }) =>
+        id === 'tag-1'
+          ? { ok: true as const, record: { id: 'tag-1', name: input.name, nameKey: input.name.toLowerCase() } }
+          : { ok: false as const, reason: 'not_found' as const },
+    })
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+
+    const ok = await app.request('/api/tags/tag-1', { method: 'PATCH', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ name: '前端开发' }) })
+    expect(ok.status).toBe(200)
+    expect(await ok.json()).toMatchObject({ id: 'tag-1', name: '前端开发' })
+    expect(logs[0]).toMatchObject({ action: 'rename_tag', targetType: 'tag', targetId: 'tag-1' })
+
+    const conflictRepo = tagRepo({ rename: async () => ({ ok: false as const, reason: 'name_conflict' as const }) })
+    const conflictApp = createApp(conflictRepo.repo, { password: 'secret' })
+    const conflictCookie = (await login(conflictApp)).cookie
+    const conflict = await conflictApp.request('/api/tags/tag-1', { method: 'PATCH', headers: { 'content-type': 'application/json', cookie: conflictCookie }, body: JSON.stringify({ name: '已有' }) })
+    expect(conflict.status).toBe(409)
+    expect((await conflict.json()).error.code).toBe('CONFLICT')
+
+    const missing = await app.request('/api/tags/tag-404', { method: 'PATCH', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ name: '不存在' }) })
+    expect(missing.status).toBe(404)
+
+    const blank = await app.request('/api/tags/tag-1', { method: 'PATCH', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ name: '   ' }) })
+    expect(blank.status).toBe(400)
+
+    const unknownField = await app.request('/api/tags/tag-1', { method: 'PATCH', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ name: '新名', bogus: 1 }) })
+    expect(unknownField.status).toBe(400)
+  })
+
+  it('merges a tag into a target, records the log, and rejects self-merge / missing tags / invalid bodies', async () => {
+    const { repo, logs } = tagRepo({
+      merge: async (sourceId: string) =>
+        sourceId === 'tag-1'
+          ? { ok: true as const, moved: 3, target: { id: 'tag-2', name: '目标' } }
+          : { ok: false as const, reason: 'not_found' as const },
+    })
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+
+    const ok = await app.request('/api/tags/tag-1/merge', { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ targetId: '00000000-0000-4000-8000-000000000002' }) })
+    expect(ok.status).toBe(200)
+    expect(await ok.json()).toMatchObject({ ok: true, moved: 3, target: { id: 'tag-2', name: '目标' } })
+    expect(logs[0]).toMatchObject({ action: 'merge_tag', targetType: 'tag', targetId: 'tag-1' })
+    expect(String((logs[0] as { detail?: string }).detail)).toContain('目标')
+
+    const sameRepo = tagRepo({ merge: async () => ({ ok: false as const, reason: 'same_tag' as const }) })
+    const sameApp = createApp(sameRepo.repo, { password: 'secret' })
+    const sameCookie = (await login(sameApp)).cookie
+    const same = await sameApp.request('/api/tags/tag-1/merge', { method: 'POST', headers: { 'content-type': 'application/json', cookie: sameCookie }, body: JSON.stringify({ targetId: '00000000-0000-4000-8000-000000000001' }) })
+    expect(same.status).toBe(400)
+
+    const missing = await app.request('/api/tags/tag-404/merge', { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ targetId: '00000000-0000-4000-8000-000000000002' }) })
+    expect(missing.status).toBe(404)
+
+    const invalid = await app.request('/api/tags/tag-1/merge', { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ targetId: 'not-a-uuid' }) })
+    expect(invalid.status).toBe(400)
+  })
+
+  it('returns aggregated stats', async () => {
+    const repo = repository()
+    repo.stats = async () => ({
+      total: 412,
+      byStatus: { unread: 14, saved: 351, archived: 47 },
+      bySource: { page: 380, agent: 12, extension: 15, raindrop: 5 },
+      byFolder: [], byScene: [], byTag: [],
+      importantCount: 23,
+      recycleCount: 6,
+    })
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+    const response = await app.request('/api/stats', { headers: { cookie } })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ total: 412, importantCount: 23, recycleCount: 6, byStatus: { unread: 14 } })
+  })
+
+  it('passes time range, nav visibility and important sort through to the repository list', async () => {
+    const calls: Array<{ filters: Record<string, unknown>; opts?: { sort?: string } }> = []
+    const repo = repository()
+    const rows = [
+      { id: 'b-1', status: 'saved', private: false },
+      { id: 'b-2', status: 'saved', private: false },
+    ]
+    repo.list = async (filters: Record<string, unknown>, _limit?: number, _cursor?: string, opts?: { sort?: string }) => {
+      calls.push({ filters, opts })
+      return { items: [...rows], nextCursor: null, total: rows.length }
+    }
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+
+    const response = await app.request('/api/bookmarks?sort=important&createdFrom=2026-09-01T00:00:00.000Z&createdTo=2026-09-26T00:00:00.000Z&navVisible=true', { headers: { cookie } })
+    expect(response.status).toBe(200)
+    const listCall = calls.find((call) => call.opts?.sort === 'important')
+    expect(listCall).toBeTruthy()
+    expect(listCall!.filters.createdFrom).toBeInstanceOf(Date)
+    expect(listCall!.filters.createdTo).toBeInstanceOf(Date)
+    // navVisible=true：路由先跑 nav 求值（无规则回落=全部候选），把候选 id 集交给仓储过滤
+    expect(listCall!.filters.navVisibleIds).toEqual(['b-1', 'b-2'])
+
+    const excluded = await app.request('/api/bookmarks?navVisible=false', { headers: { cookie } })
+    expect(excluded.status).toBe(200)
+    const excludedCall = calls.filter((call) => call.filters.navExcludedIds !== undefined).at(-1)
+    expect(excludedCall!.filters.navExcludedIds).toEqual(['b-1', 'b-2'])
+
+    const invalidNav = await app.request('/api/bookmarks?navVisible=yes', { headers: { cookie } })
+    expect(invalidNav.status).toBe(400)
+    const invalidDate = await app.request('/api/bookmarks?createdFrom=not-a-date', { headers: { cookie } })
+    expect(invalidDate.status).toBe(400)
+  })
+})
