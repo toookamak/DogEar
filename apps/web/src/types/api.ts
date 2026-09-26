@@ -120,6 +120,10 @@ export interface SkillUsageResponse {
 
 export interface SettingsWhitelist {
   'recycle.retention_days'?: string | number
+  /** 操作日志保留天数（v1.15，缺省 30） */
+  'log.retention_days'?: string | number
+  /** 操作日志最大条数（v1.15，缺省 5000，超出删最旧） */
+  'log.max_entries'?: string | number
   'skill.capabilities'?: {
     read: boolean
     write_new: boolean

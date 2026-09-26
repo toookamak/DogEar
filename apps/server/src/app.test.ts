@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { initializeSqliteSchema } from '@dogear/db'
 import { describe, expect, it } from 'vitest'
 import { createApp } from './app.js'
+import { createBackupRoutes } from './backup/backup-routes.js'
 
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
 
@@ -709,5 +710,103 @@ describe('tag rename/merge and stats API (v1.14)', () => {
     expect(invalidNav.status).toBe(400)
     const invalidDate = await app.request('/api/bookmarks?createdFrom=not-a-date', { headers: { cookie } })
     expect(invalidDate.status).toBe(400)
+  })
+})
+
+describe('scene merge, export filters and log cleanup (v1.15)', () => {
+  it('requires a session for scene merge and log cleanup', async () => {
+    const app = createApp(repository(), { password: 'secret' })
+
+    expect((await app.request('/api/scenes/00000000-0000-4000-8000-000000000001/merge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ targetId: '00000000-0000-4000-8000-000000000002' }) })).status).toBe(401)
+    expect((await app.request('/api/operation-log/cleanup', { method: 'POST' })).status).toBe(401)
+  })
+
+  it('merges a scene, records the log, and rejects self-merge / missing scenes', async () => {
+    const logs: Array<Record<string, unknown>> = []
+    const repo = repository()
+    repo.scenes = {
+      list: async () => [],
+      create: async (input: Record<string, unknown>) => input,
+      update: async () => undefined,
+      remove: async () => true,
+      merge: async (sourceId: string) =>
+        sourceId === 'sc-1'
+          ? { ok: true as const, moved: 2, target: { id: 'sc-2', name: '目标场景' } }
+          : { ok: false as const, reason: 'not_found' as const },
+    }
+    repo.operationLog = {
+      list: async () => [],
+      get: async () => undefined,
+      append: async (input: Record<string, unknown>) => { logs.push(input); return input },
+      consumeRevert: async () => undefined,
+    }
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+
+    const ok = await app.request('/api/scenes/sc-1/merge', { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ targetId: '00000000-0000-4000-8000-000000000002' }) })
+    expect(ok.status).toBe(200)
+    expect(await ok.json()).toMatchObject({ ok: true, moved: 2, target: { id: 'sc-2', name: '目标场景' } })
+    expect(logs[0]).toMatchObject({ action: 'merge_scene', targetType: 'scene', targetId: 'sc-1' })
+
+    const same = await app.request('/api/scenes/sc-1/merge', { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ targetId: 'sc-1' }) })
+    expect(same.status).toBe(400)
+
+    const missing = await app.request('/api/scenes/sc-404/merge', { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ targetId: '00000000-0000-4000-8000-000000000002' }) })
+    expect(missing.status).toBe(404)
+
+    const invalid = await app.request('/api/scenes/sc-1/merge', { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ targetId: 'nope' }) })
+    expect(invalid.status).toBe(400)
+  })
+
+  it('cleans up logs using the settings-backed retention policy', async () => {
+    const logs: Array<Record<string, unknown>> = []
+    let cleanupOpts: { retentionDays?: number; maxEntries?: number } | undefined
+    const repo = repository()
+    repo.settings = {
+      list: async () => [
+        { key: 'log.retention_days', value: '14', updatedAt: new Date() },
+        { key: 'log.max_entries', value: '1000', updatedAt: new Date() },
+      ],
+      get: async (key: string) => {
+        if (key === 'log.retention_days') return { key, value: '14', updatedAt: new Date() }
+        if (key === 'log.max_entries') return { key, value: '1000', updatedAt: new Date() }
+        return undefined
+      },
+      set: async (key: string, value: unknown) => ({ key, value, updatedAt: new Date() }),
+    }
+    repo.operationLog = {
+      list: async () => [],
+      get: async () => undefined,
+      append: async (input: Record<string, unknown>) => { logs.push(input); return input },
+      consumeRevert: async () => undefined,
+      cleanup: async (opts: { retentionDays?: number; maxEntries?: number }) => {
+        cleanupOpts = opts
+        return { removed: 7 }
+      },
+    }
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+
+    const response = await app.request('/api/operation-log/cleanup', { method: 'POST', headers: { cookie } })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ ok: true, removed: 7, retentionDays: 14, maxEntries: 1000 })
+    expect(cleanupOpts).toEqual({ retentionDays: 14, maxEntries: 1000 })
+    expect(logs[0]).toMatchObject({ action: 'cleanup_log', actor: 'system' })
+  })
+
+  it('validates export-zip range filters (v1.15)', async () => {
+    const repo = repository()
+    // export-zip 属 Track B 文件能力：测试里显式挂真路由（无 dbPath 也不影响导出）
+    const app = createApp(repo, { password: 'secret', backupRoutes: (r) => createBackupRoutes(r) })
+    const { cookie } = await login(app)
+
+    const invalid = await app.request('/api/backup/export-zip?tagId=not-a-uuid', { headers: { cookie } })
+    expect(invalid.status).toBe(400)
+    const invalidStatus = await app.request('/api/backup/export-zip?status=bogus', { headers: { cookie } })
+    expect(invalidStatus.status).toBe(400)
+
+    const ok = await app.request('/api/backup/export-zip?status=saved&folderId=none', { headers: { cookie } })
+    expect(ok.status).toBe(200)
+    expect(ok.headers.get('content-type')).toBe('application/zip')
   })
 })

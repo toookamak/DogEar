@@ -18,6 +18,7 @@ import {
   skillCapabilitiesBodySchema,
   skillUsageResponseSchema,
   suggestSceneSkillInputSchema,
+  sceneMergeInputSchema,
   tagCreateInputSchema,
   tagMergeInputSchema,
   tagRenameInputSchema,
@@ -772,6 +773,38 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
   app.get('/api/stats', async (c) => {
     const stats = await repository.stats()
     return c.json(stats)
+  })
+
+  // 场景合并（API 结构表 v1.15，§2.0.1）：源场景挂载转移（主键去重）后删除源场景。
+  // 与标签合并同款语义；场景没有 name_key 唯一约束，重名合并不受限。
+  app.post('/api/scenes/:id/merge', async (c) => {
+    const parsed = sceneMergeInputSchema.safeParse(await c.req.json().catch(() => undefined))
+    if (!parsed.success) return invalidRequest(c)
+    const result = await repository.scenes.merge(c.req.param('id'), parsed.data.targetId)
+    if (!result.ok) {
+      return result.reason === 'same_scene'
+        ? skillError(c, 'VALIDATION_ERROR', 400, 'Cannot merge a scene into itself')
+        : skillError(c, 'NOT_FOUND', 404, 'Scene not found')
+    }
+    const target = result.target as { id: string; name: string }
+    await repository.operationLog.append({ actor: 'user', action: 'merge_scene', targetType: 'scene', targetId: c.req.param('id'), detail: `合并到「${target.name}」，迁移 ${result.moved} 条挂载` })
+    return c.json({ ok: true, moved: result.moved, target: { id: target.id, name: target.name } })
+  })
+
+  // 操作日志保留策略清理（API 结构表 v1.15，§4.2.12）：读 settings（缺省 30 天 / 5000 条）
+  // 后删除过期与超额记录。Cron / 自托管定时器也会低频调用；此路由供设置页手动触发。
+  app.post('/api/operation-log/cleanup', async (c) => {
+    const [retentionSetting, maxEntriesSetting] = await Promise.all([
+      repository.settings.get('log.retention_days'),
+      repository.settings.get('log.max_entries'),
+    ])
+    const retentionDays = Number((retentionSetting as { value?: unknown } | undefined)?.value ?? 30) || 30
+    const maxEntries = Number((maxEntriesSetting as { value?: unknown } | undefined)?.value ?? 5000) || 5000
+    const result = await repository.operationLog.cleanup({ retentionDays, maxEntries })
+    if (result.removed > 0) {
+      await repository.operationLog.append({ actor: 'system', action: 'cleanup_log', targetType: 'operation_log', targetId: 'operation-log', detail: `清理 ${result.removed} 条（保留 ${retentionDays} 天 / 最多 ${maxEntries} 条）` })
+    }
+    return c.json({ ok: true, removed: result.removed, retentionDays, maxEntries })
   })
 
   app.get('/api/bookmarks/:bookmarkId/suggestions', async (c) => {

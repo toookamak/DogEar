@@ -13,6 +13,7 @@ import type { D1Database, ExecutionContext } from '@cloudflare/workers-types'
 import { createApp } from './app.js'
 import { ChannelConfigManager } from './channels/index.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
+import { cleanupOperationLog } from './log-cleanup.js'
 import { createFetchSnapshotProcessor } from './archive/snapshot-fetch.js'
 import { createR2CoverStore } from './archive/cover-store.js'
 
@@ -102,6 +103,11 @@ export default {
       }, 25)
         .then((summary) => {
           console.log(JSON.stringify({ msg: 'dogear.sync-cron', ...summary }))
+        })
+        // 操作日志保留清理（v1.15）：低频顺带执行，通常为空操作
+        .then(() => cleanupOperationLog(repository))
+        .then((removed) => {
+          if (removed > 0) console.log(JSON.stringify({ msg: 'dogear.log-cleanup', removed }))
         })
         .catch((err: unknown) => {
           console.error(JSON.stringify({

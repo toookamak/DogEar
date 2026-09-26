@@ -10,6 +10,7 @@ import { extractMetadataWithMetascraper } from './archive/metadata-enhancer.js'
 import { createMonolithSnapshotProcessor } from './archive/snapshot-monolith.js'
 import { createFileCoverStore } from './archive/cover-store-fs.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
+import { cleanupOperationLog } from './log-cleanup.js'
 
 const dbPath = process.env.DOGEAR_DB_PATH ?? './data/dogear.sqlite'
 mkdirSync(dirname(dbPath), { recursive: true })
@@ -49,6 +50,9 @@ async function runSyncWorker() {
       return resolveRaindropClient(channels)
     }, 25)
     if (summary.processed > 0) console.log('[sync-worker]', JSON.stringify(summary))
+    // 操作日志保留清理（v1.15）：低频顺带执行，通常为空操作
+    const cleaned = await cleanupOperationLog(repository)
+    if (cleaned > 0) console.log('[log-cleanup] removed:', cleaned)
   } catch (err) {
     console.error('[sync-worker] Error:', err instanceof Error ? err.message : String(err))
   } finally {

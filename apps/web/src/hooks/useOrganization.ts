@@ -49,6 +49,14 @@ export function useOrganization() {
     notifyOrgChanged()
   }, [])
 
+  /** 合并到目标场景（v1.15）：源场景消失、挂载转移，成功后从本地列表移除并广播 */
+  const mergeScene = useCallback(async (id: string, targetId: string) => {
+    const res = await organizationApi.scenes.merge(id, targetId)
+    setScenes(prev => prev.filter(s => s.id !== id))
+    notifyOrgChanged()
+    return res
+  }, [])
+
   const addFolder = useCallback(async (data: { name: string; parentId?: string }) => {
     const res = await organizationApi.folders.create(data)
     setFolders(prev => [...prev, res])
@@ -105,7 +113,7 @@ export function useOrganization() {
   return {
     scenes, folders, tags,
     loading, error,
-    addScene, updateScene, deleteScene,
+    addScene, updateScene, deleteScene, mergeScene,
     addFolder, updateFolder, deleteFolder,
     addTag, deleteTag, renameTag, mergeTag,
   }

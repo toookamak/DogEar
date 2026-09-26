@@ -79,6 +79,7 @@ type BatchUpdate = BookmarkUpdate & { ids: string[]; addSceneIds?: string[]; rem
 type BatchUpdateSkippedItem = { id: string; reason: 'not_found' | 'deleted' }
 type TagRenameResult = { ok: true; record: unknown } | { ok: false; reason: 'not_found' | 'name_conflict' }
 type TagMergeResult = { ok: true; moved: number; target: unknown } | { ok: false; reason: 'not_found' | 'same_tag' }
+type SceneMergeResult = { ok: true; moved: number; target: unknown } | { ok: false; reason: 'not_found' | 'same_scene' }
 export type BookmarkStats = {
   total: number
   byStatus: Record<string, number>
@@ -193,7 +194,7 @@ export type BookmarkRepository = {
 }
 
 type ResourceRepositories = {
-  scenes: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
+  scenes: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean>; merge: (sourceId: string, targetId: string) => Promise<SceneMergeResult> }
   folders: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
   tags: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; remove: (id: string) => Promise<boolean>; rename: (id: string, input: { name: string }) => Promise<TagRenameResult>; merge: (sourceId: string, targetId: string) => Promise<TagMergeResult> }
   suggestions: { list: (bookmarkId: string, status?: string) => Promise<PageResult<unknown>>; create: (input: Record<string, unknown>) => Promise<unknown>; resolve: (id: string, status: string) => Promise<unknown | undefined>; accept: (id: string, actor?: string) => Promise<unknown | undefined> }
@@ -202,6 +203,8 @@ type ResourceRepositories = {
     get: (id: string) => Promise<unknown | undefined>
     append: (input: Record<string, unknown>) => Promise<unknown>
     consumeRevert: (id: string) => Promise<unknown | undefined>
+    /** 保留策略清理（v1.15）：按天数与最大条数删旧日志，返回删除总数 */
+    cleanup: (opts?: { retentionDays?: number; maxEntries?: number }) => Promise<{ removed: number }>
   }
   settings: { list: () => Promise<unknown[]>; get: (key: string) => Promise<unknown | undefined>; set: (key: string, value: unknown) => Promise<unknown> }
   archives: {
@@ -785,6 +788,25 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     create: async (input) => { const timestamp = now(); const record = { ...input, aerr: input.aerr ?? 'reference', enabled: input.enabled ?? true, sortOrder: input.sortOrder ?? 0, createdAt: timestamp, updatedAt: timestamp }; await db.insert(scenes).values(record).run(); return record },
     update: async (id, input) => { const record = { ...input, updatedAt: now() }; await db.update(scenes).set(record).where(eq(scenes.id, id)).run(); return (await db.select().from(scenes).where(eq(scenes.id, id)).all())[0] },
     remove: async (id) => { const members = await db.select().from(bookmarkScenes).where(eq(bookmarkScenes.sceneId, id)).all(); if (members.length) return false; await db.delete(scenes).where(eq(scenes.id, id)).run(); return true },
+    /** 合并到目标场景（API 结构表 v1.15）：挂载转移（主键去重）后删除源场景；D1 无事务按序执行 */
+    merge: async (sourceId, targetId) => tx(async (t) => {
+      if (sourceId === targetId) return { ok: false as const, reason: 'same_scene' as const }
+      const [sourceRows, targetRows] = await Promise.all([
+        t.select().from(scenes).where(eq(scenes.id, sourceId)).all(),
+        t.select().from(scenes).where(eq(scenes.id, targetId)).all(),
+      ])
+      const source = sourceRows[0]
+      const target = targetRows[0]
+      if (!source || !target) return { ok: false as const, reason: 'not_found' as const }
+      const mountings = await t.select().from(bookmarkScenes).where(eq(bookmarkScenes.sceneId, sourceId)).all()
+      if (mountings.length) {
+        const remapped = mountings.map((row: any) => ({ bookmarkId: row.bookmarkId, sceneId: targetId, source: row.source, createdAt: row.createdAt }))
+        await runBatched(t, remapped.map((row: { bookmarkId: string; sceneId: string; source: string; createdAt: unknown }) => t.insert(bookmarkScenes).values(row).onConflictDoNothing()))
+      }
+      await t.delete(bookmarkScenes).where(eq(bookmarkScenes.sceneId, sourceId)).run()
+      await t.delete(scenes).where(eq(scenes.id, sourceId)).run()
+      return { ok: true as const, moved: mountings.length, target }
+    }),
   }
   repository.folders = {
     list: async () => db.select().from(folders).orderBy(folders.sortOrder, folders.createdAt).all(),
@@ -858,6 +880,32 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
       if (!row?.revertToken) return undefined
       await db.update(operationLog).set({ revertToken: null }).where(eq(operationLog.id, id)).run()
       return row
+    },
+    /**
+     * 保留策略清理（API 结构表 v1.15，§4.2.12）：删除 `retentionDays` 天前的记录，
+     * 再删超出 `maxEntries` 的最旧记录（子查询取第 N 新之后的 id）。两段各自
+     * 先 count 后 delete，D1 每条 1 子请求共 4 条，仅由 Cron / 手动清理触发。
+     */
+    cleanup: async (opts = {}) => {
+      let removed = 0
+      if (opts.retentionDays !== undefined && opts.retentionDays > 0) {
+        const cutoff = new Date(Date.now() - opts.retentionDays * 86400000)
+        const expired = await db.select({ count: count() }).from(operationLog).where(lt(operationLog.createdAt, cutoff)).all()
+        const expiredCount = Number(expired[0]?.count ?? 0)
+        if (expiredCount > 0) {
+          await db.delete(operationLog).where(lt(operationLog.createdAt, cutoff)).run()
+          removed += expiredCount
+        }
+      }
+      if (opts.maxEntries !== undefined && opts.maxEntries > 0) {
+        const over = await db.select({ count: count() }).from(operationLog).where(sql`id in (select id from ${operationLog} order by ${operationLog.createdAt} desc limit -1 offset ${opts.maxEntries})`).all()
+        const overCount = Number(over[0]?.count ?? 0)
+        if (overCount > 0) {
+          await db.delete(operationLog).where(sql`id in (select id from ${operationLog} order by ${operationLog.createdAt} desc limit -1 offset ${opts.maxEntries})`).run()
+          removed += overCount
+        }
+      }
+      return { removed }
     },
   }
   repository.settings = {

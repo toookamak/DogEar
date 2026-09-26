@@ -22,6 +22,7 @@ interface SceneManagerProps {
   scenes: SceneResponse[]
   onCreate: (data: { name: string; icon?: string; aerr?: string }) => Promise<unknown>
   onUpdate: (id: string, data: Record<string, unknown>) => Promise<unknown>
+  onMerge: (id: string, targetId: string) => Promise<unknown>
   onDelete: (id: string) => Promise<unknown>
 }
 
@@ -29,7 +30,7 @@ interface SceneManagerProps {
  * 场景管理：数据与增删改一律由上层 useOrganization 提供（单一数据源），
  * 本组件只保留输入态与展开/编辑态，不再自持一份列表副本。
  */
-export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneManagerProps) {
+export function SceneManager({ scenes, onCreate, onUpdate, onMerge, onDelete }: SceneManagerProps) {
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [newIcon, setNewIcon] = useState('')
@@ -40,6 +41,11 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
   const [editAerr, setEditAerr] = useState('reference')
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // 合并态（v1.15）：mergeId 非空时在列表下方展示目标场景选择；挂载转移后源场景删除，不可撤销
+  const [mergeId, setMergeId] = useState<string | null>(null)
+  const [mergeTargetId, setMergeTargetId] = useState('')
+  const [merging, setMerging] = useState(false)
+  const [mergedSummary, setMergedSummary] = useState<string | null>(null)
 
   const handleCreate = async () => {
     if (!newName.trim()) return
@@ -81,6 +87,25 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
       )
     }
     setConfirmId(null)
+  }
+
+  /** 合并到目标场景：挂载转移后源场景删除，结果如实汇报 */
+  const handleMerge = async () => {
+    if (!mergeId || !mergeTargetId) return
+    setError(null)
+    setMerging(true)
+    try {
+      const result = await onMerge(mergeId, mergeTargetId) as { target?: { name?: string }; moved?: number }
+      const moved = typeof result?.moved === 'number' ? result.moved : 0
+      const targetName = result?.target?.name ?? '目标场景'
+      setMergeId(null)
+      setMergeTargetId('')
+      setMergedSummary(`已把挂载合并到「${targetName}」（迁移 ${moved} 条挂载），原场景已移除。`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '合并失败')
+    } finally {
+      setMerging(false)
+    }
   }
 
   /** 停用 / 启用：停用不删历史挂载（docs/modules/20260904_数据库设计.md） */
@@ -183,6 +208,13 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
                   >
                     编辑
                   </button>
+                  <button
+                    onClick={() => { setMergeId(scene.id); setMergeTargetId(''); setError(null) }}
+                    className="btn btn--pill"
+                    title="把该场景的挂载合并到另一场景后删除此场景"
+                  >
+                    合并
+                  </button>
                   <button onClick={() => handleToggleEnabled(scene)} className="btn btn--pill">
                     {scene.enabled ? '停用' : '启用'}
                   </button>
@@ -199,6 +231,38 @@ export function SceneManager({ scenes, onCreate, onUpdate, onDelete }: SceneMana
         ))}
         {scenes.length === 0 && <p className="empty-note">暂无场景，点击「新建场景」创建。</p>}
       </div>
+
+      {/* 合并目标选择：仅展示其他场景；没有可选目标时给出明确出口 */}
+      {mergeId !== null && (
+        <div className="manager-create" role="group" aria-label="合并场景">
+          <span className="merge-label">
+            把「{scenes.find((s) => s.id === mergeId)?.name ?? ''}」合并到
+          </span>
+          <select
+            value={mergeTargetId}
+            className="input"
+            onChange={(e) => setMergeTargetId(e.target.value)}
+            aria-label="选择合并目标场景"
+          >
+            <option value="">选择目标场景…</option>
+            {scenes.filter((s) => s.id !== mergeId).map((scene) => (
+              <option key={scene.id} value={scene.id}>{scene.name}</option>
+            ))}
+          </select>
+          <button type="button" className="btn btn--primary" disabled={!mergeTargetId || merging} onClick={() => void handleMerge()}>
+            {merging ? '合并中…' : '合并'}
+          </button>
+          <button type="button" className="btn btn--pill" onClick={() => setMergeId(null)}>取消</button>
+          {scenes.length <= 1 && <span className="empty-note">没有其他场景可作为合并目标。</span>}
+        </div>
+      )}
+
+      {mergedSummary && (
+        <div className="alert alert--info" role="status">
+          {mergedSummary}
+          <button type="button" className="mini-btn" onClick={() => setMergedSummary(null)}>知道了</button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmId !== null}

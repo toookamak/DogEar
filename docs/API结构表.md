@@ -1,7 +1,7 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.14
-> **应用版本**：v0.7.40
+> **文档版本**：v1.15
+> **应用版本**：v0.7.43
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
@@ -28,6 +28,7 @@
 | v1.12 | v0.7.34 | 2026-09-13 | **Skill Token 工作台签发 + 快照内容**：`GET/POST /api/skill/token`（会话鉴权；POST 生成一次明文、库内只存 sha256）；`POST /api/archive/process` 在 Track A 用 fetch 轻量抓取；`GET /api/archive/:id/content` 返回已完成快照 HTML（inline metadata）。Skill `snapshot=true` 仍只入队 | glm-4.6 |
 | v1.13 | v0.7.37 | 2026-09-14 | **`save_bookmark` 可选页面元数据（加性）**：入参增加可选 `title`、`excerpt`、`favicon`（Chrome 扩展保存时当场传入；空串视为未传）。调用方已写入的字段事后抓页不覆盖。未传时行为与 v1.12 相同 | composer |
 | v1.14 | v0.7.40 | 2026-09-26 | **管理地基批次一（设计稿 `20260926_管理地基补齐设计.md`）**：①标签改名/合并 `PATCH /api/tags/:id`、`POST /api/tags/:id/merge`（§4.5/§8.4）；②`GET /api/bookmarks` 与 `/search` 加性参数 `createdFrom`/`createdTo`（ISO 日期，时间范围筛选）、`navVisible`（按 nav_rules 求值集过滤）、`sort=important`（收藏标星优先，keyset 分页稳定）；③新增 `GET /api/stats`（侧栏计数/统计聚合，口径同 list：不含回收站、含私密） | glm-5.3-flash |
+| v1.15 | v0.7.43 | 2026-09-26 | **管理地基批次二（同设计稿）**：①`GET /api/backup/export-zip` 加性 query `status`/`folderId`/`tagId`/`createdFrom`/`createdTo`（§4.6.2 按范围导出，所选范围记入 meta.json，不传即全量）；②`POST /api/scenes/:id/merge` 场景合并（§4.5，挂载转移+源删除，同标签合并语义）；③`POST /api/operation-log/cleanup` 日志保留清理（§4.2.12，settings `log.retention_days`/`log.max_entries` 缺省 30 天/5000 条，白名单扩 2 key；Workers Cron 与自托管定时器低频自动执行） | glm-5.3-flash |
 
 # API 结构表
 
@@ -214,6 +215,7 @@ Skill 本版无批量。
 | POST | `/api/tags/:id/merge` | **v1.14**：合并到目标，体 `{targetId}`；源标签挂载转移到目标（主键去重）后删除源标签，**不可撤销**；`targetId=自身` → 400，源/目标不存在 → 404。成功 `{ok,moved,target:{id,name}}`。记 log `merge_tag` |
 | DELETE | `/api/tags/:id` | 只解挂载 |
 | GET | `/api/stats` | **v1.14**：侧栏计数/统计聚合。返回 `{total,byStatus,bySource,byFolder[],byScene[],byTag[],importantCount,recycleCount}`；口径与 list 一致（不含回收站，含私密；`byFolder/byScene/byTag` 全量，600 条基线内不分页）。会话鉴权 |
+| POST | `/api/scenes/:id/merge` | **v1.15**：合并到目标场景，体 `{targetId}`；源场景挂载转移（主键去重）后删除源场景，**不可撤销**；`targetId=自身` → 400，源/目标不存在 → 404。成功 `{ok,moved,target:{id,name}}`。记 log `merge_scene` |
 
 四默认场景由迁移写入，不靠启动接口补种。
 
@@ -233,8 +235,9 @@ Skill 本版无批量。
 | 方法 | 路径 | 要点 |
 | --- | --- | --- |
 | GET | `/api/operation-log` | `limit` `cursor` `actor` `action`；无密钥 |
+| POST | `/api/operation-log/cleanup` | **v1.15**：按保留策略清理（settings `log.retention_days`/`log.max_entries`，缺省 30 天/5000 条），回执 `{ok,removed,retentionDays,maxEntries}`，`removed>0` 记 log `cleanup_log`（actor=system）。Workers Cron 与自托管定时器也会低频自动执行 |
 | GET | `/api/settings` | 不得返回口令或摘要 |
-| PUT | `/api/settings` | |
+| PUT | `/api/settings` | 白名单见 §8.6（v1.15 增 `log.retention_days`/`log.max_entries`） |
 | PUT | `/api/skill/capabilities` | 三级开关 |
 | GET | `/api/skill/usage` | 今日请求量/写入量/拦截次数 |
 | GET | `/api/skill/token` | `{configured,fromEnv,fromSettings}`；不返回明文或摘要 |
@@ -435,6 +438,8 @@ POST 必须有非空 `name`；`aerr` 缺省为 `reference`。PATCH 只允许上�
 
 **v1.14**：标签改名 `PATCH /api/tags/:id` 体为 `{name}`（非空，strict 拒绝未知字段）；撞已有 `nameKey` 返回 409 `CONFLICT`。合并 `POST /api/tags/:id/merge` 体为 `{targetId}`（UUID）；成功 `{ok:true, moved:<number>, target:{id,name}}`。二者均记操作日志（`rename_tag` / `merge_tag`）。
 
+**v1.15**：场景合并 `POST /api/scenes/:id/merge` 体为 `{targetId}`（UUID），语义与标签合并一致（挂载转移去重后删除源场景）；记操作日志 `merge_scene`。
+
 ### 8.5 回收站、建议、访问记录
 
 `GET /api/recycle-bin` 使用 `deletedAt` 倒序分页。restore 成功返回 `{ok:true, bookmark}`；永久删除返回 `{ok:true}`，并清理书签成员、建议、访问记录和未完成归档 Job。`POST /api/recycle-bin/empty` 接受 `{onlyExpired?: boolean}`，缺省为 true，返回 `{ok:true,purged:<number>}`。
@@ -445,7 +450,7 @@ POST 必须有非空 `name`；`aerr` 缺省为 `reference`。PATCH 只允许上�
 
 ### 8.6 设置、能力、用量和 Job
 
-`GET /api/settings` 返回 `{items:[{key,value,updatedAt}]}`；敏感设置按 key 和 value 双重过滤，不返回口令、Token、摘要或密钥。`PUT /api/settings` 只允许白名单：`recycle.retention_days`、`skill.capabilities`，未知 key 返回 `VALIDATION_ERROR`。通道配置不走本接口，走 `/api/channels`。复杂 value 使用 JSON 原值，不向前端暴露内部字符串化细节。必须提供 `GET /api/settings`，不得只实现 PUT。
+`GET /api/settings` 返回 `{items:[{key,value,updatedAt}]}`；敏感设置按 key 和 value 双重过滤，不返回口令、Token、摘要或密钥。`PUT /api/settings` 只允许白名单：`recycle.retention_days`、`log.retention_days`、`log.max_entries`（v1.15）、`skill.capabilities`，未知 key 返回 `VALIDATION_ERROR`。通道配置不走本接口，走 `/api/channels`。复杂 value 使用 JSON 原值，不向前端暴露内部字符串化细节。必须提供 `GET /api/settings`，不得只实现 PUT。
 
 `PUT /api/skill/capabilities` 接受并返回：
 
@@ -534,7 +539,7 @@ Job 回执固定包含 `id`、`bookmarkId`、`type`、`status`、`retryCount`、
 | GET | `/api/backup/:id` | — | 记录 | 无文件也返回记录，`filePath` 为 null |
 | GET | `/api/backup/:id/download` | — | 文件流 | **本版必做**。`status!=completed` 或无 `file_path` → 409 `CONFLICT` 或 404 |
 | POST | `/api/backup/:id/restore` | `{confirm:true, bookmarks?}` | `{ok,restored,removed,createdTags,createdScenes,rollbackBackupId}` | **破坏性**。语义见下 |
-| GET | `/api/backup/export-zip` | — | ZIP 文件流 | **v1.7（Track B）**：`bookmarks.csv`（列同轻档）+ `meta.json`；文件名 `dogear_export_YYYYMMDD_HHMMSS.zip`。纯内存生成，不写备份记录 |
+| GET | `/api/backup/export-zip` | **v1.15 加性 query**：`status`(unread\|saved\|archived) `folderId`(<uuid>\|none) `tagId`(<uuid>) `createdFrom`/`createdTo`(ISO)，非法值 400；不传即全量 | ZIP 文件流 | **Track B**：`bookmarks.csv`（列同轻档）+ `meta.json`（含 `filters` 实际范围）；文件名 `dogear_export_YYYYMMDD_HHMMSS.zip`。纯内存生成，不写备份记录 |
 | POST | `/api/backup/import` | multipart：`file`（CSV/ZIP，≤25MB）+ `confirm:true` | `{ok,restored,removed,createdTags,createdScenes,rollbackBackupId,skippedSnapshots,sourceFile}` | **v1.7（Track B，破坏性）**：全量替换书签表；导入前自动创建回滚点备份；ZIP 内 `snapshots/` 暂跳过并在回执报告数量（快照存储待 L3）；Workers 501 |
 
 `light` 至少一种可下载格式（CSV 即可）。`medium` = 轻档 + 设置（无密钥）。`full` = SQLite 或全表导出；没有快照文件则 `includes` 不得声称含快照。失败不删书签。

@@ -33,6 +33,22 @@ export function LogTab() {
   const [actionFilter, setActionFilter] = useState('')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
+  // 保留策略（v1.15，§4.2.12）：写入 settings 白名单（log.retention_days / log.max_entries），
+  // 清理由 Cron / 自托管定时器低频执行，此处也可手动立即清理
+  const [retentionDays, setRetentionDays] = useState('30')
+  const [maxEntries, setMaxEntries] = useState('5000')
+  const [policyBusy, setPolicyBusy] = useState(false)
+
+  useEffect(() => {
+    settingsApi.list()
+      .then((res) => {
+        const retention = res.items.find((item) => item.key === 'log.retention_days')
+        const max = res.items.find((item) => item.key === 'log.max_entries')
+        if (retention) setRetentionDays(String(retention.value))
+        if (max) setMaxEntries(String(max.value))
+      })
+      .catch(() => { /* 读取失败保留默认值 */ })
+  }, [])
 
   // 类型筛选走服务端：把它做进请求，而不是先拉全部再在端侧筛
   const load = async (action = actionFilter) => {
@@ -95,6 +111,80 @@ export function LogTab() {
   return (
     <>
       {notice && <div className={`alert alert--${notice.kind}`}>{notice.text}</div>}
+
+      <section className="settings-section">
+        <h3 className="section-title">日志保留策略</h3>
+        <div className="backup-actions">
+          <label className="merge-label">
+            保留天数
+            <input
+              type="number"
+              min={1}
+              value={retentionDays}
+              onChange={(e) => setRetentionDays(e.target.value)}
+              className="input"
+              style={{ width: 90 }}
+              aria-label="日志保留天数"
+            />
+          </label>
+          <label className="merge-label">
+            最多条数
+            <input
+              type="number"
+              min={1}
+              value={maxEntries}
+              onChange={(e) => setMaxEntries(e.target.value)}
+              className="input"
+              style={{ width: 110 }}
+              aria-label="日志最大条数"
+            />
+          </label>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={policyBusy}
+            onClick={async () => {
+              setPolicyBusy(true)
+              setNotice(null)
+              try {
+                await settingsApi.update({
+                  'log.retention_days': Number(retentionDays) || 30,
+                  'log.max_entries': Number(maxEntries) || 5000,
+                })
+                setNotice({ kind: 'success', text: '保留策略已保存。' })
+              } catch (e) {
+                setNotice({ kind: 'error', text: e instanceof Error ? e.message : '保存失败' })
+              }
+              setPolicyBusy(false)
+            }}
+          >
+            保存策略
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            disabled={policyBusy}
+            onClick={async () => {
+              setPolicyBusy(true)
+              setNotice(null)
+              try {
+                const result = await settingsApi.cleanupLog()
+                setNotice({ kind: 'success', text: `已清理 ${result.removed} 条过期 / 超额日志（按保留 ${result.retentionDays} 天 / 最多 ${result.maxEntries} 条）。` })
+                await load()
+              } catch (e) {
+                setNotice({ kind: 'error', text: e instanceof Error ? e.message : '清理失败' })
+              }
+              setPolicyBusy(false)
+            }}
+          >
+            立即清理
+          </button>
+        </div>
+        <p className="muted backup-note">
+          超过保留天数或超出最大条数（保留最新）的日志会在后台定时清理；「立即清理」马上执行一次。
+          撤销（revert）能力依赖日志存在——被清理的旧操作不可再撤销。
+        </p>
+      </section>
 
       <section className="settings-section">
         <h3 className="section-title">操作日志{!loading && ` ${filtered.length} 条`}</h3>

@@ -10,4 +10,6 @@ export const settingsApi = {
   rotateToken: () => api.post<{ token: string; configured: boolean }>('/api/skill/token'),
   operationLog: (params?: { actor?: string; action?: string }) => api.get<{ items: OperationLogResponse[]; nextCursor: string | null }>('/api/operation-log', params as Record<string, string | undefined>),
   revertOperation: (id: string) => api.post<{ ok: boolean }>(`/api/operation-log/${id}/revert`),
+  /** 手动触发日志保留清理（v1.15），回执带生效配置 */
+  cleanupLog: () => api.post<{ ok: boolean; removed: number; retentionDays: number; maxEntries: number }>('/api/operation-log/cleanup'),
 }

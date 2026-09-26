@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { readFile, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import type { BookmarkRepository } from '@dogear/db'
-import { backupRestoreRequestSchema } from '@dogear/shared'
+import { backupRestoreRequestSchema, exportZipQuerySchema } from '@dogear/shared'
 import { BackupRestoreError, BackupService, parseCsv } from './backup-service.js'
 
 export function createBackupRoutes(repository: BookmarkRepository, dbPath?: string) {
@@ -12,9 +12,22 @@ export function createBackupRoutes(repository: BookmarkRepository, dbPath?: stri
   /** 上传上限（用户拍板）：25MB，足够多年量级的 CSV/ZIP 导出包 */
   const IMPORT_MAX_BYTES = 25 * 1024 * 1024
 
-  /** 本地导出 ZIP（备份设计 §3.1）：bookmarks.csv + meta.json，浏览器下载 */
+  /** 按范围导出的 query（v1.15，§4.6.2）：与列表筛选同语义，加性且向后兼容 */
+
+  /** 本地导出 ZIP（备份设计 §3.1）：bookmarks.csv + meta.json，浏览器下载；v1.15 支持按范围 */
   app.get('/export-zip', async (c) => {
-    const result = await backupService.exportZip()
+    const query = exportZipQuerySchema.safeParse(c.req.query())
+    if (!query.success) {
+      return c.json({ error: { code: 'VALIDATION_ERROR', message: 'Invalid export filters' } }, 400)
+    }
+    const { status, folderId, tagId, createdFrom, createdTo } = query.data
+    const result = await backupService.exportZip({
+      status,
+      folderId: folderId === 'none' ? 'none' : folderId,
+      tagId,
+      createdFrom,
+      createdTo,
+    })
     return c.body(result.bytes as unknown as ArrayBuffer, 200, {
       'Content-Disposition': `attachment; filename="${result.name}"`,
       'Content-Type': 'application/zip',

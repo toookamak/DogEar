@@ -110,6 +110,10 @@ export const settingsListResponseSchema = z.object({
  */
 export const settingsWhitelistSchema = z.object({
   'recycle.retention_days': z.union([z.string(), z.number()]).optional(),
+  /** 操作日志保留天数（§4.2.12，默认 30；v1.15） */
+  'log.retention_days': z.union([z.string(), z.number()]).optional(),
+  /** 操作日志最大条数（§4.2.12，默认 5000，超出删最旧；v1.15） */
+  'log.max_entries': z.union([z.string(), z.number()]).optional(),
   'skill.capabilities': z.object({
     read: z.boolean(),
     write_new: z.boolean(),
@@ -271,6 +275,23 @@ export const tagMergeInputSchema = z.object({
   targetId: z.string().uuid(),
 }).strict()
 
+/** 场景合并到目标场景（API 结构表 v1.15）：源场景挂载转移后删除源场景，不可撤销 */
+export const sceneMergeInputSchema = z.object({
+  targetId: z.string().uuid(),
+}).strict()
+
+/**
+ * 按范围导出 ZIP 的 query（API 结构表 v1.15，备份设计 §4.6.2）：
+ * 字段语义与书签列表筛选一致，全部可选；不传即全量导出（向后兼容）。
+ */
+export const exportZipQuerySchema = z.object({
+  status: z.enum(['unread', 'saved', 'archived']).optional(),
+  folderId: z.string().min(1).optional(),
+  tagId: z.string().uuid().optional(),
+  createdFrom: z.coerce.date().optional(),
+  createdTo: z.coerce.date().optional(),
+})
+
 export type SceneCreateInput = z.infer<typeof sceneCreateInputSchema>
 export type SceneUpdateInput = z.infer<typeof sceneUpdateInputSchema>
 export type FolderCreateInput = z.infer<typeof folderCreateInputSchema>
@@ -278,6 +299,7 @@ export type FolderUpdateInput = z.infer<typeof folderUpdateInputSchema>
 export type TagCreateInput = z.infer<typeof tagCreateInputSchema>
 export type TagRenameInput = z.infer<typeof tagRenameInputSchema>
 export type TagMergeInput = z.infer<typeof tagMergeInputSchema>
+export type SceneMergeInput = z.infer<typeof sceneMergeInputSchema>
 
 export const archiveTierSchema = z.enum(['snapshot', 'reader', 'metadata'])
 export const archiveStatusSchema = z.enum(['pending', 'completed', 'failed'])

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { backupApi } from '../../../api/backup.js'
+import { organizationApi } from '../../../api/organization.js'
 import { ConfirmDialog } from '../../feedback/ConfirmDialog.js'
 import { formatBytes, formatDateTime, label } from '../../../utils/format.js'
 import {
@@ -63,11 +64,46 @@ export function BackupTab() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importBusy, setImportBusy] = useState(false)
 
+  // 按范围导出（§4.6.2，v1.15）：四维筛选，空 = 全部；时间用与工作台一致的预设档
+  const [exportScope, setExportScope] = useState({ status: '', folderId: '', tagId: '', createdRange: '' })
+  const [scenes, setScenes] = useState<Array<{ id: string; name: string }>>([])
+  const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([])
+  const [tags, setTags] = useState<Array<{ id: string; name: string }>>([])
+  const [exporting, setExporting] = useState(false)
+
+  useEffect(() => {
+    void (async () => {
+      const [scenesRes, foldersRes, tagsRes] = await Promise.allSettled([
+        organizationApi.scenes.list(),
+        organizationApi.folders.list(),
+        organizationApi.tags.list(),
+      ])
+      if (scenesRes.status === 'fulfilled') setScenes(scenesRes.value.items ?? [])
+      if (foldersRes.status === 'fulfilled') setFolders(foldersRes.value.items ?? [])
+      if (tagsRes.status === 'fulfilled') setTags(tagsRes.value.items ?? [])
+    })()
+  }, [])
+
+  const exportQuery = (): string => {
+    const params = new URLSearchParams()
+    if (exportScope.status) params.set('status', exportScope.status)
+    if (exportScope.folderId) params.set('folderId', exportScope.folderId)
+    if (exportScope.tagId) params.set('tagId', exportScope.tagId)
+    const days = exportScope.createdRange === '7d' ? 7 : exportScope.createdRange === '30d' ? 30 : exportScope.createdRange === 'year' ? 365 : null
+    if (days !== null) params.set('createdFrom', new Date(Date.now() - days * 86400000).toISOString())
+    const query = params.toString()
+    return query ? `?${query}` : ''
+  }
+
   const handleExportZip = async () => {
     setNotice(null)
+    setExporting(true)
     try {
-      const response = await fetch('/api/backup/export-zip')
-      if (!response.ok) throw new Error(`导出失败（HTTP ${response.status}）`)
+      const response = await fetch(`/api/backup/export-zip${exportQuery()}`)
+      if (!response.ok) {
+        const body = await response.json().catch(() => null)
+        throw new Error(body?.error?.message ?? `导出失败（HTTP ${response.status}）`)
+      }
       const blob = await response.blob()
       const disposition = response.headers.get('Content-Disposition') ?? ''
       const name = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'dogear_export.zip'
@@ -81,6 +117,7 @@ export function BackupTab() {
     } catch (e) {
       setNotice({ kind: 'error', text: e instanceof Error ? e.message : '导出失败' })
     }
+    setExporting(false)
   }
 
   const handleImport = async () => {
@@ -167,9 +204,32 @@ export function BackupTab() {
       <section className="settings-section">
         <h3 className="section-title">本地导出 / 导入</h3>
         <div className="backup-actions">
-          <button type="button" className="btn btn--primary" onClick={() => { void handleExportZip() }}>
-            导出 ZIP（书签 CSV）
+          <select className="input" value={exportScope.status} aria-label="导出状态范围" onChange={(e) => setExportScope((s) => ({ ...s, status: e.target.value }))}>
+            <option value="">全部状态</option>
+            <option value="unread">待处理</option>
+            <option value="saved">已确认</option>
+            <option value="archived">搁置</option>
+          </select>
+          <select className="input" value={exportScope.folderId} aria-label="导出文件夹范围" onChange={(e) => setExportScope((s) => ({ ...s, folderId: e.target.value }))}>
+            <option value="">全部文件夹</option>
+            <option value="none">无文件夹</option>
+            {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+          </select>
+          <select className="input" value={exportScope.tagId} aria-label="导出标签范围" onChange={(e) => setExportScope((s) => ({ ...s, tagId: e.target.value }))}>
+            <option value="">全部标签</option>
+            {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
+          </select>
+          <select className="input" value={exportScope.createdRange} aria-label="导出时间范围" onChange={(e) => setExportScope((s) => ({ ...s, createdRange: e.target.value }))}>
+            <option value="">全部时间</option>
+            <option value="7d">最近 7 天</option>
+            <option value="30d">最近 30 天</option>
+            <option value="year">最近一年</option>
+          </select>
+          <button type="button" className="btn btn--primary" disabled={exporting} onClick={() => { void handleExportZip() }}>
+            {exporting ? '导出中…' : '导出 ZIP（书签 CSV）'}
           </button>
+        </div>
+        <div className="backup-actions">
           <label className="btn btn--ghost">
             选择要导入的 CSV / ZIP…
             <input
@@ -189,7 +249,8 @@ export function BackupTab() {
           </button>
         </div>
         <p className="muted backup-note">
-          导出为 ZIP（bookmarks.csv + meta.json）；导入支持 CSV 或该 ZIP，语义为**全量替换**当前书签表——
+          可按状态 / 文件夹 / 标签 / 时间范围导出（均为空即全量），所选范围会记录在 ZIP 内的 meta.json；
+          导入支持 CSV 或该 ZIP，语义为**全量替换**当前书签表——
           导入前服务端会自动创建一次回滚点备份。上传上限 25MB；ZIP 中的快照文件暂不导入（快照存储待接入）。
         </p>
       </section>

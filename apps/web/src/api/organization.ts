@@ -6,6 +6,8 @@ export const organizationApi = {
     list: () => api.get<{ items: SceneResponse[] }>('/api/scenes'),
     create: (data: { name: string; icon?: string; aerr?: string; sortOrder?: number }) => api.post<SceneResponse>('/api/scenes', data),
     update: (id: string, data: Record<string, unknown>) => api.patch<SceneResponse>(`/api/scenes/${id}`, data),
+    /** 合并到目标场景（API 结构表 v1.15），回执 {ok, moved, target}；不可撤销 */
+    merge: (id: string, targetId: string) => api.post<{ ok: boolean; moved: number; target: { id: string; name: string } }>(`/api/scenes/${id}/merge`, { targetId }),
     remove: (id: string) => api.delete<{ ok: boolean }>(`/api/scenes/${id}`),
   },
   folders: {

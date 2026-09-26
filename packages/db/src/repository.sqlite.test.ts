@@ -169,4 +169,54 @@ describe('repository on real SQLite (v1.14 批次一)', () => {
     const chunkedExclude = await repository.list({ navExcludedIds: manyIds })
     expect((chunkedExclude.items as any[]).map((row) => row.id)).toEqual(['old'])
   })
+
+  it('merges a scene into a target with mount dedupe and source removal (v1.15)', async () => {
+    const repository = setup()
+    // 初始化会种子 4 个默认场景（固定 UUID），直接取两个用
+    const sourceId = '00000000-0000-4000-8000-000000000001'
+    const targetId = '00000000-0000-4000-8000-000000000002'
+    const onlySource = await seedBookmark(repository)
+    const both = await seedBookmark(repository)
+    await repository.batchUpdate({ ids: [String(onlySource.id)], addSceneIds: [sourceId] } as never)
+    await repository.batchUpdate({ ids: [String(both.id)], addSceneIds: [sourceId, targetId] } as never)
+
+    const result = await repository.scenes.merge(sourceId, targetId)
+    expect(result).toMatchObject({ ok: true, moved: 2 })
+    expect((await repository.get(String(onlySource.id)) as any).scenes).toEqual([{ id: targetId, name: '灵感收集' }])
+    expect((await repository.get(String(both.id)) as any).scenes).toEqual([{ id: targetId, name: '灵感收集' }])
+    const sceneIds = (await repository.scenes.list()).map((scene: any) => scene.id)
+    expect(sceneIds).not.toContain(sourceId)
+    expect(sceneIds).toContain(targetId)
+    expect(await repository.scenes.merge(targetId, targetId)).toEqual({ ok: false, reason: 'same_scene' })
+    expect(await repository.scenes.merge('sc-404', targetId)).toEqual({ ok: false, reason: 'not_found' })
+  })
+
+  it('cleans up operation logs by retention days and max entries (v1.15)', async () => {
+    const repository = setup()
+    const now = Date.now()
+    for (let i = 0; i < 5; i += 1) {
+      await repository.operationLog.append({
+        actor: 'user', action: 'create', targetType: 'bookmark', targetId: `b-${i}`,
+        createdAt: new Date(now - (i + 3) * 86400000),
+      })
+    }
+
+    // 保留 2 天：5 条（3~7 天前）全部过期
+    const byDays = await repository.operationLog.cleanup({ retentionDays: 2 })
+    expect(byDays.removed).toBe(5)
+    expect(await repository.operationLog.list()).toHaveLength(0)
+
+    // max=2：3 条新鲜日志删最旧 1 条，保留最新 2 条
+    for (let i = 0; i < 3; i += 1) {
+      await repository.operationLog.append({
+        actor: 'user', action: 'create', targetType: 'bookmark', targetId: `fresh-${i}`,
+        createdAt: new Date(now - i * 3600000),
+      })
+    }
+    const byMax = await repository.operationLog.cleanup({ maxEntries: 2 })
+    expect(byMax.removed).toBe(1)
+    const rest = await repository.operationLog.list()
+    expect(rest).toHaveLength(2)
+    expect((rest as any[]).map((row) => row.targetId).sort()).toEqual(['fresh-0', 'fresh-1'])
+  })
 })

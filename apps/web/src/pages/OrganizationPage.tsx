@@ -21,7 +21,7 @@ export function OrganizationPage() {
   const [tab, setTab] = useState<TabKey>('scenes')
   const {
     scenes, folders, tags, loading, error,
-    addScene, updateScene, deleteScene,
+    addScene, updateScene, deleteScene, mergeScene,
     addFolder, updateFolder, deleteFolder,
     addTag, deleteTag, renameTag, mergeTag,
   } = useOrganization()
@@ -55,6 +55,7 @@ export function OrganizationPage() {
                   scenes={scenes}
                   onCreate={addScene}
                   onUpdate={updateScene}
+                  onMerge={mergeScene}
                   onDelete={deleteScene}
                 />
               )}

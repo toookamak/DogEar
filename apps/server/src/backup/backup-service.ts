@@ -9,6 +9,15 @@ import { pipeline } from 'node:stream/promises'
 export type BackupTier = 'light' | 'medium' | 'full'
 export type BackupTarget = 'local' | 's3' | 'webdav'
 
+/** 按范围导出（§4.6.2，API 结构表 v1.15）：字段语义与列表接口一致 */
+export type ExportFilters = {
+  status?: string
+  folderId?: string | 'none'
+  tagId?: string
+  createdFrom?: Date
+  createdTo?: Date
+}
+
 /** 恢复失败时用带 code 的错误，便于路由映射成正确的 HTTP 状态 */
 export class BackupRestoreError extends Error {
   constructor(public code: 'NOT_FOUND' | 'CONFLICT' | 'NOT_SUPPORTED' | 'BAD_BACKUP', message: string) {
@@ -185,11 +194,13 @@ export class BackupService {
   }
 
   /**
-   * 本地导出（备份设计 §3.1）：当前书签表打包为 ZIP（bookmarks.csv + meta.json）。
+   * 本地导出（备份设计 §3.1）：书签表打包为 ZIP（bookmarks.csv + meta.json）。
+   * v1.15 起支持按范围导出（§4.6.2）：status/folderId/tagId/createdFrom/createdTo，
+   * 语义与列表接口一致，直接复用 repository.list 的筛选；不传即全量。
    * 纯内存生成；快照文件归档待 L3 快照产出落地后在 snapshots/ 目录补充。
    */
-  async exportZip(): Promise<{ name: string; bytes: Uint8Array; count: number }> {
-    const csv = await this.buildExportCsv()
+  async exportZip(filters: ExportFilters = {}): Promise<{ name: string; bytes: Uint8Array; count: number }> {
+    const csv = await this.buildExportCsv(filters)
     const { zipSync, strToU8 } = await import('fflate')
     const count = parseCsv(csv).length
     const now = new Date()
@@ -202,10 +213,12 @@ export class BackupService {
       String(now.getMinutes()).padStart(2, '0'),
       String(now.getSeconds()).padStart(2, '0'),
     ].join('')
+    const appliedFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''))
     const meta = JSON.stringify({
       app: 'DogEar',
       exportedAt: now.toISOString(),
       bookmarks: count,
+      filters: appliedFilters,
       note: '快照文件归档待快照存储（L3）落地后加入 snapshots/ 目录',
     }, null, 2)
     const bytes = zipSync({
@@ -216,8 +229,8 @@ export class BackupService {
   }
 
   /** 导出/打包共用的书签 CSV（列与轻档备份一致，导入侧 parseCsv 直接可读） */
-  private async buildExportCsv(): Promise<string> {
-    const result = await this.repository.list({}, 10000)
+  private async buildExportCsv(filters: ExportFilters = {}): Promise<string> {
+    const result = await this.repository.list(filters, 10000)
     const csvData = (result.items as any[]).map((b) => ({
       id: b.id,
       url: b.url,

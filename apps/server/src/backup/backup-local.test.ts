@@ -106,6 +106,29 @@ describe('本地导出 ZIP（backup §3.1）', () => {
     expect(rows.find((r) => r.id === 'b-2')?.note).toBe('带,逗号')
     expect(JSON.parse(strFromU8(entries['meta.json']))).toMatchObject({ app: 'DogEar', bookmarks: 2 })
   })
+
+  it('exports a filtered subset and records the applied filters in meta.json (v1.15)', async () => {
+    const repository = service['repository']
+    const originalList = repository.list
+    // 真实筛选由 repository.list 的 SQL 完成；这里模拟同语义（status + createdFrom）
+    repository.list = async (filters: Record<string, any> = {}) => ({
+      items: store.bookmarks
+        .filter((b) => !filters.status || b.status === filters.status)
+        .filter((b) => !filters.createdFrom || new Date(b.createdAt).getTime() >= filters.createdFrom.getTime())
+        .map((b) => ({ ...b, tags: [], scenes: [] })),
+      nextCursor: null,
+    })
+
+    const { bytes, count } = await service.exportZip({ status: 'unread', createdFrom: new Date('2020-01-01T00:00:00.000Z') })
+    const entries = unzipSync(bytes)
+    const rows = parseCsv(strFromU8(entries['bookmarks.csv']))
+    expect(count).toBe(rows.length)
+    expect(count).toBe(1)
+    expect(rows[0].status).toBe('unread')
+    expect(JSON.parse(strFromU8(entries['meta.json'])).filters).toMatchObject({ status: 'unread' })
+
+    repository.list = originalList
+  })
 })
 
 describe('本地导入（backup §3.2）', () => {
