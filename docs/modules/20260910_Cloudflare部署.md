@@ -1,4 +1,4 @@
-> **文档版本**：v0.6
+> **文档版本**：v0.7
 > **应用版本**：v0.7.40
 > **文档状态**：生效（轨 A 默认路径已真实部署验证，2026-09-12 起线上运行）
 > **目的和适用范围**：Cloudflare Workers（轨 A）的部署方式、必填配置与验收步骤。默认口径：**前后端同域合并部署**——前端工作台（apps/web）作为静态资源随 Worker 一起发布（Workers Builds 零 Token，建库/迁移/构建/部署由 `apps/server/scripts/ci-deploy.mjs` 一体完成）；GitHub Actions 为备用口径。以本文为准配置部署；不改 wiki。
@@ -10,6 +10,7 @@
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
 > | --- | --- | --- | --- | --- |
+| v0.7 | v0.7.40 | 2026-09-26 | 记录线上自定义域名 `drop.861306.xyz`（§2 补线上地址与复核结论，§6 同步） | deepseek-v4.1-flash |
 | v0.6 | v0.7.40 | 2026-09-26 | 复核更正过时记录：Cron 已配置（v0.7.35）、真实部署已跑通（2026-09-12）、R2 已绑定（v0.7.39，仅封面）；§6 验收清单同步勾选，文档状态草案→生效 | deepseek-v4.1-flash |
 | v0.5 | v0.7.39 | 2026-09-14 | 封面 R2：binding `COVERS` / 桶 `dogear-covers`；ci-deploy 确保桶存在；`/api/bookmarks/:id/cover` 命中缓存出图 | composer |
 > | v0.4 | v0.7.26 | 2026-09-12 | 前端并入 Worker 同域部署（`[assets]` + `run_worker_first` + SPA 回退）：ci-deploy.mjs 增前端构建步骤、Actions 补构建步骤；**取消 Pages 项目与 CORS 配置**（前端相对路径 `/api` 同域零改动，跨域方案需改前端+Cookie 成本高，经用户拍板合并） | GLM-5.3-Flash |
@@ -35,6 +36,8 @@
 ## 2. 首次准备（路径一 · Workers Builds，零 Token）
 
 **默认口径：全程只用 Cloudflare 面板，不需要创建任何 API Token，也不需要 GitHub Secrets**——Workers Builds（面板的 Git 集成构建）跑在 Cloudflare 自己的构建机上，自带账号凭据。
+
+**线上地址**：<https://drop.861306.xyz/>（Worker `dogear` 的自定义域名；`dogear.<account>.workers.dev` 是同一份部署的默认域名，两者内容一致）。2026-09-26 复核：根路径 200 出登录页，`/health` 200，未鉴权 `/api/*` 401，`/.well-known/capabilities` 返回 JSON；前端资源哈希与本仓库 HEAD 重建产物**逐字节一致**（应用版本 v0.7.40）。
 
 ### 2.1 Worker（后端 API + 数据）
 
@@ -140,7 +143,7 @@ pnpm --filter @dogear/server dev:workers
 
 - [x] 真实首次部署（路径一）：2026-09-12 推 main 后 Workers Builds 自动建库/迁移/部署跑通，线上工作台为新版视觉（用户确认），`DOGEAR_PASSWORD` 登录可用
 - [ ] （可选）路径二 Actions 在真实 Secrets 下跑通（workflow 变更后需重验）——本仓库为私有仓库，Actions 结果与 badge 需登录查看，仍待仓库拥有者核对
-- [x] 打开 Worker 域名根路径即见工作台登录页（前端同域），登录后列表可读、保存可用。2026-09-26 复核：根路径 200 出登录页、`/health` 200、未鉴权 `/api/*` 401、`/.well-known/capabilities` 返回 JSON；线上前端资源哈希与本仓库 HEAD 重建产物**逐字节一致**（应用版本 v0.7.40）
+- [x] 打开线上地址（<https://drop.861306.xyz/>，前端同域）即见工作台登录页，登录后列表可读、保存可用。2026-09-26 复核：根路径 200 出登录页、`/health` 200、未鉴权 `/api/*` 401、`/.well-known/capabilities` 返回 JSON；前端资源哈希与本仓库 HEAD 重建产物**逐字节一致**（应用版本 v0.7.40）
 
 ## 7. 未做的事（2026-09-26 复核）
 

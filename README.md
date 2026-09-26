@@ -28,6 +28,7 @@ DogEar 是本地优先、异步同步的个人网页信息收集与管理工具�
 | 技术架构 | 已定稿         | [技术总纲](wiki/DogEar-技术总纲.md)               |
 | 界面原型 | 可用（mock 数据） | `dev/dogear-workbench`，用于验证界面与交互，不是正式实现   |
 | 正式工程 | 已完工（M5-M7 已完成） | Capture（工作台保存 + Agent Skill API）、Organize（Scene/Folder/Tag/Status 多维组织）、Rediscover（搜索/导航页/最近访问）、Archive（Metadata 提取 + SingleFile 快照）、Backup（本地导入导出 + 通道同步）、Docker 部署（Track B 自托管）全部完成 |
+| 线上运行 | 已上线（Track A） | <https://drop.861306.xyz/> —— Cloudflare Workers 同域部署（工作台 + API），应用版本 v0.7.40；部署与验收见 [部署文档](docs/modules/20260910_Cloudflare部署.md) |
 | 核心契约 | 生效（docs）   | 设计说明：[数据库设计](docs/modules/20260904_数据库设计.md) · [API 设计](docs/modules/20260904_API设计.md)；开发约束：[数据库结构表](docs/数据库结构表.md) · [API 结构表](docs/API结构表.md) |
 
 全部功能已在正式工程中实现，详见 [M1 骨架执行计划](docs/modules/20260903_M1-骨架执行计划.md) 及其后续开发记录。写代码以 `docs/` 根目录结构表为范围；设计说明在 `docs/modules/`。未经授权不写入 `wiki/`。
