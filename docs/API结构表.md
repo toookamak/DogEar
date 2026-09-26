@@ -1,12 +1,12 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.13
-> **应用版本**：v0.7.37
+> **文档版本**：v1.14
+> **应用版本**：v0.7.40
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
 > **配套**：[数据库结构表](./数据库结构表.md) · [API 设计](./modules/20260904_API设计.md)
-> **最后更新日期**：2026-09-14
+> **最后更新日期**：2026-09-26
 > **修改记录**：
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
@@ -27,6 +27,7 @@
 | v1.11 | v0.7.33 | 2026-09-13 | **列表回执增加 `total`（加性变更）**：`GET /api/bookmarks`、`GET /api/bookmarks/search`、`GET /api/inbox` 回执新增 `total`（当前筛选条件下的总数，分页器「共 y 页」用；游标条件不计入统计）。配套：list 关联读取改页级批量（一页 4 条查询替代逐条 4~5 条，Workers Free 档 50 子请求内跑得动整页列表）。导航页 `GET /api/nav/feed` 未动 | glm-5.3-flash |
 | v1.12 | v0.7.34 | 2026-09-13 | **Skill Token 工作台签发 + 快照内容**：`GET/POST /api/skill/token`（会话鉴权；POST 生成一次明文、库内只存 sha256）；`POST /api/archive/process` 在 Track A 用 fetch 轻量抓取；`GET /api/archive/:id/content` 返回已完成快照 HTML（inline metadata）。Skill `snapshot=true` 仍只入队 | glm-4.6 |
 | v1.13 | v0.7.37 | 2026-09-14 | **`save_bookmark` 可选页面元数据（加性）**：入参增加可选 `title`、`excerpt`、`favicon`（Chrome 扩展保存时当场传入；空串视为未传）。调用方已写入的字段事后抓页不覆盖。未传时行为与 v1.12 相同 | composer |
+| v1.14 | v0.7.40 | 2026-09-26 | **管理地基批次一（设计稿 `20260926_管理地基补齐设计.md`）**：①标签改名/合并 `PATCH /api/tags/:id`、`POST /api/tags/:id/merge`（§4.5/§8.4）；②`GET /api/bookmarks` 与 `/search` 加性参数 `createdFrom`/`createdTo`（ISO 日期，时间范围筛选）、`navVisible`（按 nav_rules 求值集过滤）、`sort=important`（收藏标星优先，keyset 分页稳定）；③新增 `GET /api/stats`（侧栏计数/统计聚合，口径同 list：不含回收站、含私密） | glm-5.3-flash |
 
 # API 结构表
 
@@ -157,7 +158,7 @@ Skill 能力默认：查=开，写新=开，改已有=关。关掉仍保留路�
 | GET | `/api/bookmarks/search` | `q` + 同列表筛选 | 200 `{items,nextCursor}` | 标题/URL/标签名/备注；无正文索引 |
 | PATCH | `/api/bookmarks/batch` | 见下 | 200 `{updated[],skipped[]}` | 最多 100；同一事务；回收站 id 进 skipped |
 
-列表/搜索 query：`status` `sceneId` `folderId`（`none`=无文件夹）`tagId` `important` `source` `q` `limit` `cursor`。
+列表/搜索 query：`status` `sceneId` `folderId`（`none`=无文件夹）`tagId` `important` `source` `q` `limit` `cursor`；**v1.14 加性**：`sort`（`recent` 缺省｜`title`｜`domain`｜`important`=收藏标星优先，`important DESC → createdAt DESC → id` 稳定分页）、`createdFrom`/`createdTo`（ISO 日期时间，`created_at` 闭区间）、`navVisible`（`true|false`，按 nav_rules 求值展示集过滤；求值器候选上限 1000 条与 `/api/nav/feed` 同口径）。回执均为 `{items,nextCursor,total}`。
 
 批量体：
 
@@ -209,7 +210,10 @@ Skill 本版无批量。
 | GET/POST | `/api/folders` | |
 | PATCH/DELETE | `/api/folders/:id` | 删文件夹：书签 `folderId=null` |
 | GET/POST | `/api/tags` | POST 遇已有 `name_key` 返回已有 |
+| PATCH | `/api/tags/:id` | **v1.14**：改名，体 `{name}` 非空；撞已有 `name_key` → 409 `CONFLICT`；不存在 → 404。标签按 id 挂载，改名对所有书签即时生效。记 log `rename_tag` |
+| POST | `/api/tags/:id/merge` | **v1.14**：合并到目标，体 `{targetId}`；源标签挂载转移到目标（主键去重）后删除源标签，**不可撤销**；`targetId=自身` → 400，源/目标不存在 → 404。成功 `{ok,moved,target:{id,name}}`。记 log `merge_tag` |
 | DELETE | `/api/tags/:id` | 只解挂载 |
+| GET | `/api/stats` | **v1.14**：侧栏计数/统计聚合。返回 `{total,byStatus,bySource,byFolder[],byScene[],byTag[],importantCount,recycleCount}`；口径与 list 一致（不含回收站，含私密；`byFolder/byScene/byTag` 全量，600 条基线内不分页）。会话鉴权 |
 
 四默认场景由迁移写入，不靠启动接口补种。
 
@@ -340,6 +344,10 @@ tagId=<uuid>
 important=true|false
 source=page|agent|extension
 q=<string>
+sort=recent|title|domain|important   （v1.14 加 important，缺省 recent）
+createdFrom=<ISO 日期时间>            （v1.14 加性，时间范围筛选下限）
+createdTo=<ISO 日期时间>              （v1.14 加性，时间范围筛选上限）
+navVisible=true|false                 （v1.14 加性，按导航规则求值集过滤）
 limit=<1..100>
 cursor=<opaque string>
 ```
@@ -424,6 +432,8 @@ POST 必须有非空 `name`；`aerr` 缺省为 `reference`。PATCH 只允许上�
 文件夹创建和更新字段为 `name`、`parentId`、`sortOrder`；`name` 非空，`parentId` 可为 null，父节点必须存在且不得形成环。GET `/api/folders` 返回 `{items}`。删除文件夹后，其书签 `folderId` 置 null。
 
 标签创建字段为 `name`，服务端生成规范化的 `nameKey`；同一 `nameKey` 返回已有标签而不重复创建。GET `/api/tags` 返回 `{items}`。DELETE `/api/tags/:id` 不存在返回 `NOT_FOUND`，存在时只解除书签挂载，不删除书签。
+
+**v1.14**：标签改名 `PATCH /api/tags/:id` 体为 `{name}`（非空，strict 拒绝未知字段）；撞已有 `nameKey` 返回 409 `CONFLICT`。合并 `POST /api/tags/:id/merge` 体为 `{targetId}`（UUID）；成功 `{ok:true, moved:<number>, target:{id,name}}`。二者均记操作日志（`rename_tag` / `merge_tag`）。
 
 ### 8.5 回收站、建议、访问记录
 
