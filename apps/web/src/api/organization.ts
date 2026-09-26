@@ -17,6 +17,10 @@ export const organizationApi = {
   tags: {
     list: () => api.get<{ items: TagResponse[] }>('/api/tags'),
     create: (data: { name: string }) => api.post<TagResponse>('/api/tags', data),
+    /** 改名（API 结构表 v1.14）；撞已有 name_key 服务端返回 409 CONFLICT */
+    rename: (id: string, data: { name: string }) => api.patch<TagResponse>(`/api/tags/${id}`, data),
+    /** 合并到目标标签（API 结构表 v1.14），回执 {ok, moved, target}；不可撤销 */
+    merge: (id: string, targetId: string) => api.post<{ ok: boolean; moved: number; target: { id: string; name: string } }>(`/api/tags/${id}/merge`, { targetId }),
     remove: (id: string) => api.delete<{ ok: boolean }>(`/api/tags/${id}`),
   },
 }

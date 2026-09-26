@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation, useSearchParams } from 'wouter'
-import { ContentHead } from '../components/layout/ContentHead.js'
 import { WorkspaceToolbar, type SortKey, type ViewMode } from '../components/bookmarks/WorkspaceToolbar.js'
 import { BookmarkGridView } from '../components/bookmarks/BookmarkGridView.js'
 import { BookmarkTableView } from '../components/bookmarks/BookmarkTableView.js'
@@ -21,6 +20,7 @@ import { offerUndo, onDataChanged } from '../undo.js'
 import { toast, errorMessage } from '../toast.js'
 import { presentationForAerr, nextSortOnSceneChange, DEFAULT_PRESENTATION } from '../utils/scene-presentation.js'
 import { scenesForPicker } from '../utils/scene-filtering.js'
+import { EMPTY_FILTERS, buildListParams, hasActiveFilters, type WorkbenchFilters } from '../utils/filters.js'
 import { onOrgChanged } from '../org-events.js'
 
 const VIEW_STORAGE_KEY = 'dogear.workbench.view'
@@ -36,18 +36,6 @@ const SKELETON_VARIANT: Record<ViewMode, 'grid' | 'tiles' | 'table' | 'board'> =
   board: 'board',
 }
 
-/** 各导航位置的标题与说明；说明取自 PRD 对三种处理状态的定位 */
-const NAV_META: Record<string, { title: string; description: string }> = {
-  '/': {
-    title: '待处理',
-    description: 'Inbox：新进入资料库的链接。可长期停留，不强制整理（PRD §2.0.2）。',
-  },
-  '/bookmarks': {
-    title: '书签',
-    description: '全部书签，可按状态、场景、文件夹、标签筛选，或直接搜索。',
-  },
-}
-
 function readStoredView(): ViewMode {
   try {
     const stored = window.localStorage.getItem(VIEW_STORAGE_KEY)
@@ -59,7 +47,6 @@ function readStoredView(): ViewMode {
 export function WorkbenchPage() {
   const [location, setLocation] = useLocation()
   const isInbox = location === '/'
-  const meta = NAV_META[location] ?? { title: '工作台', description: '' }
 
   const [bookmarks, setBookmarks] = useState<BookmarkResponse[]>([])
   const [page, setPage] = useState(0)
@@ -76,7 +63,7 @@ export function WorkbenchPage() {
   const [scenes, setScenes] = useState<SceneResponse[]>([])
   const [folders, setFolders] = useState<FolderResponse[]>([])
   const [tags, setTags] = useState<TagResponse[]>([])
-  const [filters, setFilters] = useState({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
+  const [filters, setFilters] = useState<WorkbenchFilters>(EMPTY_FILTERS)
   const [searchParams, setSearchParams] = useSearchParams()
   // 每页的入口游标（keyset）：stack[i] = 第 i 页的取数游标（第 0 页为 null）。
   // 上一页 = 退回上一格游标，避免为「页码跳转」改用 offset 牺牲排序稳定性。
@@ -115,7 +102,7 @@ export function WorkbenchPage() {
     if (save === '1') setShowSaveForm(true)
     if (clear === '1') {
       // 清掉全部筛选，并把排序交还给默认值——否则停留在上个 Scene 带过来的排序上
-      setFilters({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
+      setFilters(EMPTY_FILTERS)
       setSort(DEFAULT_PRESENTATION.defaultSort)
     } else if (sceneId || folderId || tagId) {
       setFilters((f) => ({
@@ -131,16 +118,7 @@ export function WorkbenchPage() {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams])
 
-  const queryParams = useCallback((): BookmarkListParams => {
-    const params: BookmarkListParams = { sort }
-    if (!isInbox && filters.status) params.status = filters.status
-    if (filters.sceneId) params.sceneId = filters.sceneId
-    if (filters.folderId) params.folderId = filters.folderId
-    if (filters.tagId) params.tagId = filters.tagId
-    if (filters.source) params.source = filters.source
-    if (filters.q.trim()) params.q = filters.q.trim()
-    return params
-  }, [filters, isInbox, sort])
+  const queryParams = useCallback((): BookmarkListParams => buildListParams(filters, sort, isInbox), [filters, isInbox, sort])
 
   /**
    * 取指定页（缺省刷新当前页）。游标来自 cursorStackRef——只有真正访问过的页
@@ -310,10 +288,9 @@ export function WorkbenchPage() {
     }
   }
 
-  const hasActiveFilters = filters.q !== '' || filters.source !== '' || filters.status !== '' ||
-    filters.sceneId !== '' || filters.folderId !== '' || filters.tagId !== ''
+  const hasFilters = hasActiveFilters(filters)
 
-  const clearFilters = () => setFilters({ q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '' })
+  const clearFilters = () => setFilters(EMPTY_FILTERS)
 
   const pageCount = total !== null ? Math.ceil(total / PAGE_SIZE) : null
 
@@ -364,73 +341,30 @@ export function WorkbenchPage() {
 
   return (
     <div className="workbench">
-      <ContentHead
-        title={activeScene ? activeScene.name : meta.title}
-        count={total ?? bookmarks.length}
-        description={activeScene?.description || meta.description}
-        actions={
-          <>
-            <button type="button" className="btn btn--primary" onClick={() => setShowSaveForm(true)}>
-              添加书签
-            </button>
-            {/* Scene 视图的主操作：文案随该 Scene 的 AERR 原型变化（PRD §2.0.3）。
-                这里只换文案与引导，不伪造独立功能——点击后落到当前筛选结果上。 */}
-            {activeScene && (
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => {
-                  document.querySelector('.bookmark-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }}
-              >
-                {presentation.primaryAction}
-              </button>
-            )}
-          </>
-        }
-      />
-
+      {/* 单行工具栏（视觉稿 v2 确认口径）：搜索 / 筛选弹层 / 排序 / 视图 / 场景主操作 / 添加书签。
+          原 ContentHead（标题+计数+描述）整体去除，计数由侧栏承担；
+          Scene 视图的 AERR 主操作以 ghost 按钮并入本行。 */}
       <WorkspaceToolbar
         query={filters.q}
-        source={filters.source}
+        filters={filters}
         sort={sort}
         view={viewMode}
+        scenes={scenes}
+        folders={folders}
+        tags={tags}
+        showFilters={!isInbox}
         suggestionCount={pendingSuggestionTotal}
+        scenePrimaryAction={activeScene ? presentation.primaryAction : undefined}
         onQuery={(q) => setFilters((f) => ({ ...f, q }))}
-        onSource={(source) => setFilters((f) => ({ ...f, source }))}
+        onFilters={(patch) => setFilters((f) => ({ ...f, ...patch }))}
         onSort={setSort}
         onView={changeView}
         onReviewSuggestions={reviewSuggestions}
+        onAdd={() => setShowSaveForm(true)}
+        onScenePrimaryAction={() => {
+          document.querySelector('.bookmark-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }}
       />
-
-      {!isInbox && (
-        <div className="filter-row">
-          <select className="input" value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
-            <option value="">全部状态</option>
-            <option value="unread">待处理</option>
-            <option value="saved">已确认</option>
-            <option value="archived">搁置</option>
-          </select>
-          <select className="input" value={filters.sceneId} onChange={(e) => setFilters((f) => ({ ...f, sceneId: e.target.value }))}>
-            <option value="">全部场景</option>
-            {/* 停用场景保留在筛选里并加标注：停用不删历史挂载，仍要能筛到已挂的书签 */}
-            {scenes.map((scene) => (
-              <option key={scene.id} value={scene.id}>
-                {scene.enabled === false ? `${scene.name}（已停用）` : scene.name}
-              </option>
-            ))}
-          </select>
-          <select className="input" value={filters.folderId} onChange={(e) => setFilters((f) => ({ ...f, folderId: e.target.value }))}>
-            <option value="">全部文件夹</option>
-            <option value="none">无文件夹</option>
-            {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-          </select>
-          <select className="input" value={filters.tagId} onChange={(e) => setFilters((f) => ({ ...f, tagId: e.target.value }))}>
-            <option value="">全部标签</option>
-            {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
-          </select>
-        </div>
-      )}
 
       {showSaveForm && (
         <div className="save-form-wrap">
@@ -499,7 +433,7 @@ export function WorkbenchPage() {
       <section className="bookmark-area" data-density={presentation.density}>
         <div className="bookmark-summary">
           <span>共 {total ?? bookmarks.length} 条</span>
-          {hasActiveFilters && (
+          {hasFilters && (
             <button type="button" className="clear-btn" onClick={clearFilters}>清除筛选</button>
           )}
         </div>
@@ -509,14 +443,14 @@ export function WorkbenchPage() {
         {!loading && !error && bookmarks.length === 0 && (
           <EmptyState
             message={
-              hasActiveFilters
+              hasFilters
                 ? '当前筛选条件下没有书签'
                 : isInbox ? 'Inbox 为空' : '暂无书签'
             }
             // 有筛选时才给「清除筛选」——这才是死胡同的出口；
             // 真正没数据时给「添加第一条」，指向页面顶部的添加入口。
             action={
-              hasActiveFilters
+              hasFilters
                 ? { label: '清除筛选', onClick: clearFilters }
                 : { label: '添加第一条', onClick: () => setShowSaveForm(true) }
             }

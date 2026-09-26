@@ -23,7 +23,7 @@ export function OrganizationPage() {
     scenes, folders, tags, loading, error,
     addScene, updateScene, deleteScene,
     addFolder, updateFolder, deleteFolder,
-    addTag, deleteTag,
+    addTag, deleteTag, renameTag, mergeTag,
   } = useOrganization()
 
   return (
@@ -67,7 +67,7 @@ export function OrganizationPage() {
                 />
               )}
               {tab === 'tags' && (
-                <TagManager tags={tags} onCreate={addTag} onDelete={deleteTag} />
+                <TagManager tags={tags} onCreate={addTag} onRename={renameTag} onMerge={mergeTag} onDelete={deleteTag} />
               )}
               {tab === 'navrules' && (
                 <NavRuleManager scenes={scenes} folders={folders} tags={tags} />

@@ -3,6 +3,7 @@ import { useLocation } from 'wouter'
 import { navItems, settingsNavItem, isActive } from '../../app/navigation.js'
 import { organizationApi } from '../../api/organization.js'
 import { onOrgChanged } from '../../org-events.js'
+import { useStats, countForDimension } from '../../stats-store.js'
 import type { SceneResponse, FolderResponse, TagResponse } from '../../types/api.js'
 
 interface SidebarProps {
@@ -21,6 +22,8 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
   const [folders, setFolders] = useState<FolderResponse[]>([])
   const [tags, setTags] = useState<TagResponse[]>([])
   const [loaded, setLoaded] = useState(false)
+  // v1.14：真实计数来自 GET /api/stats（store 自行处理拉取与变更刷新）
+  const { stats } = useStats()
 
   useEffect(() => {
     let cancelled = false
@@ -62,28 +65,39 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
     go(`/bookmarks?${param}=${encodeURIComponent(id)}`)
   }
 
+  /** 顶部导航计数：Inbox = 未读（byStatus.unread），书签 = 总数 */
+  const navCount = (path: string): number | null => {
+    if (!stats) return null
+    if (path === '/') return stats.byStatus?.unread ?? 0
+    if (path === '/bookmarks') return stats.total
+    return null
+  }
+
   return (
     <aside className={`sidebar${open ? ' sidebar--open' : ''}`}>
       <nav className="sidebar-group">
         <div className="sidebar-nav">
-          {navItems.map((item) => (
-            <button
-              key={item.path}
-              type="button"
-              className="nav-item"
-              aria-current={isActive(location, item.path) ? 'page' : undefined}
-              onClick={() => (item.path === '/' || item.path === '/bookmarks' ? goWorkbench(item.path) : go(item.path))}
-            >
-              {item.label}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const count = navCount(item.path)
+            return (
+              <button
+                key={item.path}
+                type="button"
+                className="nav-item"
+                aria-current={isActive(location, item.path) ? 'page' : undefined}
+                onClick={() => (item.path === '/' || item.path === '/bookmarks' ? goWorkbench(item.path) : go(item.path))}
+              >
+                {item.label}
+                {count !== null && <span className="nav-item-count">{count}</span>}
+              </button>
+            )
+          })}
         </div>
       </nav>
 
       <div className="sidebar-group">
-        {/* 计数取自已加载的列表，零额外请求。
-            各维度的「该维度下有多少书签」需要统计接口，本版 API 结构表不允许新增路由，
-            故只显示维度自身的条目数（见 docs/modules/20260910_工作台外壳屏稿.md §4）。 */}
+        {/* v1.14 起各维度行显示「该维度下有多少书签」，来自 GET /api/stats 聚合；
+            此前的近似口径（取已加载列表 / 仅维度条目数）已移除。 */}
         <h3 className="sidebar-group-title">场景 <span className="group-count">{scenes.length}</span></h3>
         {scenes.length === 0 ? (
           <p className="sidebar-empty">
@@ -93,17 +107,21 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
           <div className="sidebar-nav">
             {/* 停用场景保留入口：停用只是从挑选器消失，已挂上的书签仍要能按它筛到
                 （docs/modules/20260904_数据库设计.md）。故弱化显示而非隐藏。 */}
-            {scenes.map((scene) => (
-              <button
-                key={scene.id}
-                type="button"
-                className={`nav-item${scene.enabled === false ? ' nav-item--muted' : ''}`}
-                title={scene.enabled === false ? '该场景已停用；仍可筛出已挂在它下面的书签' : undefined}
-                onClick={() => goFiltered('sceneId', scene.id)}
-              >
-                {scene.name}
-              </button>
-            ))}
+            {scenes.map((scene) => {
+              const count = countForDimension(stats?.byScene, scene.id)
+              return (
+                <button
+                  key={scene.id}
+                  type="button"
+                  className={`nav-item${scene.enabled === false ? ' nav-item--muted' : ''}`}
+                  title={scene.enabled === false ? '该场景已停用；仍可筛出已挂在它下面的书签' : undefined}
+                  onClick={() => goFiltered('sceneId', scene.id)}
+                >
+                  {scene.name}
+                  {count !== null && <span className="nav-item-count">{count}</span>}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -116,38 +134,56 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
           </p>
         ) : (
           <div className="sidebar-nav">
-            {folders.map((folder) => (
-              <button
-                key={folder.id}
-                type="button"
-                className="nav-item"
-                onClick={() => goFiltered('folderId', folder.id)}
-              >
-                {folder.name}
-              </button>
-            ))}
+            {folders.map((folder) => {
+              const count = countForDimension(stats?.byFolder, folder.id)
+              return (
+                <button
+                  key={folder.id}
+                  type="button"
+                  className="nav-item"
+                  onClick={() => goFiltered('folderId', folder.id)}
+                >
+                  {folder.name}
+                  {count !== null && <span className="nav-item-count">{count}</span>}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
 
       <div className="sidebar-group">
-        <h3 className="sidebar-group-title">标签 <span className="group-count">{tags.length}</span></h3>
+        <h3 className="sidebar-group-title">
+          标签 <span className="group-count">{tags.length}</span>
+          {/* 改名 / 合并的完整管理面在组织管理页（v1.14）；侧栏只给入口 */}
+          <a
+            className="sidebar-empty-link group-manage-link"
+            href="/organization"
+            onClick={(e) => { e.preventDefault(); go('/organization') }}
+          >
+            管理
+          </a>
+        </h3>
         {tags.length === 0 ? (
           <p className="sidebar-empty">
             {loaded ? <>还没有标签 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
           </p>
         ) : (
           <div className="sidebar-nav">
-            {tags.map((tag) => (
-              <button
-                key={tag.id}
-                type="button"
-                className="nav-item"
-                onClick={() => goFiltered('tagId', tag.id)}
-              >
-                {tag.name}
-              </button>
-            ))}
+            {tags.map((tag) => {
+              const count = countForDimension(stats?.byTag, tag.id)
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  className="nav-item"
+                  onClick={() => goFiltered('tagId', tag.id)}
+                >
+                  <span className="nav-item-tag-hash" aria-hidden="true">#</span>{tag.name}
+                  {count !== null && <span className="nav-item-count">{count}</span>}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>

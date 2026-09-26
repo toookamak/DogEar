@@ -11,8 +11,14 @@ export interface BookmarkListParams {
   important?: string
   source?: string
   q?: string
-  /** 排序：recent（默认）| title | domain，由服务端排序 */
+  /** 排序：recent（默认）| title | domain | important（收藏标星优先），由服务端排序 */
   sort?: string
+  /** 时间范围筛选下限（ISO；v1.14） */
+  createdFrom?: string
+  /** 时间范围筛选上限（ISO；v1.14） */
+  createdTo?: string
+  /** 是否在导航页展示（按 nav_rules 求值集过滤；v1.14） */
+  navVisible?: 'true' | 'false'
 }
 
 export const bookmarksApi = {

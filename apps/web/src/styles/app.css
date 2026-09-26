@@ -381,7 +381,8 @@ input[type="radio"] {
 
 /* 分组标题（原型 .nav-label：小号大写宽字距） */
 .sidebar-group-title {
-  display: block;
+  display: flex;
+  align-items: baseline;
   padding: 0 var(--space-2);
   margin: var(--space-2) 0 var(--space-2);
   font-size: 10.5px;
@@ -398,6 +399,43 @@ input[type="radio"] {
   font-weight: 400;
   font-size: 10px;
   color: var(--faint);
+}
+
+/* 标签分组标题右侧的「管理」入口（改名/合并的完整管理面在组织管理页） */
+.group-manage-link {
+  margin-left: auto;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  font-weight: 400;
+  text-transform: none;
+}
+
+.group-manage-link:hover {
+  color: var(--amber-strong);
+}
+
+/* 维度行的书签计数（v1.14，来自 GET /api/stats） */
+.nav-item-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.nav-item[aria-current="page"] .nav-item-count {
+  color: var(--amber-strong);
+}
+
+/* 行内已有计数徽标时，「停用」角标不再抢占右缘（两个 auto margin 会把内容拆散） */
+.nav-item--muted:has(.nav-item-count)::after {
+  margin-left: var(--space-1);
+}
+
+/* 标签名前的 # 前缀（对齐卡片 tag pill 的琥珀口径） */
+.nav-item-tag-hash {
+  color: var(--amber);
+  opacity: 0.75;
+  margin-right: 2px;
 }
 
 .sidebar-nav {
@@ -908,56 +946,9 @@ input[type="radio"] {
   }
 }
 
-/* ---------------------------------------------------------------- 内容头
- * （原型 .content-head：eyebrow + 衬线标题 + mono 琥珀计数 + 说明）
- */
-
-.content-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-6) var(--space-6) var(--space-3);
-}
-
-.content-head-text {
-  min-width: 0;
-}
-
-.content-head-title {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--text);
-}
-
-.content-head-count {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--amber);
-  vertical-align: 2px;
-  margin-left: 2px;
-}
-
-.content-head-desc {
-  margin: var(--space-1) 0 0;
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  color: var(--muted);
-  max-width: 56ch;
-}
-
-.content-head-actions {
-  display: flex;
-  flex-shrink: 0;
-  gap: var(--space-2);
-}
-
 /* ---------------------------------------------------------------- 工具栏
- * （原型 .toolbar：搜索框 + filter chips + 排序 + 视图切换）
+ * （单行口径，视觉稿 v2：搜索 + 筛选弹层锚点 + 排序 + 视图切换 + 主操作。
+ *   原 .content-head（衬线标题 + 计数 + 描述）随批次二移除，计数由侧栏承担。）
  */
 
 .toolbar {
@@ -1018,6 +1009,92 @@ input[type="radio"] {
 
 .toolbar-search-clear:hover {
   color: var(--text);
+}
+
+/* ---- 筛选弹层（方向 A：全部维度收进「筛选」按钮，生效数显示在按钮上） ---- */
+
+.toolbar-filter-anchor {
+  position: relative;
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--panel);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-color);
+  white-space: nowrap;
+}
+
+.filter-toggle:hover {
+  background-color: var(--panel-raised);
+  border-color: var(--amber);
+}
+
+/* 有生效筛选时点亮为琥珀（对齐 chip 选中态：柔底 + 琥珀字 + 琥珀边） */
+.filter-toggle--on {
+  background-color: var(--amber-soft);
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+  color: var(--amber-strong);
+}
+
+.filter-toggle-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background-color: var(--amber);
+  color: var(--on-accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.filter-pop {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3) var(--space-4);
+  width: min(720px, calc(100vw - 320px));
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 8px);
+  background-color: var(--panel);
+  box-shadow: var(--shadow-lg);
+}
+
+.fp-field {
+  display: block;
+  min-width: 0;
+}
+
+.fp-label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.fp-field .input {
+  width: 100%;
 }
 
 .toolbar-kbd {
@@ -2083,7 +2160,7 @@ input[type="radio"] {
   min-height: 100%;
 }
 
-/* 组织维度筛选行（状态 / 场景 / 文件夹 / 标签） */
+/* 组织维度筛选行（v1.14 批次二起由工具栏「筛选」弹层承担，样式保留仅为兼容回退） */
 .filter-row {
   display: flex;
   gap: var(--space-2);
@@ -3062,10 +3139,18 @@ input[type="radio"] {
 @media (max-width: 767px) {
   .content-head,
   .toolbar,
+  .toolbar-wrap,
   .filter-row,
   .save-form-wrap {
     padding-left: var(--space-4);
     padding-right: var(--space-4);
+  }
+
+  /* 弹层在窄屏收为贴边单列，避免 720px 宽度溢出 */
+  .filter-pop {
+    width: calc(100vw - 2 * var(--space-4));
+    max-width: calc(100vw - 2 * var(--space-4));
+    grid-template-columns: 1fr;
   }
 
   .bookmark-area {
@@ -3226,4 +3311,19 @@ input[type="radio"] {
 
 .channel-form-actions--center {
   justify-content: center;
+}
+
+/* ---------------------------------------------------------------- 标签管理（v1.14：改名 / 合并） */
+
+.tag-chip-rename-input {
+  width: 96px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.merge-label {
+  align-self: center;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
 }

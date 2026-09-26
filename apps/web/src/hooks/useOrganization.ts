@@ -82,6 +82,22 @@ export function useOrganization() {
     notifyOrgChanged()
   }, [])
 
+  /** 改名（v1.14）：撞已有 name_key 服务端 409，错误透传给调用方展示 */
+  const renameTag = useCallback(async (id: string, data: { name: string }) => {
+    const res = await organizationApi.tags.rename(id, data)
+    setTags(prev => prev.map(t => t.id === id ? res : t))
+    notifyOrgChanged()
+    return res
+  }, [])
+
+  /** 合并到目标标签（v1.14）：源标签消失、挂载转移，成功后从本地列表移除并广播 */
+  const mergeTag = useCallback(async (id: string, targetId: string) => {
+    const res = await organizationApi.tags.merge(id, targetId)
+    setTags(prev => prev.filter(t => t.id !== id))
+    notifyOrgChanged()
+    return res
+  }, [])
+
   useEffect(() => {
     load()
   }, [load])
@@ -91,6 +107,6 @@ export function useOrganization() {
     loading, error,
     addScene, updateScene, deleteScene,
     addFolder, updateFolder, deleteFolder,
-    addTag, deleteTag,
+    addTag, deleteTag, renameTag, mergeTag,
   }
 }
