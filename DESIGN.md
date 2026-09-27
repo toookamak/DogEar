@@ -50,6 +50,7 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 | `--amber-soft` | `rgba(246,130,31,0.13)` | 选中底、focus ring |
 | `--mint` / `--mint-soft` | `#448361` / 0.14 | 成功、已确认、agent 来源 |
 | `--red` / `--red-soft` | `#d44c47` / 0.12 | 错误、危险按钮 |
+| `--warn` / `--warn-soft` | `#c99a2e` / 0.16 | 同步灯「有修改未同步」专用黄（2026-09-27 新增）。**与 `--amber` 分开**：accent 橙的语义是「可点、被选中、主操作」，拿它当状态色会让「待同步」看起来像个可点的主操作。深色 `#dcb457` / 0.16。注意与别名区的 `--color-text-warning`（指向 `--rust` 褐）不是同一语义 |
 | `--blue` / `--blue-soft` | `#337ea9` / 0.14 | 信息、待推送 |
 | `--indigo` / `--rust` / `--slate` | `#6940a5` / `#9f6b53` / `#787774` | 预留与来源着色（插件=赭石、搁置=灰） |
 
@@ -149,12 +150,21 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 - 详情抽屉：右缘滑入，纯黑系大模糊投影
 - Toast：`--panel-raised` 底 + 左缘 2px 实色（成功=薄荷/失败=红/信息=橙），带撤销按钮时文字用橙
 
+### 外壳常驻状态区（2026-09-27 新增）
+- **同步胶囊（顶栏右上角）**：折叠态 = 三色灯箱（绿=数据一致 / 黄=有修改未同步 / 红=出错 / 黄绿交替=正在同步）+ **常驻**积压数；`--radius-full-pill`、`--control-h` 32px、`--panel-raised` 底。悬停或点击**向左**滑出操作浮条（拉取 / 推送 + 待推送 / 失败 / 上次推送）。浮条内容**贴右缘**（`justify-content: flex-end`）——宽度由 0 增长时最右侧先出现，读到的方向才是「向左生长」，用默认 `flex-start` 会读成向右展开；收起态用 `visibility: hidden` 把内部按钮移出 Tab 序列（只用 `opacity` 时键盘仍会聚焦到看不见的按钮）。同步状态的**唯一入口**：底部状态栏不再重复展示
+- **账户菜单（侧栏左下角）**：侧栏贴底，弹层只能朝上。合并原「设置」单项 + 原顶栏的主题切换与退出。触发器 `--control-h` 32px，菜单 = 侧栏内容宽 + `--radius-lg` + `--modal-shadow`；「主题」行的浅 / 深两态写**显式偏好**（语义同删除前的顶栏按钮），「跟随系统」三态仍在设置页「外观」
+- 一般规则：**系统级动作（设置 / 主题 / 退出）收在一处，不放顶栏**；顶栏只放全局状态与全局入口，且同一动作不两处并列（「两个添加书签」是反例）
+
 ## 5. 布局原则
 
 ### 5.1 外壳、间距与网格
 
 - 外壳：顶栏 48px + 侧栏 228px（`--sidebar-bg` 浅灰底）+ 内容区 + 状态栏 28px；窄屏（<768px）侧栏转为覆盖式抽屉（含遮罩）
-- 内容区主留白：水平 30px（`--space-6`）起步；间距体系 4/8/12/16/22/30（`--space-1..6`）
+  - 侧栏自身内衬 `--space-2`；**一级导航扁平无容器**，场景 / 文件夹 / 标签三组各为一张白卡（`--panel` 底 + `--line` 边 + `--radius-lg`）——分组关系由卡面表达，不靠 16px 空白让人猜（2026-09-27，方案 C）
+  - 侧栏分组标题的左内距与 `.nav-item` 相同（`--space-2`），两者左缘必须对齐；此前标题比条目更靠外 4px，缩进关系是反的
+- 内容区主留白：水平 32px（`--space-6`）起步；间距刻度 **2/4/8/12/16/24/32/48/64**（`--space-0..8`，8 档全为 4px 倍数）
+  - 例外白名单（允许写死 px）：`0`、`1px`/`2px` 描边微调、`auto`、空状态与加载态的居中大留白、`.toolbar-sort` 的 28px chevron 预留、`.view-switcher` 的 3px 内衬（与 `height: calc(--control-h - 6px)` 配对）
+  - **禁止**再引入与 `--space-*` 名字形状相同、数值不同的第二套间距刻度（原 `--spacing-*` 17 档已删除：`--spacing-6`=6px 与 `--space-6`=32px 相差 5 倍，笔误不报错、只让界面多出几十像素空白）
 - 网格：书签卡 `minmax(228px,1fr)`；紧凑密度（reference 类场景）收窄为 200px 并隐藏摘要
 - 空状态：虚线框 + 白底 + 居中文案 + 下一步动作按钮
 
@@ -164,21 +174,21 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 
 | Token | 值 | 归属 |
 | --- | --- | --- |
-| `--radius-sm` | 3px | 微件：`.topbar-kbd`、`.palette-kbd`、色点容器、骨架条 |
-| `--radius` | 4px | 输入与卡片：`.input` / `select` / `.textarea`、`.topbar-search`、`.toolbar-search`、`.card`、`.bm-card`、`.bm-tile`、`.bm-board-col`、`.bm-table`、`.stat-item`、`.empty-state`、`.chip`、`.btn--pill`、`.tag-pill`、`.tag-chip`、`.bm-card-chip`、`.bm-tile-icon`、`.view-btn` |
-| `--radius-lg` | 6px | 按钮与面板：`.btn--primary`、`.btn--ghost`、`.icon-btn`、`.nav-item`、`.settings-tab`、`.tab-btn`、`.settings-section`、`.filter-pop`、`.sync-card`、`.view-switcher`、`.toast`、`.selection-bar` |
+| `--radius-sm` | 3px | 微件：`.topbar-kbd`、`.palette-kbd`、色点容器、骨架条、`.account-item`、`.account-seg` 内按钮 |
+| `--radius` | 4px | 输入与卡片：`.input` / `select` / `.textarea`、`.topbar-search`、`.toolbar-search`、`.card`、`.bm-card`、`.bm-tile`、`.bm-board-col`、`.bm-table`、`.stat-item`、`.empty-state`、`.chip`、`.btn--pill`、`.tag-pill`、`.tag-chip`、`.bm-card-chip`、`.bm-tile-icon`、`.view-btn`、`.account-seg` |
+| `--radius-lg` | 6px | 按钮与面板：`.btn--primary`、`.btn--ghost`、`.icon-btn`、`.nav-item`、`.settings-tab`、`.tab-btn`、`.settings-section`、`.filter-pop`、`.view-switcher`、`.toast`、`.selection-bar`、`.sidebar-group`（维度白卡）、`.account-trigger`、`.account-menu` |
 | `--radius-featured` | 8px | 弹层：`.modal`、`.palette`、`.auth-card` |
-| `--radius-full-pill` | 9999px | 仅计数徽标与状态 pill |
+| `--radius-full-pill` | 9999px | 仅计数徽标、状态 pill 与同步胶囊 / 浮条（`.sync-lamp`、`.sync-strip`） |
 
-例外（不算违规）：品牌字标方块的 `6px`、圆形元素（勾选键、状态点、favicon 圆标）的 `50%`、骨架屏齐边元素的 `0`。
+例外（不算违规）：品牌字标方块的 `6px`、圆形元素（勾选键、状态点、favicon 圆标、`.account-avatar`、`.sync-lamp-dot`）的 `50%`、骨架屏齐边元素的 `0`。
 
 控件高度刻度：
 
 | Token | 值 | 归属 |
 | --- | --- | --- |
-| `--control-h` | 32px | `.btn` 全族、`.toolbar-search`、`.filter-toggle`、`.toolbar-sort`、`.view-switcher`、单行 `.input` |
+| `--control-h` | 32px | `.btn` 全族、`.toolbar-search`、`.filter-toggle`、`.toolbar-sort`、`.view-switcher`、单行 `.input`、`.nav-item`、`.sync-lamp`、`.sync-strip`、`.account-trigger`、`.account-item`、`.account-row` |
 | `--control-h-sm` | 28px | `.chip` |
-| `--control-h-xs` | 24px | `.mini-btn` |
+| `--control-h-xs` | 24px | `.mini-btn`、`.sync-strip-btn`、`.account-seg` 内按钮 |
 | `--icon-btn-size` | 30px | `.icon-btn`（仅顶栏） |
 
 修订说明：本轮修正了 7 处偏离——按钮族原停在 3px（应 6px）、输入原 3px（应 4px）、`.settings-section` 原 4px（应 6px）、模态与命令面板原 6px（应 8px）、`.bm-card-chip` / `.tag-pill` / `.tag-chip` 原硬编码 5px（应 4px）、`.filter-pop` 原引用从未定义的 `--radius-md`（吃 fallback 8px，应 6px）。
@@ -201,6 +211,7 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 ## 7. 交互与动效
 
 - 过渡**只有两档**：颜色 / 边框 / 背景 `150ms ease`（`--transition-color`）、阴影 / 位移 `200ms ease`（`--transition-shadow`）；两者都要的场景用 `--transition-state`。不写别的时长
+- 例外：**状态类循环动画**不受两档约束——骨架屏 1.2s 呼吸、同步灯出错闪烁 1.1s、同步中黄绿交替 1.4s。这类动画一律要加 `@media (prefers-reduced-motion: reduce)` 停用（见 `.skel-*` 与 `.sync-lamp-dot`）
 - hover：按钮 / 导航 / 列表行 = 「浅灰一档加深」；卡片族 = 白底 + 轻投影 + 上移 1px（见 §4）；主按钮 hover = 橙加深
 - 焦点：container 类用 outline、控件类用橙 ring，见 §4「导航与选中态」
 - 骨架屏：面板底色呼吸闪烁（1.2s），尊重 `prefers-reduced-motion` 时停用
@@ -211,7 +222,8 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 | 宽度 | 变化 |
 | --- | --- |
 | <768px | 侧栏转抽屉、内容留白降到 16px、网格单列、看板 78vw 横滚、顶栏搜索只留图标 |
-| ≥768px | 完整外壳 |
+| <1366px | 同步浮条改为右锚定、落在顶栏下沿之下。原因：宽屏版浮条要在顶栏中段水平向左滑出，需要约 380px 空档（空档 ≈ `(视口宽 - 599) / 2`），中窄视口装不下会把搜索入口压住 |
+| ≥1366px | 完整外壳；同步浮条在顶栏内水平向左滑出 |
 
 ## 9. Agent 指南（写界面时的快查）
 
@@ -226,6 +238,7 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 9. AERR 四词（action/explore/read/reference）**永不出现**在界面上，用「用途」行为文案（见 SceneManager 的 `PURPOSE_OPTIONS`）
 10. 新增主题时：复制 tokens.css 的 `:root` 块按主题重定义值；本文 §2/§6 的具体色值与阴影对该主题不再适用，但 §3.1/§4/§5/§7 的结构语义不变
 11. 改完先跑 `pnpm --filter @dogear/web typecheck && pnpm --filter @dogear/web build`；无法目视验证时要在交付说明里写明
+12. 系统级动作（设置 / 主题 / 退出）只放在**侧栏左下角的账户菜单**；顶栏只放全局状态与全局入口，且同一动作不在两处并列（见 §4「外壳常驻状态区」）
 
 ## 10. 图标规范（2026-09-27 新增）
 
@@ -237,7 +250,9 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 - 一律 `aria-hidden="true"` + `focusable="false"`：图标不承载语义，语义由按钮的 `aria-label` 或可见文字承担
 - 签名：`<Icon name="search" />` / `<Icon name="close" size={12} />`
 
-**现有清单**：`search`、`filter`、`grid`、`tags`、`list`、`board`、`edit`、`swap`、`close`、`external`。
+**现有清单**（23 个）：`search`、`filter`、`grid`、`tags`、`list`、`board`、`edit`、`swap`、`close`、`external`、`menu`、`inbox`、`bookmark`、`compass`、`layers`、`trash`、`settings`、`sparkle`、`folder`、`sun`、`moon`、`logout`、`chevron`。
+
+**实现约束**：`Icon.tsx` 的 `PATHS` 是 `Record<IconName, string>` 且只渲染**一个** `<path d>`。所以每个图标必须把全部子路径用空格拼在同一个 `d` 里（`M...Z M...Z`）；圆 / 弧要用 `a` 参数表达，**不能改用多个 `<path>` 元素**——那样会破坏这套实现。新增图标同时要更新 `IconName` 联合类型与清单。
 
 **禁止**
 - 禁止用 Unicode 符号充当图标（`⌕ ⚙ ▦ ◈ ☷ ▤ ✎ ⇄ ×` 等）——来自不同字体，字宽、粗细、基线各不相同
