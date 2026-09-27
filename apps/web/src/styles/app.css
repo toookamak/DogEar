@@ -370,7 +370,7 @@ input[type="radio"] {
   min-width: var(--sidebar-w);
   height: 100%;
   border-right: 1px solid var(--line);
-  background-color: var(--panel);
+  background-color: var(--sidebar-bg, var(--panel));
   overflow-y: auto;
 }
 
@@ -1216,7 +1216,7 @@ input[type="radio"] {
 .view-btn[aria-pressed="true"] {
   color: var(--on-accent);
   background-color: var(--amber);
-  box-shadow: 0 1px 3px rgba(88, 72, 44, 0.28);
+  box-shadow: 0 1px 3px rgba(15, 15, 15, 0.24);
 }
 
 @media (max-width: 1240px) {

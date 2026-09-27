@@ -3,25 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <style>
-      /* 与 DogEar 工作台同一套暖纸视觉（tokens 见 apps/web/src/styles/tokens.css） */
+      /* 与 DogEar 工作台同一套 Notion 风 × Cloudflare 橙视觉（tokens 见 apps/web/src/styles/tokens.css） */
       :root {
-        --canvas: #faf9f5;
+        --canvas: #ffffff;
         --panel: #ffffff;
-        --panel-raised: #f6f4ef;
-        --line: #e9e5dc;
-        --line-strong: #d3cdbf;
-        --text: #2e2a23;
-        --muted: #716b5e;
-        --faint: #a29b8c;
-        --amber: #cf6a43;
-        --amber-strong: #b8562f;
-        --amber-soft: rgba(207, 106, 67, 0.09);
-        --mint: #3f7a5c;
-        --mint-soft: rgba(63, 122, 92, 0.09);
-        --red: #bd5449;
-        --red-soft: rgba(189, 84, 73, 0.09);
-        --radius-sm: 5px;
-        --radius: 8px;
+        --panel-raised: #f7f7f5;
+        --line: rgba(55, 53, 47, 0.09);
+        --line-strong: #e3e2de;
+        --text: #37352f;
+        --muted: #787774;
+        --faint: #9f9e9b;
+        --amber: #f6821f;
+        --amber-strong: #e26f0a;
+        --amber-soft: rgba(246, 130, 31, 0.13);
+        --mint: #448361;
+        --mint-soft: rgba(68, 131, 97, 0.14);
+        --red: #d44c47;
+        --red-soft: rgba(212, 76, 71, 0.12);
+        --radius-sm: 4px;
+        --radius: 6px;
       }
       * { box-sizing: border-box; }
       body {
@@ -47,9 +47,8 @@
         width: 20px;
         height: 20px;
         border-radius: 5px;
-        background: linear-gradient(135deg, #cf6a43, #b8562f);
-        color: #fff9f1;
-        font-family: Georgia, serif;
+        background: linear-gradient(135deg, #f6821f, #e26f0a);
+        color: #ffffff;
         font-size: 12px;
       }
       main { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
@@ -86,7 +85,7 @@
       }
       textarea:focus {
         outline: none;
-        border-color: rgba(207, 106, 67, 0.45);
+        border-color: rgba(246, 130, 31, 0.45);
         box-shadow: 0 0 0 2px var(--amber-soft);
       }
       .hint { margin: 0; font-size: 11px; color: var(--faint); }
@@ -95,7 +94,7 @@
         border: none;
         border-radius: var(--radius-sm);
         background: var(--amber);
-        color: #fff9f1;
+        color: #ffffff;
         font-weight: 700;
         cursor: pointer;
       }

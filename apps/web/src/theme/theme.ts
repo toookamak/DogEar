@@ -11,8 +11,8 @@ export type ResolvedTheme = 'light' | 'dark'
 export const THEME_STORAGE_KEY = 'dogear.theme'
 
 const THEME_COLOR: Record<ResolvedTheme, string> = {
-  light: '#faf9f5',
-  dark: '#211e19',
+  light: '#ffffff',
+  dark: '#191919',
 }
 
 const systemDarkQuery = () => window.matchMedia('(prefers-color-scheme: dark)')

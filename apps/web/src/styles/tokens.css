@@ -1,9 +1,12 @@
 /* DogEar · 设计令牌
- * 视觉基准：dev/dogear-workbench 高保真原型（默认浅色主题），经用户确认以原型页效果为准。
+ * 视觉基准：Notion 风 × Cloudflare 橙（2026-09-27 用户确认，
+ * 视觉范例 docs/theme-sample-notion-cf-orange.html；替代原「暖纸书桌」浅色
+ * 与「深夜书房」深色，历史色板见 git 历史）。
  * 本文件只做 token 声明，不含布局与组件样式。
  *
  * 两层命名：
- *  1) 原型语义名（--canvas / --panel / --amber …）：组件样式的首选引用；
+ *  1) 语义名（--canvas / --panel / --amber …）：组件样式的首选引用；
+ *     注：--amber 等为历史命名，语义上是「主强调色 accent」，当前值为 Cloudflare 橙。
  *  2) 兼容别名（--color-* / --spacing-* / --radius-*）：既有页面与内联样式仍在引用，
  *     全部指向第 1 层，保证未重做的页面同步换肤。别名数值不再表示深浅层级，
  *     而是「视觉角色」映射（例如 --color-bg-surface-400 = 卡片面 = --panel）。
@@ -12,50 +15,53 @@
 :root {
   color-scheme: light;
 
-  /* ---- 纸面与面板（原型 tokens.css 默认主题） ---- */
-  --canvas: #faf9f5;
+  /* ---- 纸面与面板（Notion 风：白纸主区 + 浅灰侧栏/内衬） ---- */
+  --canvas: #ffffff;
   --panel: #ffffff;
-  --panel-raised: #f6f4ef;
-  --panel-hover: #efede6;
-  --panel-overlay: rgba(250, 249, 245, 0.94);
+  --panel-raised: #f7f7f5;
+  --panel-hover: #efefee;
+  --panel-overlay: rgba(255, 255, 255, 0.94);
+  /* 侧栏专用底（Notion 标志性浅灰侧栏）；app.css 外壳侧栏引用 */
+  --sidebar-bg: #f7f7f5;
 
-  /* ---- 线 ---- */
-  --line: #e9e5dc;
-  --line-strong: #d3cdbf;
-  --line-soft: rgba(233, 229, 220, 0.6);
+  /* ---- 线（Notion 极淡分隔线） ---- */
+  --line: rgba(55, 53, 47, 0.09);
+  --line-strong: #e3e2de;
+  --line-soft: rgba(55, 53, 47, 0.06);
 
-  /* ---- 文字 ---- */
-  --text: #2e2a23;
-  --muted: #716b5e;
-  --faint: #a29b8c;
-  --on-accent: #fff9f1;
+  /* ---- 文字（Notion 暖黑，不用纯黑） ---- */
+  --text: #37352f;
+  --muted: #787774;
+  --faint: #9f9e9b;
+  --on-accent: #ffffff;
 
-  /* ---- 语义色（原型） ---- */
-  --amber: #cf6a43;
-  --amber-strong: #b8562f;
-  --amber-soft: rgba(207, 106, 67, 0.09);
-  --mint: #3f7a5c;
-  --mint-soft: rgba(63, 122, 92, 0.09);
-  --red: #bd5449;
-  --red-soft: rgba(189, 84, 73, 0.09);
-  --blue: #3f6d96;
-  --blue-soft: rgba(63, 109, 150, 0.09);
-  --indigo: #5d5a94;
-  --indigo-soft: rgba(93, 90, 148, 0.09);
-  --rust: #8f6a45;
-  --rust-soft: rgba(143, 106, 69, 0.09);
-  --slate: #636c7c;
-  --slate-soft: rgba(99, 108, 124, 0.11);
+  /* ---- 语义色（Notion 标签色系 + Cloudflare 橙强调） ---- */
+  --amber: #f6821f;                      /* 主强调：Cloudflare 橙 */
+  --amber-strong: #e26f0a;               /* 主按钮 hover 加深 */
+  --amber-soft: rgba(246, 130, 31, 0.13);
+  --mint: #448361;
+  --mint-soft: rgba(68, 131, 97, 0.14);
+  --red: #d44c47;
+  --red-soft: rgba(212, 76, 71, 0.12);
+  --blue: #337ea9;
+  --blue-soft: rgba(51, 126, 169, 0.14);
+  --indigo: #6940a5;
+  --indigo-soft: rgba(105, 64, 165, 0.12);
+  --rust: #9f6b53;
+  --rust-soft: rgba(159, 107, 83, 0.14);
+  --slate: #787774;
+  --slate-soft: rgba(120, 119, 116, 0.14);
 
-  /* 专有字体走系统栈（不再外链 Google Fonts，减少首屏 RTT；与 DESIGN 回退一致） */
+  /* 专有字体走系统栈（不外链 Google Fonts；Notion 风标题无衬线，
+   * --font-serif 为历史命名，现指向与 sans 相同的无衬线栈） */
   --font-sans: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-serif: Georgia, "Songti SC", "Noto Serif SC", serif;
+  --font-serif: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
 
-  /* ---- 圆角 / 间距 / 阴影（原型尺度：5 / 8 / 12） ---- */
-  --radius-sm: 5px;
-  --radius: 8px;
-  --radius-lg: 12px;
+  /* ---- 圆角 / 间距 / 阴影（Notion 偏方正：3 / 4 / 6） ---- */
+  --radius-sm: 3px;
+  --radius: 4px;
+  --radius-lg: 6px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -64,18 +70,18 @@
   --space-5: 22px;
   --space-6: 30px;
 
-  --shadow-sm: 0 1px 2px rgba(88, 72, 44, 0.07);
-  --shadow-lg: 0 16px 44px rgba(88, 72, 44, 0.13);
+  --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.06);
+  --shadow-lg: 0 4px 14px rgba(15, 15, 15, 0.1);
 
-  --scrim: rgba(60, 50, 32, 0.28);
-  --overlay-dim: rgba(70, 58, 36, 0.32);
-  --drawer-shadow: rgba(70, 58, 36, 0.26);
-  --modal-shadow: 0 24px 72px rgba(60, 50, 32, 0.3);
+  --scrim: rgba(15, 15, 15, 0.46);
+  --overlay-dim: rgba(15, 15, 15, 0.46);
+  --drawer-shadow: rgba(15, 15, 15, 0.32);
+  --modal-shadow: 0 12px 40px rgba(15, 15, 15, 0.18);
 
-  /* 书签卡装饰预览的 45° 斜纹色（原型为白斜纹；深色主题下调弱，见文件末尾） */
+  /* 书签卡装饰预览的 45° 斜纹色（深色主题下调弱，见文件末尾） */
   --preview-stripe: rgba(255, 255, 255, 0.14);
 
-  /* ---- 布局外壳（原型尺寸） ---- */
+  /* ---- 布局外壳 ---- */
   --topbar-h: 48px;
   --statusbar-h: 28px;
   --sidebar-w: 228px;
@@ -132,7 +138,7 @@
   /* 阴影 */
   --shadow-card: var(--shadow-lg);
   --shadow-ambient: var(--shadow-sm);
-  --shadow-focus: 0 0 0 2px rgba(207, 106, 67, 0.25);
+  --shadow-focus: 0 0 0 2px rgba(246, 130, 31, 0.25);
 
   /* 字体 */
   --font-display: var(--font-sans);
@@ -162,11 +168,11 @@
 
   /* 圆角 */
   --radius-micro: 2px;
-  --radius-small: 4px;
-  --radius-medium: 5px;
-  --radius-standard: 5px;
-  --radius-comfortable: 8px;
-  --radius-featured: 12px;
+  --radius-small: 3px;
+  --radius-medium: 4px;
+  --radius-standard: 4px;
+  --radius-comfortable: 6px;
+  --radius-featured: 8px;
   --radius-full-pill: 9999px;
 
   /* 动效 */
@@ -176,10 +182,11 @@
 }
 
 /* =========================================================
- * 深色主题「深夜书房」（2026-09-13 新增）
- * 依据 DESIGN.md §9.7 的主题口径：新增主题复制 :root 按自身重定义色板、
- * 阴影与部分组件约束（本主题 hover 由「加深」改为「提亮」，即
- * --amber-strong 取比 --amber 更亮的橙），结构/布局/交互语义不变。
+ * 深色主题「Notion 深色 × Cloudflare 橙」（2026-09-27 随默认主题一起更新，
+ * 替代原「深夜书房」；色板依据 docs/theme-sample-notion-cf-orange.html）。
+ * 依据 DESIGN.md §9.7 的主题口径：色板、阴影按主题自定义，
+ * 深色 hover 沿用「提亮」口径（--amber-strong 取比 --amber 更亮的橙），
+ * 结构/布局/交互语义不变。
  * 仅覆盖色值类 token；字体、间距、圆角、布局、z-index 沿用 :root，
  * 兼容别名全部为 var() 引用，自动随语义层换肤（--shadow-focus 除外，此处重定义）。
  * 挂载方式：<html data-theme="light|dark">，由 src/theme/theme.ts 管理。
@@ -188,52 +195,53 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* ---- 纸面：黑咖底 + 略浅一档的暖卡片，层级关系与浅色一致 ---- */
-  --canvas: #211e19;
-  --panel: #2a2721;
-  --panel-raised: #322e27;
-  --panel-hover: #3b362d;
-  --panel-overlay: rgba(33, 30, 25, 0.94);
+  /* ---- 纸面：Notion 深灰底 + 略浅一档的卡片 ---- */
+  --canvas: #191919;
+  --panel: #1f1f1f;
+  --panel-raised: #252525;
+  --panel-hover: #2f2f2f;
+  --panel-overlay: rgba(25, 25, 25, 0.94);
+  --sidebar-bg: #202020;
 
   /* ---- 线 ---- */
-  --line: #3d382e;
-  --line-strong: #524b3d;
-  --line-soft: rgba(61, 56, 46, 0.6);
+  --line: rgba(255, 255, 255, 0.094);
+  --line-strong: #3a3a3a;
+  --line-soft: rgba(255, 255, 255, 0.06);
 
-  /* ---- 文字：暖纸白（不用纯白），对应浅色的暖墨 ---- */
-  --text: #e9e3d7;
-  --muted: #aba394;
-  --faint: #7d7668;
-  --on-accent: #fff9f1;
+  /* ---- 文字：Notion 深色正文灰白（不用纯白） ---- */
+  --text: #d4d4d4;
+  --muted: #9b9b9b;
+  --faint: #6e6e6e;
+  --on-accent: #ffffff;
 
-  /* ---- 语义色：整体提亮一档保证深底可辨；soft 底透明度由 0.09 加深到可辨档 ---- */
-  --amber: #dd8156;
-  --amber-strong: #e99469;
-  --amber-soft: rgba(221, 129, 86, 0.16);
-  --mint: #5ba37f;
-  --mint-soft: rgba(91, 163, 127, 0.15);
-  --red: #d97263;
-  --red-soft: rgba(217, 114, 99, 0.15);
-  --blue: #7aa5cc;
-  --blue-soft: rgba(122, 165, 204, 0.15);
-  --indigo: #8d89c8;
-  --indigo-soft: rgba(141, 137, 200, 0.15);
-  --rust: #b58a5c;
-  --rust-soft: rgba(181, 138, 92, 0.16);
-  --slate: #8f97a6;
-  --slate-soft: rgba(143, 151, 166, 0.17);
+  /* ---- 语义色：整体提亮一档保证深底可辨；soft 底加深到可辨档 ---- */
+  --amber: #f6821f;
+  --amber-strong: #ff9a3d;
+  --amber-soft: rgba(246, 130, 31, 0.2);
+  --mint: #6cad94;
+  --mint-soft: rgba(108, 173, 148, 0.16);
+  --red: #e16f6a;
+  --red-soft: rgba(225, 111, 106, 0.16);
+  --blue: #6fa5c9;
+  --blue-soft: rgba(111, 165, 201, 0.16);
+  --indigo: #9b8cd9;
+  --indigo-soft: rgba(155, 140, 217, 0.16);
+  --rust: #c08e6f;
+  --rust-soft: rgba(192, 142, 111, 0.16);
+  --slate: #9b9b9b;
+  --slate-soft: rgba(155, 155, 155, 0.16);
 
-  /* ---- 阴影与遮罩：暖棕在深底不可辨，改纯黑系 ---- */
+  /* ---- 阴影与遮罩：纯黑系 ---- */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 4px 14px rgba(0, 0, 0, 0.45);
 
   --scrim: rgba(0, 0, 0, 0.5);
   --overlay-dim: rgba(0, 0, 0, 0.5);
   --drawer-shadow: rgba(0, 0, 0, 0.5);
-  --modal-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
+  --modal-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
 
   --preview-stripe: rgba(255, 255, 255, 0.06);
 
   /* ---- :root 别名区中唯一写死色值的项，此处重定义 ---- */
-  --shadow-focus: 0 0 0 2px rgba(221, 129, 86, 0.3);
+  --shadow-focus: 0 0 0 2px rgba(246, 130, 31, 0.3);
 }

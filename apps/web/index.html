@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#faf9f5" />
+    <meta name="theme-color" content="#ffffff" />
     <meta
       name="description"
       content="DogEar · 折耳书签 — 基于 Raindrop.io 的个人书签增强工具"
@@ -21,7 +21,7 @@
               matchMedia('(prefers-color-scheme: dark)').matches)
           document.documentElement.dataset.theme = dark ? 'dark' : 'light'
           var meta = document.querySelector('meta[name="theme-color"]')
-          if (meta) meta.setAttribute('content', dark ? '#211e19' : '#faf9f5')
+          if (meta) meta.setAttribute('content', dark ? '#191919' : '#ffffff')
         } catch (e) {
           /* localStorage 不可用时保持浅色，React 启动后由 theme.ts 兜底 */
         }
