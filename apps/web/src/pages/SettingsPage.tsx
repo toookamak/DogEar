@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'wouter'
 import { PageHeader } from '../components/layout/PageHeader.js'
 import { StatusTab } from '../components/settings/tabs/StatusTab.js'
 import { ChannelsTab } from '../components/settings/tabs/ChannelsTab.js'
@@ -26,7 +27,13 @@ const TABS = [
 type TabKey = typeof TABS[number]['key']
 
 export function SettingsPage() {
-  const [tab, setTab] = useState<TabKey>('status')
+  // ?tab= 直达分区（状态栏同步卡片的「管理冲突」跳 /settings?tab=channels 用）；
+  // 仅在挂载时读一次，之后仍是页内状态切换
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<TabKey>(() => {
+    const requested = searchParams.get('tab')
+    return TABS.some((item) => item.key === requested) ? (requested as TabKey) : 'status'
+  })
 
   return (
     <div>

@@ -103,6 +103,10 @@ export default {
       }, 25)
         .then((summary) => {
           console.log(JSON.stringify({ msg: 'dogear.sync-cron', ...summary }))
+          // 推送成功即记录时间戳（状态栏「上次推送」展示用；失败静默由外层 catch 兜底）
+          if (summary.succeeded > 0) {
+            return repository.settings.set('sync.last_push_at', String(Date.now()))
+          }
         })
         // 操作日志保留清理（v1.15）：低频顺带执行，通常为空操作
         .then(() => cleanupOperationLog(repository))

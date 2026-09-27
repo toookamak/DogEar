@@ -250,6 +250,8 @@ type ResourceRepositories = {
     updateStatusMany: (entries: Array<{ id: string; status: 'pending' | 'processing' | 'succeeded' | 'failed'; error?: string | null }>) => Promise<void>
     remove: (id: string) => Promise<boolean>
     countPending: () => Promise<number>
+    /** failed 计数（重试超限的毒条目在此可见；状态栏同步卡片用） */
+    countFailed: () => Promise<number>
   }
   backups: {
     create: (data: { id: string; tier: string; target: string; includes: string }) => Promise<unknown>
@@ -1096,6 +1098,10 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     },
     countPending: async () => {
       const result = await db.select({ count: count() }).from(syncQueue).where(eq(syncQueue.status, 'pending')).all()
+      return Number(result[0]?.count ?? 0)
+    },
+    countFailed: async () => {
+      const result = await db.select({ count: count() }).from(syncQueue).where(eq(syncQueue.status, 'failed')).all()
       return Number(result[0]?.count ?? 0)
     },
   }

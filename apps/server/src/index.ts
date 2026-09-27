@@ -50,6 +50,10 @@ async function runSyncWorker() {
       return resolveRaindropClient(channels)
     }, 25)
     if (summary.processed > 0) console.log('[sync-worker]', JSON.stringify(summary))
+    // 推送成功即记录时间戳（状态栏「上次推送」展示用）
+    if (summary.succeeded > 0) {
+      try { await repository.settings.set('sync.last_push_at', String(Date.now())) } catch { /* 展示性数据，失败不重试 */ }
+    }
     // 操作日志保留清理（v1.15）：低频顺带执行，通常为空操作
     const cleaned = await cleanupOperationLog(repository)
     if (cleaned > 0) console.log('[log-cleanup] removed:', cleaned)

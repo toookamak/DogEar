@@ -582,6 +582,7 @@ input[type="radio"] {
 /* ---------------------------------------------------------------- 状态栏 */
 
 .statusbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -623,6 +624,118 @@ input[type="radio"] {
   font-family: var(--font-sans);
   font-size: 11px;
   border-radius: var(--radius-sm);
+}
+
+/* 同步状态卡片（20260927 屏稿）：状态栏「待同步」点击后向上弹出 */
+.statusbar-sync {
+  padding: 1px var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.statusbar-sync:hover {
+  background-color: var(--panel-hover);
+  color: var(--text);
+}
+
+.statusbar-sync[aria-expanded='true'] {
+  background-color: var(--panel-hover);
+  color: var(--text);
+}
+
+.statusbar-sync-fail {
+  color: var(--red);
+}
+
+.sync-card {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: var(--space-4);
+  z-index: 40;
+  display: grid;
+  gap: var(--space-2);
+  width: 300px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background-color: var(--panel);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.sync-card-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sync-card-rows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  color: var(--muted);
+}
+
+.sync-card-rows b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sync-card-fail {
+  color: var(--red);
+}
+
+.sync-card-fail b {
+  color: var(--red);
+}
+
+.sync-card-warn {
+  color: var(--amber-strong);
+}
+
+.sync-card-warn b {
+  color: var(--amber-strong);
+}
+
+.sync-card-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.sync-card-times {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.sync-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--line-soft);
+}
+
+.sync-card-link {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--amber-strong);
+  cursor: pointer;
+}
+
+.sync-card-link:hover {
+  text-decoration: underline;
 }
 
 /* ---------------------------------------------------------------- 通用文本 */

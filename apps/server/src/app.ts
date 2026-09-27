@@ -299,6 +299,24 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
   // 队列只承载 Raindrop 书签级推送；S3/WebDAV 是文件级导出，保持手动触发（见同步设计 §3.1）。
   const channelManager = new ChannelConfigManager(repository)
 
+  // 同步时间戳（settings 表，key 形如 sync.last_push_at）：推送消费成功 / 拉取完成后写入，
+  // 供状态栏卡片显示「上次同步」。写入失败静默——时间戳只是展示，不能拖垮主流程。
+  async function readSyncTimestamp(key: string): Promise<number | null> {
+    try {
+      const row = await repository.settings.get(key) as { value?: unknown } | undefined
+      const n = Number(row?.value)
+      return Number.isFinite(n) && n > 0 ? n : null
+    } catch {
+      return null
+    }
+  }
+
+  async function writeSyncTimestamp(key: string): Promise<void> {
+    try {
+      await repository.settings.set(key, String(Date.now()))
+    } catch { /* 展示性数据，失败不重试 */ }
+  }
+
   async function hasEnabledRaindropChannel(): Promise<boolean> {
     try {
       const channels = await channelManager.getAllChannels()
@@ -452,6 +470,19 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
     return c.json({ pendingCount: count })
   })
 
+  // 同步状态聚合（状态栏卡片）：一次请求带回推送/拉回/冲突/上次同步时间，
+  // 替代前端分别探测 pending-count、conflicts、队列的三次往返
+  app.get('/api/sync/status', async (c) => {
+    const [pendingPush, failedPush, pendingConflicts, lastPushAt, lastPullAt] = await Promise.all([
+      repository.syncQueue.countPending(),
+      repository.syncQueue.countFailed(),
+      repository.conflicts.countPending(),
+      readSyncTimestamp('sync.last_push_at'),
+      readSyncTimestamp('sync.last_pull_at'),
+    ])
+    return c.json({ pendingPush, failedPush, pendingConflicts, lastPushAt, lastPullAt })
+  })
+
   app.get('/api/sync/queue', async (c) => {
     const limit = Number(c.req.query('limit')) || 50
     const items = await repository.syncQueue.getPending(limit)
@@ -479,6 +510,7 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
         detail: `拉回 ${summary.created} 条新增，${summary.conflicts} 条冲突记入待处理`,
       })
     }
+    await writeSyncTimestamp('sync.last_pull_at')
     return c.json(summary)
   })
 
@@ -488,6 +520,7 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
       const channels = await channelManager.getAllChannels()
       return resolveRaindropClient(channels)
     }, 10)
+    if (summary.succeeded > 0) await writeSyncTimestamp('sync.last_push_at')
     return c.json(summary)
   })
 
