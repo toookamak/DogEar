@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网格卡片结构改版 · 方案对比</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* —— DESIGN.md 暖纸风 token（单一来源 apps/web/src/styles/tokens.css）—— */
+    --canvas: #faf9f5;
+    --panel: #ffffff;
+    --panel-raised: #f6f4ef;
+    --panel-hover: #efede6;
+    --panel-overlay: rgba(250, 249, 245, 0.94);
+    --line: #e9e5dc;
+    --line-strong: #d3cdbf;
+    --line-soft: rgba(233, 229, 220, 0.6);
+    --text: #2e2a23;
+    --muted: #716b5e;
+    --faint: #a29b8c;
+    --on-accent: #fff9f1;
+    --amber: #cf6a43;
+    --amber-strong: #b8562f;
+    --amber-soft: rgba(207, 106, 67, 0.09);
+    --mint: #3f7a5c;
+    --mint-soft: rgba(63, 122, 92, 0.09);
+    --red: #bd5449;
+    --red-soft: rgba(189, 84, 73, 0.09);
+    --blue: #3f6d96;
+    --blue-soft: rgba(63, 109, 150, 0.09);
+    --rust: #8f6a45;
+    --rust-soft: rgba(143, 106, 69, 0.09);
+    --slate: #636c7c;
+    --slate-soft: rgba(99, 108, 124, 0.09);
+    --sans: "Manrope", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --serif: "Newsreader", Georgia, "Songti SC", serif;
+    --mono: "DM Mono", ui-monospace, "Cascadia Mono", monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--canvas);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 40px 32px 80px;
+  }
+
+  .wrap { max-width: 1240px; margin: 0 auto; }
+
+  /* ———— 页头 ———— */
+  .page-head { margin-bottom: 12px; }
+  .page-head h1 {
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .page-head .sub {
+    color: var(--muted);
+    max-width: 760px;
+    margin-top: 6px;
+    font-size: 13.5px;
+  }
+  .page-head .sub b { color: var(--text); font-weight: 600; }
+
+  /* ———— 方案章节 ———— */
+  .section { margin-top: 44px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .sec-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--on-accent);
+    background: var(--amber);
+    border-radius: 5px;
+    padding: 3px 9px;
+    white-space: nowrap;
+  }
+  .sec-badge.ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line-strong);
+  }
+  .sec-head h2 {
+    font-family: var(--serif);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .sec-head .one-line { color: var(--muted); font-size: 13px; }
+  .tradeoffs {
+    display: flex;
+    gap: 22px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .tradeoffs .pro::before { content: "＋ "; color: var(--mint); font-weight: 700; }
+  .tradeoffs .con::before { content: "－ "; color: var(--rust); font-weight: 700; }
+
+  .demo-grid {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+    gap: 16px;
+  }
+  .demo-grid.wide { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+
+  .fig-label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+    margin: 26px 0 8px;
+  }
+
+  /* ———— 卡片公共底座（对齐 DESIGN.md：白纸 + 细线 + 8px 圆角 + hover 加深）———— */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .card:hover { border-color: var(--line-strong); background: var(--panel-raised); }
+  .card.is-selected {
+    border-color: rgba(207, 106, 67, 0.35);
+    background: linear-gradient(0deg, var(--amber-soft), var(--amber-soft)), var(--panel);
+  }
+
+  /* 公共小件 */
+  .monogram {
+    width: 20px; height: 20px;
+    border-radius: 5px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--sans); font-size: 11px; font-weight: 700;
+    color: var(--on-accent); flex: none;
+  }
+  .monogram.src-page { background: var(--amber); }
+  .monogram.src-agent { background: var(--mint); }
+  .monogram.src-extension { background: var(--rust); }
+  .monogram.lg { width: 24px; height: 24px; font-size: 13px; }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; font-weight: 600;
+    padding: 2px 8px; border-radius: 9999px;
+    white-space: nowrap;
+  }
+  .status-pill::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .status-pill.state-pending { color: var(--amber); background: var(--amber-soft); }
+  .status-pill.state-confirmed { color: var(--mint); background: var(--mint-soft); }
+  .status-pill.state-shelved { color: var(--slate); background: var(--slate-soft); }
+
+  .pill {
+    display: inline-flex; align-items: center;
+    font-size: 10.5px; font-weight: 600;
+    padding: 1.5px 7px; border-radius: 5px;
+    border: 1px solid var(--line);
+    color: var(--muted); background: var(--panel);
+    white-space: nowrap;
+  }
+  .pill--ai { color: var(--amber-strong); border-color: rgba(207, 106, 67, 0.35); background: var(--amber-soft); }
+  .pill--important { color: var(--rust); border-color: rgba(143, 106, 69, 0.35); background: var(--rust-soft); }
+  .pill--pending { color: var(--blue); border-color: rgba(63, 109, 150, 0.35); background: var(--blue-soft); }
+
+  .tag-pill {
+    font-size: 10.5px;
+    color: rgba(207, 106, 67, 0.85);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 1.5px 7px;
+    white-space: nowrap;
+  }
+  .tag-pill::before { content: "# "; opacity: 0.7; }
+  .tag-pill.empty { color: var(--faint); font-style: italic; }
+  .tag-pill.empty::before { content: ""; }
+
+  .src-label {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .src-label.src-page { color: var(--amber); }
+  .src-label.src-agent { color: var(--mint); }
+  .src-label.src-extension { color: var(--rust); }
+
+  .date {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--faint);
+    white-space: nowrap;
+  }
+
+  .meta-row {
+    display: flex; align-items: center; gap: 8px;
+    min-width: 0; flex-wrap: nowrap;
+  }
+  .meta-row .grow { flex: 1; min-width: 0; }
+  .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .title { font-size: 13.5px; font-weight: 600; line-height: 1.45; }
+  .title.clamp2 {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .excerpt {
+    font-size: 12px; color: var(--muted); line-height: 1.55;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+
+  /* 渐变预览底（来源色 0.16 → 0.36 + 45° 白斜纹 + 衬线水印） */
+  .preview {
+    position: relative;
+    overflow: hidden;
+  }
+  .preview::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, rgba(255,255,255,0.28) 0 1px, transparent 1px 9px);
+    pointer-events: none;
+  }
+  .preview .wm {
+    position: absolute; right: 2px; bottom: -34px;
+    font-family: var(--serif); font-weight: 600;
+    font-size: 110px; line-height: 1;
+    opacity: 0.09; color: var(--text);
+    pointer-events: none; user-select: none;
+  }
+  .preview.pv-page { background: linear-gradient(135deg, rgba(207,106,67,0.14), rgba(207,106,67,0.34)); }
+  .preview.pv-agent { background: linear-gradient(135deg, rgba(63,122,92,0.14), rgba(63,122,92,0.34)); }
+  .preview.pv-extension { background: linear-gradient(135deg, rgba(143,106,69,0.16), rgba(143,106,69,0.38)); }
+  /* 演示用「照片封面」占位（真实环境为 /cover 代理图） */
+  .photo { background-size: cover; background-position: center; position: relative; }
+  .photo::after { content: none; }
+  .ph-1 { background: linear-gradient(135deg, #d9c6ae 0%, #a98d6f 55%, #7c6a55 100%); }
+  .ph-2 { background: linear-gradient(135deg, #b8c4c9 0%, #7e939e 60%, #55666f 100%); }
+
+  /* ================= 基线：现行三段式 ================= */
+  .base-cover {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; height: 40px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .base-cover .src-text {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .base-cover .spacer { flex: 1; }
+  .base-cover.src-page { background: rgba(207, 106, 67, 0.05); }
+  .base-cover.src-extension { background: rgba(143, 106, 69, 0.05); }
+  .base-preview { height: 118px; flex: none; }
+  .base-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
+  .base-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .base-domain {
+    display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 4px 9px; width: fit-content;
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    background: var(--panel-raised);
+  }
+  .base-domain .d-fav {
+    width: 15px; height: 15px; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: var(--on-accent);
+  }
+  .base-domain.src-page .d-fav { background: var(--amber); }
+  .base-domain.src-agent .d-fav { background: var(--mint); }
+  .base-domain.src-extension .d-fav { background: var(--rust); }
+
+  .issue-list { margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  .issue-list li { margin: 3px 0 3px 18px; }
+  .issue-list b { color: var(--text); font-weight: 600; }
+
+  /* ================= 方案 A：封面主导 ================= */
+  .a-cover { height: 148px; flex: none; position: relative; }
+  .a-cover .wm { font-size: 120px; }
+  .a-overlay {
+    position: absolute; top: 8px; left: 8px; right: 8px;
+    display: flex; align-items: center; gap: 7px;
+    z-index: 2;
+  }
+  .a-domain-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--panel-overlay);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 3px 8px 3px 4px;
+    font-family: var(--mono); font-size: 10.5px; color: var(--muted);
+    max-width: 65%; min-width: 0;
+  }
+  .a-domain-chip .dom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .a-overlay .spacer { flex: 1; }
+  .a-src-dot {
+    position: absolute; left: 10px; bottom: 8px; z-index: 2;
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--panel-overlay);
+    border: 1px solid var(--line);
+    border-radius: 9999px;
+    padding: 2px 9px;
+  }
+  .a-src-dot::before { content: ""; width: 6px; height: 6px; border-radius: 50%; }
+  .a-src-dot.src-page::before { background: var(--amber); }
+  .a-src-dot.src-agent::before { background: var(--mint); }
+  .a-src-dot.src-extension::before { background: var(--rust); }
+  .a-body { padding: 12px 14px 13px; display: flex; flex-direction: column; gap: 8px; }
+  .a-footer {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: auto; flex-wrap: nowrap;
+  }
+
+  /* ================= 方案 B：索引卡 ================= */
+  .b-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px 0;
+  }
+  .b-head .dom {
+    font-family: var(--mono); font-size: 11px; color: var(--faint);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .b-head .spacer { flex: 1; }
+  .b-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .b-dot.state-pending { background: var(--amber); }
+  .b-dot.state-confirmed { background: var(--mint); }
+  .b-dot.state-shelved { background: var(--slate); }
+  .b-body { padding: 5px 12px 0; display: flex; flex-direction: column; gap: 3px; }
+  .b-body .excerpt {
+    -webkit-line-clamp: 1;
+    font-size: 11.5px;
+  }
+  .b-foot {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 8px;
+    padding: 5px 12px;
+    border-top: 1px solid var(--line-soft);
+    background: var(--panel-raised);
+  }
+  .b-foot .tags { display: flex; gap: 5px; min-width: 0; flex: 1; overflow: hidden; }
+
+  /* ================= 方案 C：左图右文 ================= */
+  .c-row { display: flex; align-items: stretch; }
+  .c-thumb {
+    width: 84px; flex: none; position: relative;
+    border-right: 1px solid var(--line-soft);
+  }
+  .c-thumb .wm { font-size: 56px; right: 4px; bottom: -16px; }
+  .c-main { flex: 1; min-width: 0; padding: 10px 12px 11px; display: flex; flex-direction: column; gap: 6px; }
+  .c-title { font-size: 12.5px; }
+  .c-tags { display: flex; gap: 5px; overflow: hidden; }
+
+  /* ———— 对比表 ———— */
+  table.cmp {
+    margin-top: 18px;
+    border-collapse: collapse;
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 12.5px;
+  }
+  .cmp th, .cmp td {
+    text-align: left;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  .cmp th {
+    font-family: var(--mono); font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--faint); font-weight: 400;
+    background: var(--panel-raised);
+  }
+  .cmp tr:last-child td { border-bottom: none; }
+  .cmp td:first-child { font-weight: 600; white-space: nowrap; }
+  .cmp .dim { color: var(--muted); }
+
+  .foot-note {
+    margin-top: 28px;
+    font-size: 12.5px;
+    color: var(--muted);
+    max-width: 780px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="page-head">
+    <h1>网格模式 · 卡片结构改版方案</h1>
+    <p class="sub">
+      以 <b>DESIGN.md 暖纸风 token</b> 为唯一视觉源出的 <b>3 个方向</b>，顶部附现行三段式基线对照。
+      每组演示都覆盖三种真实数据形态：<b>有封面</b>、<b>无封面（渐变水印占位）</b>、<b>有 AI 建议 / 未整理标签</b>。
+      卡片可 hover 查看交互反馈（加深一档），含一张选中态演示。
+    </p>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- 基线                                                          -->
+  <!-- ============================================================ -->
+  <section class="section">
+    <div class="sec-head">
+      <span class="sec-badge ghost">基线</span>
+      <h2>现行结构 · 三段式（约 310px 高）</h2>
+      <span class="one-line">来源条 40px → 预览区 118px → 内容区</span>
+    </div>
+
+    <div class="demo-grid">
+      <!-- 基线卡 1：有封面页（现结构实际是渐变+水印，此处按现状绘制） -->
+      <article class="card">
+        <div class="base-cover src-page">
+          <span class="monogram src-page">R</span>
+          <span class="src-text src-page src-label">工作台</span>
+          <span class="spacer"></span>
+          <span class="status-pill state-confirmed">已确认</span>
+        </div>
+        <div class="preview base-preview pv-page"><span class="wm">R</span></div>
+        <div class="base-body">
+          <h3 class="title clamp2">React 19 Actions 与表单渐进增强实战</h3>
+          <p class="excerpt">Actions 取代手写 fetch 提交的三种模式，配合 useOptimistic 做乐观更新，以及和 Server Actions 的边界……</p>
+          <div class="base-tags">
+            <span class="tag-pill">react</span>
+            <span class="tag-pill">前端</span>
+          </div>
+          <span class="base-domain src-page"><span class="d-fav">R</span><span>react.dev</span><span>↗</span></span>
+        </div>
+      </article>
+
+      <!-- 基线卡 2：无封面 + 重要 + 待处理 -->
+      <article class="card">
+        <div class="base-cover src-extension">
+          <span class="monogram src-extension">D</span>
+          <span class="src-text src-extension src-label">插件</span>
+          <span class="spacer"></span>
+          <span class="status-pill state-pending">待处理</span>
+        </div>
+        <div class="preview base-preview pv-extension"><span class="wm">D</span></div>
+        <div class="base-body">
+          <h3 class="title clamp2">DDIA 第 3 章 · 存储与检索</h3>
+          <p class="excerpt">LSM-Tree 与 B-Tree 各自的写放大、读放大取舍，以及什么场景该选哪一种……</p>
+          <div class="base-tags">
+            <span class="pill pill--important">重要</span>
+            <span class="tag-pill">读书笔记</span>
+            <span class="tag-pill">存储</span>
+          </div>
+          <span class="base-domain src-extension"><span class="d-fav">D</span><span>dataintensive.net</span><span>↗</span></span>
+        </div>
+      </article>
+
+      <!-- 基线卡 3：AI 建议 + 未整理 -->
+      <article class="card">
+        <div class="base-cover src-page">
+          <span class="monogram src-page">C</span>
+          <span class="src-text src-page src-label">工作台</span>
+          <span class="spacer"></span>
+          <span class="status-pill state-pending">待处理</span>
+        </div>
+        <div class="preview base-preview pv-page"><span class="wm">C</span></div>
+        <div class="base-body">
+          <h3 class="title clamp2">Cloudflare Tunnel 内网穿透配置备忘</h3>
+          <p class="excerpt">cloudflared 安装、token 授权与自定义域名回源的三步流程，含常见回环问题……</p>
+          <div class="base-tags">
+            <span class="pill pill--ai">AI 建议 2</span>
+            <span class="tag-pill empty">未整理</span>
+          </div>
+          <span class="base-domain src-page"><span class="d-fav">C</span><span>developers.cloudflare.com</span><span>↗</span></span>
+        </div>
+      </article>
+    </div>
+
+    <ul class="issue-list">
+      <li><b>无封面卡信息量为零</b>：118px 渐变 + 水印是纯装饰，占了整卡约 1/3 高度。</li>
+      <li><b>纵向三段叠加太高</b>：一屏（约 700px 内容区）只能放下 6 条左右，浏览效率低。</li>
+      <li><b>来源条与域名按钮功能重叠</b>：两处都在表达「从哪来」，各占一行。</li>
+    </ul>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 方案 A                                                        -->
+  <!-- ============================================================ -->
+  <section class="section">
+    <div class="sec-head">
+      <span class="sec-badge">方案 A</span>
+      <h2>封面主导 · 视觉浏览型（约 280px 高）</h2>
+      <span class="one-line">取消独立来源条，域名 / 来源 / 状态全部压成封面上的轻量角标；标题下保留两行简介</span>
+    </div>
+    <div class="tradeoffs">
+      <span class="pro">视觉最像「书架」，扫读靠图与形，浏览体验最好</span>
+      <span class="pro">简介随卡展示，不点详情也能判断内容</span>
+      <span class="pro">来源条与域名按钮合并，纵向省 ~90px</span>
+      <span class="con">无封面时仍需水印占位，视觉收益打折扣</span>
+      <span class="con">密度提升有限（≈ 7 条/屏）</span>
+    </div>
+
+    <div class="demo-grid">
+      <article class="card is-selected">
+        <div class="a-cover photo ph-1">
+          <div class="a-overlay">
+            <span class="a-domain-chip"><span class="monogram" style="width:16px;height:16px;font-size:9px;background:var(--amber)">R</span><span class="dom">react.dev</span></span>
+            <span class="spacer"></span>
+            <span class="status-pill state-confirmed">已确认</span>
+          </div>
+          <span class="a-src-dot src-page"><span class="src-label src-page">工作台</span></span>
+        </div>
+        <div class="a-body">
+          <h3 class="title clamp2">React 19 Actions 与表单渐进增强实战</h3>
+          <p class="excerpt">Actions 取代手写 fetch 提交的三种模式，配合 useOptimistic 做乐观更新……</p>
+          <div class="a-footer">
+            <span class="pill pill--ai">AI 建议 2</span>
+            <span class="tag-pill">react</span>
+            <span class="tag-pill">前端</span>
+            <span class="grow"></span>
+            <span class="date">09-24</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="a-cover preview pv-extension">
+          <span class="wm">D</span>
+          <div class="a-overlay">
+            <span class="a-domain-chip"><span class="monogram" style="width:16px;height:16px;font-size:9px;background:var(--rust)">D</span><span class="dom">dataintensive.net</span></span>
+            <span class="spacer"></span>
+            <span class="status-pill state-pending">待处理</span>
+          </div>
+          <span class="a-src-dot src-extension"><span class="src-label src-extension">插件</span></span>
+        </div>
+        <div class="a-body">
+          <h3 class="title clamp2">DDIA 第 3 章 · 存储与检索</h3>
+          <p class="excerpt">LSM-Tree 与 B-Tree 各自的写放大、读放大取舍，以及什么场景该选哪一种……</p>
+          <div class="a-footer">
+            <span class="pill pill--important">重要</span>
+            <span class="tag-pill">读书笔记</span>
+            <span class="grow"></span>
+            <span class="date">09-25</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="a-cover preview pv-page">
+          <span class="wm">C</span>
+          <div class="a-overlay">
+            <span class="a-domain-chip"><span class="monogram" style="width:16px;height:16px;font-size:9px;background:var(--amber)">C</span><span class="dom">developers.cloudflare.com</span></span>
+            <span class="spacer"></span>
+            <span class="status-pill state-pending">待处理</span>
+          </div>
+          <span class="a-src-dot src-page"><span class="src-label src-page">工作台</span></span>
+        </div>
+        <div class="a-body">
+          <h3 class="title clamp2">Cloudflare Tunnel 内网穿透配置备忘</h3>
+          <p class="excerpt">cloudflared 安装、token 授权与自定义域名回源的三步流程，含常见回环问题……</p>
+          <div class="a-footer">
+            <span class="pill pill--ai">AI 建议 2</span>
+            <span class="tag-pill empty">未整理</span>
+            <span class="grow"></span>
+            <span class="date">09-26</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 方案 B                                                        -->
+  <!-- ============================================================ -->
+  <section class="section">
+    <div class="sec-head">
+      <span class="sec-badge">方案 B</span>
+      <h2>索引卡 · 密度优先（约 110px 高）</h2>
+      <span class="one-line">彻底去掉预览区，回到「索引卡片」气质：monogram + 域名行、标题、一行简介、底栏</span>
+    </div>
+    <div class="tradeoffs">
+      <span class="pro">密度最高（≈ 18~20 条/屏），配合 ⌘K 检索的定位场景效率最高</span>
+      <span class="pro">无封面不再有任何视觉落差，所有卡片信息等权</span>
+      <span class="pro">mono 元信息行 + 衬线标题最贴合 DESIGN.md「索引卡片」的声音</span>
+      <span class="con">简介只剩一行，长摘要基本失效</span>
+      <span class="con">损失全部视觉识别度，靠标题文字扫读</span>
+    </div>
+
+    <div class="demo-grid">
+      <article class="card">
+        <div class="b-head">
+          <span class="monogram src-page" style="width:18px;height:18px;font-size:10px">R</span>
+          <span class="dom">react.dev</span>
+          <span class="spacer"></span>
+          <span class="b-dot state-confirmed" title="已确认"></span>
+        </div>
+        <div class="b-body">
+          <h3 class="title clamp2">React 19 Actions 与表单渐进增强实战</h3>
+          <p class="excerpt">Actions 取代手写 fetch 提交的三种模式，配合 useOptimistic 做乐观更新……</p>
+        </div>
+        <div class="b-foot">
+          <span class="tag-pill">react</span>
+          <span class="tag-pill">前端</span>
+          <span class="grow" style="flex:1"></span>
+          <span class="src-label src-page">工作台</span>
+          <span class="date">09-24</span>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="b-head">
+          <span class="monogram src-extension" style="width:18px;height:18px;font-size:10px">D</span>
+          <span class="dom">dataintensive.net</span>
+          <span class="spacer"></span>
+          <span class="b-dot state-pending" title="待处理"></span>
+        </div>
+        <div class="b-body">
+          <h3 class="title clamp2">DDIA 第 3 章 · 存储与检索</h3>
+          <p class="excerpt">LSM-Tree 与 B-Tree 各自的写放大、读放大取舍，以及什么场景该选哪一种……</p>
+        </div>
+        <div class="b-foot">
+          <span class="pill pill--important">重要</span>
+          <span class="tag-pill">读书笔记</span>
+          <span class="grow" style="flex:1"></span>
+          <span class="src-label src-extension">插件</span>
+          <span class="date">09-25</span>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="b-head">
+          <span class="monogram src-page" style="width:18px;height:18px;font-size:10px">C</span>
+          <span class="dom">developers.cloudflare.com</span>
+          <span class="spacer"></span>
+          <span class="b-dot state-pending" title="待处理"></span>
+        </div>
+        <div class="b-body">
+          <h3 class="title clamp2">Cloudflare Tunnel 内网穿透配置备忘</h3>
+          <p class="excerpt">cloudflared 安装、token 授权与自定义域名回源的三步流程，含常见回环问题……</p>
+        </div>
+        <div class="b-foot">
+          <span class="pill pill--ai">AI 建议 2</span>
+          <span class="tag-pill empty">未整理</span>
+          <span class="grow" style="flex:1"></span>
+          <span class="src-label src-page">工作台</span>
+          <span class="date">09-26</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 方案 C                                                        -->
+  <!-- ============================================================ -->
+  <section class="section">
+    <div class="sec-head">
+      <span class="sec-badge">方案 C</span>
+      <h2>左图右文 · 均衡型（约 100px 高）</h2>
+      <span class="one-line">缩略图缩小为左侧竖条，文字区承载全部信息；建议配合更宽的列（320px 起）</span>
+    </div>
+    <div class="tradeoffs">
+      <span class="pro">密度与视觉兼顾（≈ 20+ 条/屏），缩略图仍在但只占 84px</span>
+      <span class="pro">横排结构与列表视图气质连贯，列表↔网格切换认知负担小</span>
+      <span class="con">228px 最小列宽下会非常挤，需把网格列距放宽（本组演示用 320px）</span>
+      <span class="con">标题截断压力大，长标题基本只剩一行有效</span>
+    </div>
+
+    <div class="demo-grid wide">
+      <article class="card">
+        <div class="c-row">
+          <div class="c-thumb photo ph-2"></div>
+          <div class="c-main">
+            <h3 class="title clamp2 c-title">React 19 Actions 与表单渐进增强实战</h3>
+            <div class="meta-row">
+              <span class="monogram src-page" style="width:15px;height:15px;font-size:8px">R</span>
+              <span class="dom" style="font-family:var(--mono);font-size:10.5px;color:var(--faint)" >react.dev</span>
+              <span class="grow"></span>
+              <span class="b-dot state-confirmed" title="已确认"></span>
+            </div>
+            <div class="c-tags">
+              <span class="tag-pill">react</span>
+              <span class="tag-pill">前端</span>
+              <span class="grow"></span>
+              <span class="date">09-24</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="c-row">
+          <div class="c-thumb preview pv-extension"><span class="wm">D</span></div>
+          <div class="c-main">
+            <h3 class="title clamp2 c-title">DDIA 第 3 章 · 存储与检索</h3>
+            <div class="meta-row">
+              <span class="monogram src-extension" style="width:15px;height:15px;font-size:8px">D</span>
+              <span class="dom" style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">dataintensive.net</span>
+              <span class="grow"></span>
+              <span class="b-dot state-pending" title="待处理"></span>
+            </div>
+            <div class="c-tags">
+              <span class="pill pill--important">重要</span>
+              <span class="tag-pill">读书笔记</span>
+              <span class="grow"></span>
+              <span class="date">09-25</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="c-row">
+          <div class="c-thumb preview pv-page"><span class="wm">C</span></div>
+          <div class="c-main">
+            <h3 class="title clamp2 c-title">Cloudflare Tunnel 内网穿透配置备忘</h3>
+            <div class="meta-row">
+              <span class="monogram src-page" style="width:15px;height:15px;font-size:8px">C</span>
+              <span class="dom" style="font-family:var(--mono);font-size:10.5px;color:var(--faint)">developers.cloudflare.com</span>
+              <span class="grow"></span>
+              <span class="b-dot state-pending" title="待处理"></span>
+            </div>
+            <div class="c-tags">
+              <span class="pill pill--ai">AI 建议 2</span>
+              <span class="tag-pill empty">未整理</span>
+              <span class="grow"></span>
+              <span class="date">09-26</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 对比与建议                                                     -->
+  <!-- ============================================================ -->
+  <section class="section">
+    <div class="sec-head">
+      <span class="sec-badge ghost">对比</span>
+      <h2>横向对比与选择建议</h2>
+    </div>
+
+    <table class="cmp">
+      <thead>
+        <tr>
+          <th>方案</th><th>卡片高度</th><th>约一屏条数*</th><th>封面依赖</th><th>信息密度</th><th>适合场景</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="dim">
+          <td>基线（现行）</td><td>~310px</td><td>6</td><td>不依赖（纯装饰）</td><td>低</td><td>—</td>
+        </tr>
+        <tr>
+          <td>A 封面主导</td><td>~280px</td><td>7</td><td>高</td><td>中低</td><td>收藏以图文内容为主、重「逛」轻「查」</td>
+        </tr>
+        <tr>
+          <td>B 索引卡</td><td>~110px</td><td>18~20</td><td>无</td><td>最高</td><td>重检索定位、条目以文字型为主</td>
+        </tr>
+        <tr>
+          <td>C 左图右文</td><td>~100px</td><td>20+</td><td>中（84px 小图）</td><td>高</td><td>配合宽列使用、从列表视图平滑过渡</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="foot-note">
+      * 一屏条数按内容区高约 700px、每行 4 列估算，仅供量级参考。<br>
+      <b>范围提示</b>：<code style="font-family:var(--mono);font-size:11px">BookmarkCard</code> 为工作台网格与导航页共用组件，选定方案后两处同时生效；
+      若导航页需要不同形态，需要拆分组件或加视图变体参数——这属于下一步屏稿要定的事。<br>
+      <b>共同约定</b>：三个方案均保留批量选择入口、AI 建议 / 重要 / 未整理标签语义与来源三色体系，仅调整版式与信息排布；密度收窄（紧凑模式隐藏摘要）沿用 DESIGN.md §5 的既有规则。
+    </p>
+  </section>
+
+</div>
+</body>
+</html>
