@@ -184,7 +184,7 @@ input[type="radio"] {
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   transition: var(--transition-color);
@@ -195,7 +195,7 @@ input[type="radio"] {
 input.input,
 select.input {
   height: var(--control-h);
-  padding: 0 10px;
+  padding: 0 var(--space-3);
 }
 
 /* select 接管外观（2026-09-27 新增）：此前全站下拉都是系统原生外观，各平台不一致，
@@ -260,6 +260,7 @@ select.input {
 /* ---------------------------------------------------------------- 顶栏 */
 
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -281,7 +282,7 @@ select.input {
 .topbar-brand {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: var(--space-2);
   border: none;
   background: none;
   padding: 0;
@@ -316,15 +317,17 @@ select.input {
   color: var(--faint);
 }
 
+/* 上限 320px（原 420px）：顶栏搜索只是 ⌘K 面板的入口，不是输入框。
+ * 收窄后顶栏中段的空档才能容纳向左滑出的同步浮条（见下方 .sync-strip）。 */
 .topbar-search {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   flex: 1;
-  max-width: 420px;
+  max-width: 320px;
   margin: 0 auto;
   height: var(--control-h);
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background-color: var(--panel);
@@ -357,6 +360,256 @@ select.input {
   align-items: center;
   gap: var(--space-2);
   margin-left: auto;
+}
+
+/* ------------------------------------------- 同步胶囊（顶栏右上角，2026-09-27 从状态栏迁来）
+ * 折叠态 = 三色灯箱 + 常驻积压数；悬停 / 点击向左滑出操作浮条。
+ * 「常驻积压数」是对原方案 D 的有意偏离：方案 D 折叠态只有灯、无文字，
+ * 那会让「要点开才知道有没有积压」——比原状态栏（常驻「待同步 N」）还退一步。
+ * 灯态四态：绿=数据一致 / 黄=有修改未同步 / 红=出错 / 黄绿交替=正在同步。
+ */
+.syncbox {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.sync-lamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full-pill);
+  background-color: var(--panel-raised);
+  color: var(--muted);
+  cursor: pointer;
+  transition: var(--transition-color), var(--transition-shadow);
+}
+
+.sync-lamp:hover,
+.syncbox.is-open .sync-lamp {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.sync-lamp-housing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.sync-lamp-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background-color: var(--line-strong);
+  opacity: 0.55;
+}
+
+.sync-lamp-dot.is-on-ok {
+  background-color: var(--mint);
+  opacity: 1;
+  box-shadow: 0 0 0 3px var(--mint-soft);
+}
+
+.sync-lamp-dot.is-on-warn {
+  background-color: var(--warn);
+  opacity: 1;
+  box-shadow: 0 0 0 3px var(--warn-soft);
+}
+
+.sync-lamp-dot.is-on-red {
+  background-color: var(--red);
+  opacity: 1;
+  box-shadow: 0 0 0 3px var(--red-soft);
+  animation: sync-lamp-blink 1.1s ease-in-out infinite;
+}
+
+.sync-lamp-dot.is-alt-warn {
+  animation: sync-lamp-alt-warn 1.4s ease-in-out infinite;
+}
+
+.sync-lamp-dot.is-alt-ok {
+  animation: sync-lamp-alt-ok 1.4s ease-in-out infinite;
+}
+
+@keyframes sync-lamp-blink {
+  0%,
+  100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes sync-lamp-alt-warn {
+  0%,
+  42% { background-color: var(--warn); opacity: 1; box-shadow: 0 0 0 3px var(--warn-soft); }
+  58%,
+  100% { background-color: var(--line-strong); opacity: 0.55; box-shadow: none; }
+}
+
+@keyframes sync-lamp-alt-ok {
+  0%,
+  42% { background-color: var(--line-strong); opacity: 0.55; box-shadow: none; }
+  58%,
+  100% { background-color: var(--mint); opacity: 1; box-shadow: 0 0 0 3px var(--mint-soft); }
+}
+
+.sync-lamp-count {
+  min-width: 1ch;
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  text-align: right;
+}
+
+.sync-lamp-count.is-err { color: var(--red); }
+.sync-lamp-count.is-ok { color: var(--mint); }
+
+/* 向左滑出的浮条（方案 D 镜像）。
+ * justify-content: flex-end 是关键：内容贴住右缘，宽度由 0 增长时最右侧先出现、
+ * 左侧后出现，读到的方向才是「向左生长」；用默认 flex-start 会读成向右展开。
+ * visibility 参与过渡是为了把收起态的按钮移出 Tab 序列——只用 opacity 隐藏时
+ * 键盘仍会聚焦到看不见的「拉取 / 推送」。
+ * 不设 z-index：浮条在定位层里天然压住 .app-body 的普通流内容，而带 z-index 的
+ * 遮罩（详情浮层的 backdrop）仍会正常盖住它。 */
+.sync-strip {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + var(--space-2));
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  width: max-content;
+  max-width: 0;
+  height: var(--control-h);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full-pill);
+  background-color: var(--panel);
+  box-shadow: var(--shadow-lg);
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(10px);
+  transition: max-width 200ms ease, padding 200ms ease, opacity 150ms ease,
+    transform 200ms ease, border-color 200ms ease, visibility 0s linear 200ms;
+}
+
+.syncbox:hover .sync-strip,
+.syncbox.is-open .sync-strip {
+  max-width: 380px;
+  padding: 0 var(--space-3);
+  border-color: var(--line);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(-50%);
+  transition-delay: 0s;
+}
+
+.syncbox.is-open .sync-strip {
+  border-color: var(--line-strong);
+}
+
+.sync-strip-acts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.sync-strip-btn {
+  height: var(--control-h-xs);
+  padding: 0 var(--space-2);
+  font-size: var(--fs-small);
+}
+
+/* 保底：.btn--pill 在文件里排在 .btn--primary 之后，两者同为单类特异性，
+ * 所以「btn--pill btn--primary」组合会被 pill 的 background:none / color:muted
+ * 吃掉实底橙（局部 hover 也一并被压）。浮条里的「推送」要保持实底，
+ * 这里用两类选择器把外观补回来——不调整全局按钮顺序，那会波及几十处调用点。 */
+.sync-strip-btn.btn--primary {
+  border-color: transparent;
+  background-color: var(--amber);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.sync-strip-btn.btn--primary:hover:not(:disabled) {
+  background-color: var(--amber-strong);
+}
+
+.sync-strip-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  font-size: var(--fs-small);
+  color: var(--faint);
+}
+
+.sync-strip-item b {
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.sync-strip-item--err,
+.sync-strip-item--err b { color: var(--red); }
+
+.sync-strip-item--warn,
+.sync-strip-item--warn b { color: var(--amber-strong); }
+
+.sync-strip-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--fs-small);
+  color: var(--amber-strong);
+  cursor: pointer;
+}
+
+.sync-strip-link:hover {
+  text-decoration: underline;
+}
+
+/* 尊重「减少动态效果」偏好：关掉灯的闪烁与交替，只留静态灯色
+ * （逐个列出动效类既能覆盖、又不动用 !important） */
+@media (prefers-reduced-motion: reduce) {
+  .sync-lamp-dot.is-on-red,
+  .sync-lamp-dot.is-alt-warn,
+  .sync-lamp-dot.is-alt-ok {
+    animation: none;
+  }
+}
+
+/* 中窄视口下顶栏中段没有 380px 空档（空档 ≈ (视口宽 - 599px) / 2），
+ * 故浮条改为右锚定、落在顶栏下沿之下：仍从右缘向左生长，但不会压住搜索入口。
+ * 锚点换成 .topbar（position: relative），所以这里把 .syncbox 的定位上下文撤掉。 */
+@media (max-width: 1365px) {
+  .syncbox {
+    position: static;
+  }
+
+  .sync-strip {
+    top: calc(100% + var(--space-1));
+    right: var(--space-4);
+    transform: translateY(-4px);
+  }
+
+  .syncbox:hover .sync-strip,
+  .syncbox.is-open .sync-strip {
+    max-width: min(380px, calc(100vw - var(--space-8)));
+    transform: none;
+  }
 }
 
 /* 图标按钮（原型 .icon-btn：30px 方形、hover 面板底） */
@@ -433,30 +686,61 @@ select.input {
 .sidebar {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
   width: var(--sidebar-w);
   min-width: var(--sidebar-w);
   height: 100%;
+  padding: var(--space-2);
   border-right: 1px solid var(--line);
   background-color: var(--sidebar-bg, var(--panel));
   overflow-y: auto;
 }
 
+/* 维度分组：白卡（方案 C）。三组此前只靠 16px 空白分隔，分组关系靠猜；
+ * 各自成为一张卡后，浅灰侧栏与白卡之间自然形成层次。 */
 .sidebar-group {
-  padding: 0 var(--space-3);
-  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background-color: var(--panel);
 }
 
-/* 分组标题（原型 .nav-label：小号大写宽字距） */
+/* 一级导航：扁平、无容器。白卡只留给三个维度组，层次才立得住 */
+.sidebar-group--flat {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+/* 分组标题（原型 .nav-label：小号宽字距）。
+ * 左内距与 .nav-item 相同（--space-2），使标题与条目左缘对齐——
+ * 此前标题左缘比条目更靠外 4px，缩进关系是反的。 */
 .sidebar-group-title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  gap: var(--space-2);
+  height: 22px;
   padding: 0 var(--space-2);
-  margin: var(--space-2) 0 var(--space-2);
   font-size: var(--fs-micro);
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   color: var(--faint);
+}
+
+.sidebar-group-title > svg {
+  font-size: var(--fs-small);
+  color: var(--faint);
+}
+
+.sidebar-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 维度条目数（取自已加载的列表） */
@@ -474,7 +758,6 @@ select.input {
   font-size: var(--fs-micro);
   letter-spacing: 0.08em;
   font-weight: 400;
-  text-transform: none;
 }
 
 .group-manage-link:hover {
@@ -511,13 +794,14 @@ select.input {
   gap: 1px;
 }
 
+/* 行高统一到 32px 控件族（原为 7px 内距凑出的约 32px，属巧合不是约定） */
 .nav-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
-  padding: 7px var(--space-3);
+  height: var(--control-h);
+  padding: 0 var(--space-2);
   border: none;
   border-radius: var(--radius-lg);
   background: none;
@@ -526,10 +810,22 @@ select.input {
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   transition: var(--transition-color);
+}
+
+/* 图标 14px（比 13px 标签大一号，视觉重量才配得上）；未选中时比标签更弱一档 */
+.nav-item > svg {
+  font-size: var(--fs-lead);
+  color: var(--faint);
+  transition: var(--transition-color);
+}
+
+.nav-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-item:hover {
@@ -537,11 +833,21 @@ select.input {
   background-color: var(--panel-hover);
 }
 
-/* 当前项（原型 .nav-item.active：琥珀底 + 2px 左侧条） */
+.nav-item:hover > svg {
+  color: var(--muted);
+}
+
+/* 当前项（原型 .nav-item.active：琥珀底 + 2px 左侧条）
+ * 注意：白卡分组里 --amber-soft 压在白底上比原先压在 #f7f7f5 侧栏上更清楚，
+ * 这也是「当前项几乎看不见」的成因之一。 */
 .nav-item[aria-current="page"] {
   color: var(--text);
   background-color: var(--amber-soft);
   box-shadow: inset 2px 0 var(--amber);
+}
+
+.nav-item[aria-current="page"] > svg {
+  color: var(--amber-strong);
 }
 
 /* 停用场景：仍在侧栏可点（否则「已挂书签仍能按它筛到」就落空了），但明显弱化 */
@@ -603,10 +909,241 @@ select.input {
   text-decoration: underline;
 }
 
+/* ---------------------------------------------------------- 账户菜单（左下角）
+ * 2026-09-27：合并原「设置」单项 + 原顶栏的主题切换与退出。
+ * 侧栏贴底，弹层只能朝上展开。顶栏不再保留主题入口，
+ * 「跟随系统」三态仍在设置页「外观」（这里的浅/深写的是显式偏好，语义同删除前的顶栏按钮）。 */
 .sidebar-footer {
   margin-top: auto;
-  padding: var(--space-2) var(--space-3);
+  padding-top: var(--space-2);
   border-top: 1px solid var(--line);
+}
+
+.account {
+  position: relative;
+}
+
+.account-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  text-align: left;
+  transition: var(--transition-color);
+}
+
+.account-trigger:hover {
+  color: var(--text);
+  background-color: var(--panel-hover);
+}
+
+.account.is-open .account-trigger {
+  color: var(--text);
+  background-color: var(--panel);
+  border-color: var(--line);
+}
+
+.account-trigger-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-caret {
+  font-size: var(--fs-small);
+  color: var(--faint);
+}
+
+.account-caret > svg {
+  transition: transform 200ms ease;
+}
+
+.account.is-open .account-caret > svg {
+  transform: rotate(180deg);
+}
+
+.account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background-color: var(--amber-soft);
+  color: var(--amber-strong);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+}
+
+.account-avatar--lg {
+  width: 24px;
+  height: 24px;
+  font-size: var(--fs-small);
+}
+
+.account-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  z-index: var(--z-sidebar);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background-color: var(--panel);
+  box-shadow: var(--modal-shadow);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  transition: opacity 160ms ease, transform 200ms ease, visibility 0s linear 200ms;
+}
+
+.account.is-open .account-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+
+.account-id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.account-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.account-who b {
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-who i {
+  font-style: normal;
+  font-size: var(--fs-micro);
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-sep {
+  height: 1px;
+  margin: var(--space-1) 0;
+  background-color: var(--line);
+}
+
+.account-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  text-align: left;
+  transition: var(--transition-color);
+}
+
+.account-item > svg {
+  font-size: var(--fs-lead);
+  color: var(--faint);
+  transition: var(--transition-color);
+}
+
+.account-item:hover {
+  color: var(--text);
+  background-color: var(--panel-hover);
+}
+
+.account-item:hover > svg {
+  color: var(--muted);
+}
+
+.account-item--danger,
+.account-item--danger > svg {
+  color: var(--red);
+}
+
+.account-item--danger:hover {
+  background-color: var(--red-soft);
+  color: var(--red);
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  font-size: var(--fs-body);
+  color: var(--muted);
+}
+
+.account-row > svg {
+  font-size: var(--fs-lead);
+  color: var(--faint);
+}
+
+.account-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0);
+  margin-left: auto;
+  padding: 0 var(--space-0);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--panel-raised);
+}
+
+.account-seg button {
+  height: var(--control-h-xs);
+  padding: 0 var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--fs-micro);
+}
+
+.account-seg button.on {
+  background-color: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  font-weight: 500;
 }
 
 /* 窄屏：侧栏转为覆盖式抽屉（原型窄屏抽屉 + 右投影） */
@@ -693,117 +1230,9 @@ select.input {
   border-radius: var(--radius-sm);
 }
 
-/* 同步状态卡片（20260927 屏稿）：状态栏「待同步」点击后向上弹出 */
-.statusbar-sync {
-  padding: 1px var(--space-2);
-  margin-left: calc(-1 * var(--space-2));
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-
-.statusbar-sync:hover {
-  background-color: var(--panel-hover);
-  color: var(--text);
-}
-
-.statusbar-sync[aria-expanded='true'] {
-  background-color: var(--panel-hover);
-  color: var(--text);
-}
-
-.statusbar-sync-fail {
-  color: var(--red);
-}
-
-.sync-card {
-  position: absolute;
-  bottom: calc(100% + var(--space-2));
-  left: var(--space-4);
-  z-index: 40;
-  display: grid;
-  gap: var(--space-2);
-  width: 300px;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background-color: var(--panel);
-  box-shadow: var(--shadow-lg);
-  font-family: var(--font-sans);
-  font-size: var(--fs-small);
-  color: var(--text);
-}
-
-.sync-card-title {
-  font-size: var(--fs-small);
-  font-weight: 600;
-}
-
-.sync-card-rows {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-  color: var(--muted);
-}
-
-.sync-card-rows b {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.sync-card-fail {
-  color: var(--red);
-}
-
-.sync-card-fail b {
-  color: var(--red);
-}
-
-.sync-card-warn {
-  color: var(--amber-strong);
-}
-
-.sync-card-warn b {
-  color: var(--amber-strong);
-}
-
-.sync-card-hint {
-  margin: 0;
-  font-size: var(--fs-micro);
-  color: var(--faint);
-}
-
-.sync-card-times {
-  display: grid;
-  gap: 2px;
-  font-size: var(--fs-micro);
-  color: var(--muted);
-}
-
-.sync-card-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding-top: var(--space-1);
-  border-top: 1px solid var(--line-soft);
-}
-
-.sync-card-link {
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-size: var(--fs-small);
-  color: var(--amber-strong);
-  cursor: pointer;
-}
-
-.sync-card-link:hover {
-  text-decoration: underline;
-}
+/* 同步状态卡片（20260927 屏稿 v1.0）原在此处：状态栏「待同步」点击后向上弹出。
+ * v1.1（2026-09-27）起整体迁到顶栏右上角的同步胶囊，见上方 .syncbox 段；
+ * 状态栏只保留瞬时任务（导入/导出进度）与撤销。 */
 
 /* ---------------------------------------------------------------- 通用文本 */
 
@@ -902,8 +1331,8 @@ select.input {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 9px;
+  gap: var(--space-1);
+  padding: var(--space-0) var(--space-2);
   border-radius: var(--radius-full-pill);
   background-color: var(--panel-hover);
   font-family: var(--font-sans);
@@ -922,7 +1351,7 @@ select.input {
 .stat-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1059,23 +1488,23 @@ select.input {
   display: flex;
   align-items: flex-start;
   gap: var(--space-5);
-  padding: var(--space-4);
+  padding: var(--space-6);
 }
 
 .settings-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0);
   flex: 0 0 180px;
   position: sticky;
-  top: var(--space-4);
+  top: var(--space-6);
 }
 
 .settings-tab {
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
   background: none;
-  padding: 9px 12px;
+  padding: var(--space-2) var(--space-3);
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   color: var(--muted);
@@ -1136,7 +1565,7 @@ select.input {
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
-  padding: 0 var(--space-6) var(--space-4);
+  padding: var(--space-4) var(--space-6);
 }
 
 .toolbar-search {
@@ -1146,7 +1575,7 @@ select.input {
   flex: 1 1 220px;
   max-width: 240px;
   height: var(--control-h);
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background-color: var(--panel);
@@ -1189,7 +1618,7 @@ select.input {
   justify-content: center;
   border: none;
   background: none;
-  padding: 0 var(--spacing-2);
+  padding: 0 var(--space-0);
   color: var(--faint);
   cursor: pointer;
   font-size: var(--fs-small);
@@ -1211,7 +1640,7 @@ select.input {
   align-items: center;
   gap: var(--space-1);
   height: var(--control-h);
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-lg);
   background-color: var(--panel);
@@ -1242,7 +1671,7 @@ select.input {
   justify-content: center;
   min-width: 16px;
   height: 16px;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-full-pill);
   background-color: var(--amber);
   color: var(--on-accent);
@@ -1306,7 +1735,7 @@ select.input {
 
 .input.toolbar-sort {
   height: var(--control-h);
-  padding: 0 28px 0 10px;
+  padding: 0 28px 0 var(--space-3);
   color: var(--muted);
 }
 
@@ -1326,7 +1755,7 @@ select.input {
   min-width: 17px;
   height: 17px;
   margin-left: var(--space-1);
-  padding: 0 5px;
+  padding: 0 var(--space-1);
   border-radius: var(--radius-full-pill);
   background-color: color-mix(in srgb, var(--on-accent) 22%, transparent);
   color: var(--on-accent);
@@ -1342,7 +1771,7 @@ select.input {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background-color: var(--panel);
-  padding: 0 11px;
+  padding: 0 var(--space-3);
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   color: var(--muted);
@@ -1384,9 +1813,9 @@ select.input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--space-2);
   height: calc(var(--control-h) - 6px);
-  padding: 0 11px;
+  padding: 0 var(--space-3);
   border: none;
   border-radius: var(--radius);
   background: none;
@@ -1424,9 +1853,9 @@ select.input {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   height: auto;
-  padding: 2px 9px;
+  padding: var(--space-0) var(--space-2);
   border-radius: var(--radius-full-pill);
   background-color: var(--panel-hover);
   font-family: var(--font-sans);
@@ -1459,7 +1888,7 @@ select.input {
   font-family: var(--font-mono);
   font-size: var(--fs-micro);
   letter-spacing: 0.06em;
-  padding: 2px 6px;
+  padding: var(--space-0) var(--space-2);
   border-radius: var(--radius-sm);
 }
 
@@ -1474,7 +1903,7 @@ select.input {
   border: none;
   border-radius: var(--radius);
   background: none;
-  padding: 0 10px;
+  padding: 0 var(--space-2);
   font-family: var(--font-sans);
   font-size: var(--fs-small);
   color: var(--muted);
@@ -1577,27 +2006,33 @@ select.input {
   display: none;
 }
 
-/* 顶部信息层：选择键 / 域名 chip / 状态徽标 */
-.bm-card-overlay {
+/* 封面底行：来源点（左）＋ 域名 chip（右）。
+ * 选择键与状态徽标已各自绝对定位到左上 / 右上，不在这一行里，
+ * 故选择键的出现不会推动域名——这是 2026-09-27 修的「多选框推挤主域名」。 */
+.bm-card-bottom {
   position: absolute;
   z-index: 1;
-  top: 8px;
-  left: 8px;
-  right: 8px;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: var(--space-2);
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-/* 域名 chip：面板覆盖底 + mono 域名 + 来源色首字标，兼任打开原文入口 */
+/* 域名 chip：面板覆盖底 + mono 域名 + 来源色首字标，兼任打开原文入口。
+ * 右锚定、可收缩：长域名走省略号，不再把 chip 本身压扁。
+ * 上限 140px：卡片最小 228px 宽，扣掉左下来源点后仍留得下。 */
 .bm-card-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
   min-width: 0;
-  max-width: 70%;
-  padding: 3px 8px 3px 4px;
+  max-width: 140px;
+  flex: 0 1 auto;
+  margin-left: auto;
+  padding: var(--space-0) var(--space-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background-color: var(--panel-overlay);
@@ -1633,7 +2068,7 @@ select.input {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: 2px;
+  padding: var(--space-0);
 }
 
 .bm-card-chip.src-page .chip-ico { background-color: var(--amber); }
@@ -1648,12 +2083,16 @@ select.input {
 }
 
 /* 状态徽标：沿用原型 cover-status 的圆点 + 柔和底样式 */
+/* 状态徽标：右上角独立锚定（沿用原型 cover-status 的圆点 + 柔和底样式） */
 .bm-card-flag {
+  position: absolute;
+  z-index: 1;
+  top: var(--space-2);
+  right: var(--space-2);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  padding: 1px 7px;
+  gap: var(--space-1);
+  padding: 1px var(--space-2);
   border-radius: var(--radius-full-pill);
   background-color: var(--panel-overlay);
   font-size: var(--fs-micro);
@@ -1676,16 +2115,13 @@ select.input {
 .bm-card-flag.state-archived { color: var(--slate); }
 .bm-card-flag.state-archived::before { background-color: var(--slate); }
 
-/* 左下来源点：色点 + mono 来源字 */
+/* 来源点：底行左端（不再是绝对定位，改由 .bm-card-bottom 布局，与域名 chip 同排） */
 .bm-card-srcdot {
-  position: absolute;
-  z-index: 1;
-  left: 10px;
-  bottom: 8px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 9px;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  padding: var(--space-0) var(--space-2);
   border: 1px solid var(--line);
   border-radius: var(--radius-full-pill);
   background-color: var(--panel-overlay);
@@ -1771,12 +2207,12 @@ select.input {
   flex-direction: column;
   flex: 1;
   gap: 0;
-  padding: 11px 13px 12px;
+  padding: var(--space-3);
   min-height: 0;
 }
 
 .bm-card-title {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-2);
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   font-weight: 600;
@@ -1792,7 +2228,7 @@ select.input {
 
 .bm-card-note,
 .bm-card-excerpt {
-  margin: 0 0 9px;
+  margin: 0 0 var(--space-2);
   font-family: var(--font-sans);
   font-size: var(--fs-small);
   line-height: 1.5;
@@ -1811,14 +2247,14 @@ select.input {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   margin-top: auto;
 }
 
 .tag-pill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: var(--space-0) var(--space-2);
   border-radius: var(--radius);
   border: 1px solid var(--line);
   background: none;
@@ -1851,7 +2287,7 @@ select.input {
   background: none;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 2px 8px;
+  padding: var(--space-0) var(--space-2);
   color: var(--muted);
 }
 
@@ -1939,7 +2375,7 @@ select.input {
 .bm-col-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0);
   min-width: 0;
 }
 
@@ -1966,7 +2402,7 @@ select.input {
 
 .bm-col-actions {
   display: flex;
-  gap: 5px;
+  gap: var(--space-1);
   justify-content: flex-end;
 }
 
@@ -2016,7 +2452,7 @@ select.input {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--line);
 }
 
@@ -2052,13 +2488,13 @@ select.input {
   background-color: var(--panel-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius-full-pill);
-  padding: 1px 7px;
+  padding: 1px var(--space-2);
 }
 
 .bm-board-cards {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--space-2);
   padding: var(--space-2);
   min-height: 90px;
 }
@@ -2066,8 +2502,8 @@ select.input {
 .bm-board-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 9px;
+  gap: var(--space-0);
+  padding: var(--space-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background-color: var(--panel-raised);
@@ -2124,8 +2560,8 @@ select.input {
   max-width: 280px;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 12px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
   border-radius: var(--radius);
   background-color: var(--panel-overlay);
@@ -2179,8 +2615,8 @@ select.input {
 .bm-tile-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px 0;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
   min-width: 0;
 }
 
@@ -2206,7 +2642,7 @@ select.input {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: 2px;
+  padding: var(--space-0);
 }
 
 .bm-tile-initial {
@@ -2253,7 +2689,7 @@ select.input {
 .bm-tile-dot.state-archived { background-color: var(--slate); }
 
 .bm-tile-title {
-  padding: 5px 12px 0;
+  padding: var(--space-1) var(--space-3) 0;
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   font-weight: 600;
@@ -2267,7 +2703,7 @@ select.input {
 }
 
 .bm-tile-sub {
-  margin: 4px 12px 0;
+  margin: var(--space-1) var(--space-3) 0;
   font-family: var(--font-sans);
   font-size: var(--fs-small);
   line-height: 1.5;
@@ -2282,9 +2718,9 @@ select.input {
 .bm-tile-foot {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   margin-top: 8px;
-  padding: 5px 12px;
+  padding: var(--space-1) var(--space-3);
   border-top: 1px solid var(--line-soft);
   background-color: var(--panel-raised);
   min-width: 0;
@@ -2292,7 +2728,7 @@ select.input {
 
 .bm-tile-tags {
   display: flex;
-  gap: 5px;
+  gap: var(--space-1);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -2301,7 +2737,7 @@ select.input {
 .bm-tile-foot-end {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   flex: 0 0 auto;
   margin-left: auto;
 }
@@ -2365,8 +2801,8 @@ select.input {
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
-  margin: 0 var(--space-6) var(--space-3);
-  padding: 9px 14px;
+  margin: 0 var(--space-6) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
   border-radius: var(--radius-lg);
   background-color: var(--panel-raised);
@@ -2387,7 +2823,7 @@ select.input {
 /* 信息密度：由当前 Scene 的 AERR 原型决定（PRD §2.0.3）。
  * compact 用于「以后反复查」类场景：收窄网格并隐藏摘要（对齐原型 data-density）。 */
 .bookmark-area[data-density="compact"] {
-  padding: 0 var(--space-4) var(--space-5);
+  padding: 0 var(--space-6) var(--space-5);
 }
 
 .bookmark-area[data-density="compact"] .bm-grid {
@@ -2448,11 +2884,11 @@ select.input {
   display: flex;
   gap: var(--space-2);
   flex-wrap: wrap;
-  padding: 0 var(--space-6) var(--space-3);
+  padding: 0 var(--space-6) var(--space-4);
 }
 
 .save-form-wrap {
-  padding: 0 var(--space-6) var(--space-3);
+  padding: 0 var(--space-6) var(--space-4);
 }
 
 .load-more {
@@ -2616,8 +3052,8 @@ select.input {
 .tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3.5px 9px;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: none;
@@ -2738,7 +3174,7 @@ select.input {
   align-items: center;
   gap: var(--space-2);
   max-width: min(420px, calc(100vw - 32px));
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--line-strong);
   border-left-width: 2px;
   border-radius: var(--radius-lg);
@@ -2767,7 +3203,7 @@ select.input {
   flex-shrink: 0;
   border: none;
   background: none;
-  padding: 0 var(--spacing-2);
+  padding: 0 var(--space-0);
   font-family: var(--font-sans);
   font-size: var(--fs-small);
   color: var(--amber-strong);
@@ -2790,7 +3226,7 @@ select.input {
   flex-shrink: 0;
   border: none;
   background: none;
-  padding: 0 var(--spacing-2);
+  padding: 0 var(--space-0);
   color: var(--faint);
   cursor: pointer;
   font-size: var(--fs-small);
@@ -2829,11 +3265,11 @@ select.input {
 
 /* 骨架在具体容器内的行距 */
 .bm-card-body .skel-line {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-2);
 }
 
 .bm-card-body .skel-line.w40 {
-  margin: 0 0 9px;
+  margin: 0 0 var(--space-2);
 }
 
 .bm-card-body .skel-line:last-child {
@@ -2980,7 +3416,7 @@ select.input {
 .detail-facts {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: var(--space-2);
 }
 
 .detail-fact-row {
@@ -3184,7 +3620,7 @@ select.input {
   flex-direction: column;
   gap: var(--space-3);
   width: min(340px, 100%);
-  padding: var(--space-6) var(--space-6) var(--space-6);
+  padding: var(--space-6);
   border: 1px solid var(--line);
   border-radius: var(--radius-featured);
   background-color: var(--panel);
@@ -3195,7 +3631,7 @@ select.input {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: var(--space-2);
   margin: 0;
   font-family: var(--font-sans);
   font-size: var(--fs-title-sm);
@@ -3377,7 +3813,7 @@ select.input {
 .palette-item-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0);
   min-width: 0;
 }
 
@@ -3413,7 +3849,7 @@ select.input {
   flex-direction: column;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-6) var(--space-4);
+  padding: var(--space-6);
   text-align: center;
 }
 
@@ -3469,7 +3905,7 @@ select.input {
 
 /* ---------------------------------------------------------------- 工具修饰符
  * 内联样式的下沉落点（N1-3）：只承载单值差异，全部叠加在既有类上使用。
- * 像素值沿用 --spacing-* 别名（像素语义明确）。
+ * 间距一律走 --space-* 刻度（见 DESIGN.md §5.1）。
  */
 
 /* 文本 flush / 间距 */
@@ -3480,11 +3916,11 @@ select.input {
 
 .muted--gap-top,
 .field-row--gap-top {
-  margin-top: var(--spacing-12);
+  margin-top: var(--space-3);
 }
 
 .muted--gap-bottom {
-  margin-bottom: var(--spacing-12);
+  margin-bottom: var(--space-3);
 }
 
 /* 标题变体 */
@@ -3554,16 +3990,16 @@ select.input {
 
 /* 徽标 / pill 间距 */
 .badge--gap {
-  margin-left: var(--spacing-8);
+  margin-left: var(--space-2);
 }
 
 .pill--gap {
-  margin-left: var(--spacing-6);
+  margin-left: var(--space-1);
 }
 
 /* 加载态（App 悬浮文案与 Loading 组件共用） */
 .loading {
-  padding: var(--spacing-64) var(--spacing-16);
+  padding: var(--space-8) var(--space-4);
   text-align: center;
   font-family: var(--font-sans);
   font-size: var(--fs-body);
@@ -3576,7 +4012,7 @@ select.input {
 
 /* 快照按钮下的状态提示 */
 .snapshot-hint {
-  margin-top: var(--spacing-4);
+  margin-top: var(--space-1);
   font-family: var(--font-sans);
   font-size: var(--fs-small);
   color: var(--faint);
@@ -3590,12 +4026,12 @@ select.input {
 .chips-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-6);
+  gap: var(--space-2);
 }
 
 /* 页面容器与行内提示变体 */
 .org-content--padded {
-  padding: var(--spacing-16);
+  padding: var(--space-6);
 }
 
 .list-row-meta--error {
@@ -3611,7 +4047,7 @@ select.input {
 .input.tag-chip-rename-input {
   width: 96px;
   height: auto;
-  padding: 2px 6px;
+  padding: var(--space-0) var(--space-2);
   font-size: var(--fs-small);
 }
 

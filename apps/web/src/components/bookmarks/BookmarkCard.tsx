@@ -102,16 +102,31 @@ export function BookmarkCard({
           />
         )}
 
-        <div className="bm-card-overlay">
-          {selectable && (
-            <input
-              type="checkbox"
-              className={`bm-card-select${selected ? ' checked' : ''}`}
-              checked={Boolean(selected)}
-              aria-label={selected ? '取消选择' : '选择该书签'}
-              onClick={(event) => event.stopPropagation()}
-              onChange={() => onToggleSelect?.(bookmark.id)}
-            />
+        {/* 封面四角各自锚定：选择键左上、状态徽标右上、来源点左下、域名 chip 右下。
+            此前四者同处一个 flex 行，选择键一出现就把域名右推约 24px ——
+            现在四者各自定位，选择键出现或消失都不改变域名位置。 */}
+        {selectable && (
+          <input
+            type="checkbox"
+            className={`bm-card-select${selected ? ' checked' : ''}`}
+            checked={Boolean(selected)}
+            aria-label={selected ? '取消选择' : '选择该书签'}
+            onClick={(event) => event.stopPropagation()}
+            onChange={() => onToggleSelect?.(bookmark.id)}
+          />
+        )}
+
+        {status && (
+          <span className={`bm-card-flag state-${status}`}>
+            {label(STATUS_LABELS, status)}
+          </span>
+        )}
+
+        <div className="bm-card-bottom">
+          {source && (
+            <span className={`bm-card-srcdot srcdot-${source}`}>
+              <span className="srcdot-label">{label(SOURCE_LABELS, source)}</span>
+            </span>
           )}
           {/* 域名 chip：兼任「打开原链接」入口（替代原独立域名按钮行） */}
           <a
@@ -128,18 +143,7 @@ export function BookmarkCard({
             </span>
             <span className="chip-dom">{domain}</span>
           </a>
-          {status && (
-            <span className={`bm-card-flag state-${status}`}>
-              {label(STATUS_LABELS, status)}
-            </span>
-          )}
         </div>
-
-        {source && (
-          <span className={`bm-card-srcdot srcdot-${source}`}>
-            <span className="srcdot-label">{label(SOURCE_LABELS, source)}</span>
-          </span>
-        )}
       </div>
 
       <div className="bm-card-body">

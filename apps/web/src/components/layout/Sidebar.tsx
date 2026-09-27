@@ -1,22 +1,31 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'wouter'
-import { navItems, settingsNavItem, isActive } from '../../app/navigation.js'
+import { navItems, isActive } from '../../app/navigation.js'
 import { organizationApi } from '../../api/organization.js'
 import { onOrgChanged } from '../../org-events.js'
 import { useStats, countForDimension } from '../../stats-store.js'
+import { Icon } from '../ui/Icon.js'
+import { AccountMenu } from './AccountMenu.js'
 import type { SceneResponse, FolderResponse, TagResponse } from '../../types/api.js'
 
 interface SidebarProps {
   open: boolean
   onNavigate?: () => void
+  onLogout: () => void | Promise<void>
 }
 
 /**
- * 侧栏：主区固定导航 + 三个组织维度（Scene / 文件夹 / 标签）+ 底部设置。
- * 维度列表点击后带 query 参数跳到工作台筛选；本轮不显示各维度计数
- * （无对应接口，见 docs/modules/20260910_工作台外壳屏稿.md §4）。
+ * 侧栏：一级导航（扁平 + 图标）+ 三个组织维度（各一张白卡）+ 左下角账户菜单。
+ *
+ * 2026-09-27（方案 C）：
+ * - 一级导航此前是全站唯一没有图标语言的一级导航（顶栏、工具栏早已换内联 SVG），
+ *   且分组标题的字号 / 字重与条目几乎相同——现在导航补图标、行高统一到 32px 控件族；
+ * - 场景 / 文件夹 / 标签三组此前只靠 16px 空白分隔、标题左缘还比条目更靠外
+ *   （缩进关系反了），现在三组各自成为一张白卡坐在浅灰侧栏上，标题与条目左缘对齐；
+ * - 底部「设置」扩为账户菜单，合并原顶栏的主题切换与退出，见 AccountMenu。
+ * 维度列表点击后带 query 参数跳到工作台筛选；计数来自 GET /api/stats。
  */
-export function Sidebar({ open, onNavigate }: SidebarProps) {
+export function Sidebar({ open, onNavigate, onLogout }: SidebarProps) {
   const [location, setLocation] = useLocation()
   const [scenes, setScenes] = useState<SceneResponse[]>([])
   const [folders, setFolders] = useState<FolderResponse[]>([])
@@ -75,7 +84,8 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
 
   return (
     <aside className={`sidebar${open ? ' sidebar--open' : ''}`}>
-      <nav className="sidebar-group">
+      {/* 一级导航：扁平、无容器（白卡只留给三个维度组，层次才立得住） */}
+      <nav className="sidebar-group sidebar-group--flat">
         <div className="sidebar-nav">
           {navItems.map((item) => {
             const count = navCount(item.path)
@@ -87,7 +97,8 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
                 aria-current={isActive(location, item.path) ? 'page' : undefined}
                 onClick={() => (item.path === '/' || item.path === '/bookmarks' ? goWorkbench(item.path) : go(item.path))}
               >
-                {item.label}
+                <Icon name={item.icon} />
+                <span className="nav-item-label">{item.label}</span>
                 {count !== null && <span className="nav-item-count">{count}</span>}
               </button>
             )
@@ -98,7 +109,11 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
       <div className="sidebar-group">
         {/* v1.14 起各维度行显示「该维度下有多少书签」，来自 GET /api/stats 聚合；
             此前的近似口径（取已加载列表 / 仅维度条目数）已移除。 */}
-        <h3 className="sidebar-group-title">场景 <span className="group-count">{scenes.length}</span></h3>
+        <h3 className="sidebar-group-title">
+          <Icon name="sparkle" />
+          <span className="sidebar-group-label">场景</span>
+          <span className="group-count">{scenes.length}</span>
+        </h3>
         {scenes.length === 0 ? (
           <p className="sidebar-empty">
             {loaded ? <>还没有场景 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
@@ -117,7 +132,7 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
                   title={scene.enabled === false ? '该场景已停用；仍可筛出已挂在它下面的书签' : undefined}
                   onClick={() => goFiltered('sceneId', scene.id)}
                 >
-                  {scene.name}
+                  <span className="nav-item-label">{scene.name}</span>
                   {count !== null && <span className="nav-item-count">{count}</span>}
                 </button>
               )
@@ -127,7 +142,11 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
       </div>
 
       <div className="sidebar-group">
-        <h3 className="sidebar-group-title">文件夹 <span className="group-count">{folders.length}</span></h3>
+        <h3 className="sidebar-group-title">
+          <Icon name="folder" />
+          <span className="sidebar-group-label">文件夹</span>
+          <span className="group-count">{folders.length}</span>
+        </h3>
         {folders.length === 0 ? (
           <p className="sidebar-empty">
             {loaded ? <>还没有文件夹 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
@@ -143,7 +162,7 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
                   className="nav-item"
                   onClick={() => goFiltered('folderId', folder.id)}
                 >
-                  {folder.name}
+                  <span className="nav-item-label">{folder.name}</span>
                   {count !== null && <span className="nav-item-count">{count}</span>}
                 </button>
               )
@@ -154,7 +173,9 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
 
       <div className="sidebar-group">
         <h3 className="sidebar-group-title">
-          标签 <span className="group-count">{tags.length}</span>
+          <Icon name="tags" />
+          <span className="sidebar-group-label">标签</span>
+          <span className="group-count">{tags.length}</span>
           {/* 改名 / 合并的完整管理面在组织管理页（v1.14）；侧栏只给入口 */}
           <a
             className="sidebar-empty-link group-manage-link"
@@ -179,7 +200,9 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
                   className="nav-item"
                   onClick={() => goFiltered('tagId', tag.id)}
                 >
-                  <span className="nav-item-tag-hash" aria-hidden="true">#</span>{tag.name}
+                  <span className="nav-item-label">
+                    <span className="nav-item-tag-hash" aria-hidden="true">#</span>{tag.name}
+                  </span>
                   {count !== null && <span className="nav-item-count">{count}</span>}
                 </button>
               )
@@ -189,14 +212,7 @@ export function Sidebar({ open, onNavigate }: SidebarProps) {
       </div>
 
       <div className="sidebar-footer">
-        <button
-          type="button"
-          className="nav-item"
-          aria-current={isActive(location, settingsNavItem.path) ? 'page' : undefined}
-          onClick={() => go(settingsNavItem.path)}
-        >
-          {settingsNavItem.label}
-        </button>
+        <AccountMenu onLogout={onLogout} onNavigate={onNavigate} />
       </div>
     </aside>
   )

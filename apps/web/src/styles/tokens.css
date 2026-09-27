@@ -7,9 +7,10 @@
  * 两层命名：
  *  1) 语义名（--canvas / --panel / --amber …）：组件样式的首选引用；
  *     注：--amber 等为历史命名，语义上是「主强调色 accent」，当前值为 Cloudflare 橙。
- *  2) 兼容别名（--color-* / --spacing-* / --radius-*）：既有页面与内联样式仍在引用，
+ *  2) 兼容别名（--color-* / --radius-*）：既有页面与内联样式仍在引用，
  *     全部指向第 1 层，保证未重做的页面同步换肤。别名数值不再表示深浅层级，
  *     而是「视觉角色」映射（例如 --color-bg-surface-400 = 卡片面 = --panel）。
+ *     注：--spacing-* 别名层已于 2026-09-27 整块删除（原因见下方「间距」注释）。
  */
 
 :root {
@@ -46,6 +47,13 @@
   --mint-soft: rgba(68, 131, 97, 0.14);
   --red: #d44c47;
   --red-soft: rgba(212, 76, 71, 0.12);
+  /* 同步灯专用黄（2026-09-27）：与 --amber 分开。
+   * --amber 是 accent（品牌橙），语义是「可点、被选中、主操作」；
+   * 同步灯的「有修改未同步」是状态黄，用它会让「待同步」看起来像可点的主操作。
+   * 注意与兼容别名区的 --color-text-warning / --color-bg-warning-subtle 区分：
+   * 那两个指向 --rust（褐），服务于「提示条」的警示语气，不是同一语义。 */
+  --warn: #c99a2e;
+  --warn-soft: rgba(201, 154, 46, 0.16);
   --blue: #337ea9;
   --blue-soft: rgba(51, 126, 169, 0.14);
   --indigo: #6940a5;
@@ -86,12 +94,23 @@
   --radius-comfortable: 6px; /* = --radius-lg，历史别名，语义「按钮与面板」 */
   --radius-featured: 8px;    /* 弹层：模态、命令面板、登录卡 */
 
+  /* ---- 间距刻度（2026-09-27 归到 4px 网格，8 档）
+   * 相邻档差 +4/+4/+4/+8/+8/+16/+16，呈可预测的倍增。
+   * 原 --space-5(22px) / --space-6(30px) 不在 4px 网格上（4×5.5 / 4×7.5），
+   * 是全部 token 里唯一破格的两档——相邻区块间距因此不可预测，
+   * 16px 与 22px 只差 6px 在 13px 正文旁读作「没对齐」而非「有意为之」，
+   * 本轮归位。依据见 docs/modules/20260927_侧栏与间距体系改造.md §2.1。
+   * 例外白名单（允许字面 px，见 DESIGN.md §5.1）：0、1px/2px 描边微调、
+   * auto、空状态与加载态的居中大留白。 */
+  --space-0: 2px;  /* 微衬（承接原 --spacing-2 的语义） */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 22px;
-  --space-6: 30px;
+  --space-5: 24px; /* 2026-09-27 由 22px 归位 */
+  --space-6: 32px; /* 2026-09-27 由 30px 归位；页面级主留白与控件水平内距 */
+  --space-7: 48px;
+  --space-8: 64px; /* 加载态居中留白 */
 
   --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.06);
   --shadow-lg: 0 4px 14px rgba(15, 15, 15, 0.1);
@@ -172,25 +191,11 @@
   --font-body: var(--font-serif);
   --font-code: var(--font-mono);
 
-  /* 间距（沿用既有像素语义；组件样式优先用 --space-*） */
-  --spacing-1: 1.5px;
-  --spacing-2: 2px;
-  --spacing-2_5: 2.5px;
-  --spacing-3: 3px;
-  --spacing-4: 4px;
-  --spacing-5: 5px;
-  --spacing-6: 6px;
-  --spacing-8: 8px;
-  --spacing-10: 10px;
-  --spacing-12: 12px;
-  --spacing-14: 14px;
-  --spacing-16: 16px;
-  --spacing-24: 24px;
-  --spacing-32: 32px;
-  --spacing-48: 48px;
-  --spacing-64: 64px;
-  --spacing-96: 96px;
-  --spacing-sidebar: var(--sidebar-w);
+  /* 间距：已收敛为上方 --space-* 单一刻度（2026-09-27）。
+   * 原 --spacing-* 像素刻度（17 档）整块删除：它与 --space-* 名字形状相同、
+   * 数值相差 4~5 倍（--spacing-6=6px vs --space-6=32px），笔误不报错、
+   * 只让界面多出几十像素空白，是间距不一致的制度性来源。
+   * 侧栏宽度请用 --sidebar-w（原 --spacing-sidebar 无实际引用）。 */
 
   /* 圆角（--radius-comfortable / --radius-featured 已上移为第 1 层主 token） */
   --radius-micro: 2px;
@@ -250,6 +255,8 @@
   --mint-soft: rgba(108, 173, 148, 0.16);
   --red: #e16f6a;
   --red-soft: rgba(225, 111, 106, 0.16);
+  --warn: #dcb457;
+  --warn-soft: rgba(220, 180, 87, 0.16);
   --blue: #6fa5c9;
   --blue-soft: rgba(111, 165, 201, 0.16);
   --indigo: #9b8cd9;

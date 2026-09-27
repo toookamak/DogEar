@@ -13,7 +13,7 @@ interface AppShellProps {
 
 /**
  * 应用外壳：顶栏 + 正文（侧栏 + 内容区）+ 状态栏。
- * 侧栏在 ≥768px 常驻（宽度由 --spacing-sidebar 控制），窄屏转为抽屉，由顶栏 ☰ 开关。
+ * 侧栏在 ≥768px 常驻（宽度由 --sidebar-w 控制），窄屏转为抽屉，由顶栏 ☰ 开关。
  */
 export function AppShell({ children, onLogout }: AppShellProps) {
   const [showWizard, setShowWizard] = useState(() => {
@@ -32,14 +32,18 @@ export function AppShell({ children, onLogout }: AppShellProps) {
 
   return (
     <div className="app-shell">
+      {/* 顶栏只留全局状态与全局入口；主题切换与退出在侧栏左下角的账户菜单（需 onLogout） */}
       <TopBar
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((open) => !open)}
-        onLogout={onLogout}
       />
 
       <div className="app-body">
-        <Sidebar open={sidebarOpen} onNavigate={() => setSidebarOpen(false)} />
+        <Sidebar
+          open={sidebarOpen}
+          onNavigate={() => setSidebarOpen(false)}
+          onLogout={onLogout}
+        />
         {sidebarOpen && (
           <button
             type="button"
