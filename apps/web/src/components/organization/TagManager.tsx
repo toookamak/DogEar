@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { TagResponse } from '../../types/api.js'
 import { ConfirmDialog } from '../feedback/ConfirmDialog.js'
+import { Icon } from '../ui/Icon.js'
 
 interface TagManagerProps {
   tags: TagResponse[]
@@ -141,7 +142,7 @@ export function TagManager({ tags, onCreate, onRename, onMerge, onDelete }: TagM
                   title="改名"
                   aria-label={`改名标签 ${tag.name}`}
                 >
-                  ✎
+                  <Icon name="edit" />
                 </button>
                 <button
                   type="button"
@@ -150,7 +151,7 @@ export function TagManager({ tags, onCreate, onRename, onMerge, onDelete }: TagM
                   title="合并到其他标签"
                   aria-label={`合并标签 ${tag.name}`}
                 >
-                  ⇄
+                  <Icon name="swap" />
                 </button>
                 <button
                   type="button"
@@ -159,7 +160,7 @@ export function TagManager({ tags, onCreate, onRename, onMerge, onDelete }: TagM
                   title="删除标签"
                   aria-label={`删除标签 ${tag.name}`}
                 >
-                  ×
+                  <Icon name="close" />
                 </button>
               </>
             )}

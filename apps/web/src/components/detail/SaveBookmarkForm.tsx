@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Icon } from '../ui/Icon.js'
 
 interface SaveBookmarkFormProps {
   onSave: (data: { url: string; note?: string; intent?: string; important?: boolean; private?: boolean }) => void
@@ -32,7 +33,7 @@ export function SaveBookmarkForm({ onSave, onClose }: SaveBookmarkFormProps) {
     <form onSubmit={handleSubmit} className="save-form">
       <div className="manager-head manager-head--flush">
         <h3 className="section-title section-title--flush">添加书签</h3>
-        <button type="button" className="icon-btn" aria-label="关闭添加表单" onClick={onClose}>×</button>
+        <button type="button" className="icon-btn" aria-label="关闭添加表单" onClick={onClose}><Icon name="close" /></button>
       </div>
 
       <input

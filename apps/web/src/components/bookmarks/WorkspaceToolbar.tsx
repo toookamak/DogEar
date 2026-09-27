@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SOURCE_LABELS, label } from '../../utils/format.js'
 import { CREATED_RANGES, activeFilterCount, type WorkbenchFilters } from '../../utils/filters.js'
+import { Icon, type IconName } from '../ui/Icon.js'
 import type { SceneResponse, FolderResponse, TagResponse } from '../../types/api.js'
 
 export type ViewMode = 'grid' | 'tags' | 'list' | 'board'
@@ -31,11 +32,12 @@ interface Props {
   onScenePrimaryAction: () => void
 }
 
-const VIEW_META: Record<ViewMode, { label: string; glyph: string }> = {
-  grid: { label: '网格', glyph: '▦' },
-  tags: { label: '标签', glyph: '◈' },
-  list: { label: '列表', glyph: '☷' },
-  board: { label: '看板', glyph: '▤' },
+/** 视图切换：图标用内联 SVG（原 ▦ ◈ ☷ ▤ 来自不同字体，字宽与基线不一致） */
+const VIEW_META: Record<ViewMode, { label: string; icon: IconName }> = {
+  grid: { label: '网格', icon: 'grid' },
+  tags: { label: '标签', icon: 'tags' },
+  list: { label: '列表', icon: 'list' },
+  board: { label: '看板', icon: 'board' },
 }
 
 /** 来源筛选项（v1.14 起收进弹层；raindrop 来自双向拉回/导入） */
@@ -96,7 +98,7 @@ export function WorkspaceToolbar({
     <div className="toolbar-wrap">
       <div className="toolbar">
         <label className="toolbar-search">
-          <span className="toolbar-search-icon" aria-hidden="true">⌕</span>
+          <span className="toolbar-search-icon" aria-hidden="true"><Icon name="search" /></span>
           <input
             ref={inputRef}
             type="search"
@@ -112,7 +114,7 @@ export function WorkspaceToolbar({
               aria-label="清除搜索"
               onClick={() => onQuery('')}
             >
-              ×
+              <Icon name="close" />
             </button>
           )}
         </label>
@@ -126,7 +128,7 @@ export function WorkspaceToolbar({
               onClick={() => setShowFilterPop((v) => !v)}
               title="按状态、来源、时间等维度筛选"
             >
-              <span aria-hidden="true">⚙</span> 筛选
+              <span aria-hidden="true"><Icon name="filter" /></span> 筛选
               {activeCount > 0 && <span className="filter-toggle-count">{activeCount}</span>}
             </button>
 
@@ -249,7 +251,7 @@ export function WorkspaceToolbar({
                 title={VIEW_META[key].label}
                 onClick={() => onView(key)}
               >
-                <span aria-hidden="true">{VIEW_META[key].glyph}</span>
+                <span aria-hidden="true"><Icon name={VIEW_META[key].icon} /></span>
                 <span className="view-btn-label">{VIEW_META[key].label}</span>
               </button>
             ))}

@@ -5,6 +5,7 @@ import { BookmarkGridView } from '../components/bookmarks/BookmarkGridView.js'
 import { Skeleton } from '../components/feedback/Skeleton.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
 import { EmptyState } from '../components/feedback/EmptyState.js'
+import { Icon } from '../components/ui/Icon.js'
 import { navApi } from '../api/nav.js'
 import { bookmarksApi } from '../api/bookmarks.js'
 import { onOrgChanged } from '../org-events.js'
@@ -110,7 +111,7 @@ export function NavPage() {
           <h3 className="section-title">全部书签</h3>
           {/* manager-head 为 space-between：标题居左，筛选框自然靠右 */}
           <div className="toolbar-search">
-            <span className="toolbar-search-icon" aria-hidden="true">⌕</span>
+            <span className="toolbar-search-icon" aria-hidden="true"><Icon name="search" /></span>
             <input
               className="toolbar-search-input"
               type="search"
@@ -121,7 +122,7 @@ export function NavPage() {
             />
             {query && (
               <button type="button" className="toolbar-search-clear" aria-label="清除筛选" onClick={() => setQuery('')}>
-                ×
+                <Icon name="close" />
               </button>
             )}
           </div>

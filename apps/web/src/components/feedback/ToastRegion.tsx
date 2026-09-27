@@ -3,6 +3,7 @@ import { onToast, TOAST_TTL, type Toast } from '../../toast.js'
 import { bookmarksApi } from '../../api/bookmarks.js'
 import { notifyDataChanged } from '../../undo.js'
 import { toast, errorMessage } from '../../toast.js'
+import { Icon } from '../ui/Icon.js'
 
 /**
  * 提示区：固定在右下角，堆叠显示。
@@ -57,7 +58,7 @@ export function ToastRegion() {
             aria-label="关闭提示"
             onClick={() => dismiss(item.id)}
           >
-            ×
+            <Icon name="close" />
           </button>
         </div>
       ))}

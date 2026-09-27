@@ -29,10 +29,13 @@
   --line-strong: #e3e2de;
   --line-soft: rgba(55, 53, 47, 0.06);
 
-  /* ---- 文字（Notion 暖黑，不用纯黑） ---- */
+  /* ---- 文字（Notion 暖黑，不用纯黑） ----
+   * --faint 由 #9f9e9b 抬至 #8a8985：原值对白底仅约 2.7:1，却承担全部元信息。
+   * 抬升后约 3.4:1，仍低于 AA 正文 4.5:1，属「弱化层级」与「可读性」的取舍得
+   * （2026-09-27，取舍依据见 docs/modules/20260927_UI精细化设计.md §6）。 */
   --text: #37352f;
   --muted: #787774;
-  --faint: #9f9e9b;
+  --faint: #8a8985;
   --on-accent: #ffffff;
 
   /* ---- 语义色（Notion 标签色系 + Cloudflare 橙强调） ---- */
@@ -58,10 +61,30 @@
   --font-serif: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
 
-  /* ---- 圆角 / 间距 / 阴影（Notion 偏方正：3 / 4 / 6） ---- */
+  /* ---- 字号刻度（2026-09-27 收敛：19 个散值 → 7 档，无半像素）
+   * 收编关系见 docs/modules/20260927_UI精细化设计.md §1.2；
+   * 装饰性字号（404 的 72px、卡片水印 126px）不走刻度，保持绝对值。 */
+  --fs-micro: 11px;    /* 元信息、mono、大写分组标签、脚注日期（原 9/10/10.5/11） */
+  --fs-small: 12px;    /* 次级说明、空状态文案（原 11.5/12） */
+  --fs-body: 13px;     /* 界面正文与全部按钮（原 12.5/13/13.5） */
+  --fs-lead: 14px;     /* 强调正文（原 14/15） */
+  --fs-title-sm: 17px; /* 区块标题（原 17/18） */
+  --fs-title: 21px;    /* 页面标题、详情标题、模态标题（原 20/21/22） */
+  --fs-display: 24px;  /* 大数字 */
+
+  /* ---- 控件高度刻度（2026-09-27 新增；同屏控件一律同档） ---- */
+  --control-h: 32px;      /* 标准控件：.btn 全族、工具栏搜索/筛选/排序/视图切换、.input */
+  --control-h-sm: 28px;   /* 筛选胶囊 .chip */
+  --control-h-xs: 24px;   /* 行内小按钮 .mini-btn */
+  --icon-btn-size: 30px;  /* 图标按钮（仅顶栏，与 32px 族不同屏出现） */
+
+  /* ---- 圆角（微件 3 / 输入与卡片 4 / 按钮与面板 6 / 弹层 8；9999 只给计数与状态胶囊）
+   * 归属清单见 docs/modules/20260927_UI精细化设计.md §2。 */
   --radius-sm: 3px;
   --radius: 4px;
   --radius-lg: 6px;
+  --radius-comfortable: 6px; /* = --radius-lg，历史别名，语义「按钮与面板」 */
+  --radius-featured: 8px;    /* 弹层：模态、命令面板、登录卡 */
 
   --space-1: 4px;
   --space-2: 8px;
@@ -72,6 +95,10 @@
 
   --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.06);
   --shadow-lg: 0 4px 14px rgba(15, 15, 15, 0.1);
+  /* 卡片浮起专用轻投影（2026-09-27 从 var(--shadow-lg) 拆出独立定义：
+   * 原别名给的 14px 模糊重投影用作卡片 hover 过重，与 Notion 式「平时无投影、
+   * hover 才轻浮起」不符）。取双层叠加，位移 2px 内。 */
+  --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.06), 0 2px 6px rgba(15, 15, 15, 0.06);
 
   --scrim: rgba(15, 15, 15, 0.46);
   --overlay-dim: rgba(15, 15, 15, 0.46);
@@ -136,7 +163,6 @@
   --border-light: var(--canvas);
 
   /* 阴影 */
-  --shadow-card: var(--shadow-lg);
   --shadow-ambient: var(--shadow-sm);
   --shadow-focus: 0 0 0 2px rgba(246, 130, 31, 0.25);
 
@@ -166,19 +192,20 @@
   --spacing-96: 96px;
   --spacing-sidebar: var(--sidebar-w);
 
-  /* 圆角 */
+  /* 圆角（--radius-comfortable / --radius-featured 已上移为第 1 层主 token） */
   --radius-micro: 2px;
   --radius-small: 3px;
   --radius-medium: 4px;
   --radius-standard: 4px;
-  --radius-comfortable: 6px;
-  --radius-featured: 8px;
   --radius-full-pill: 9999px;
 
-  /* 动效 */
+  /* 动效（2026-09-27 收敛为两档：颜色/边框 150ms、阴影/位移 200ms）
+   * --transition-state 供卡片等既有底色变化又有浮起的元素一次声明。 */
   --transition-color: color 150ms ease, background-color 150ms ease,
     border-color 150ms ease;
   --transition-shadow: box-shadow 200ms ease;
+  --transition-state: color 150ms ease, background-color 150ms ease,
+    border-color 150ms ease, box-shadow 200ms ease, transform 200ms ease;
 }
 
 /* =========================================================
@@ -208,10 +235,11 @@
   --line-strong: #3a3a3a;
   --line-soft: rgba(255, 255, 255, 0.06);
 
-  /* ---- 文字：Notion 深色正文灰白（不用纯白） ---- */
+  /* ---- 文字：Notion 深色正文灰白（不用纯白） ----
+   * --faint 由 #6e6e6e 抬至 #7d7d7d（对 #191919 约 4.4:1），与浅色同口径。 */
   --text: #d4d4d4;
   --muted: #9b9b9b;
-  --faint: #6e6e6e;
+  --faint: #7d7d7d;
   --on-accent: #ffffff;
 
   /* ---- 语义色：整体提亮一档保证深底可辨；soft 底加深到可辨档 ---- */
@@ -234,6 +262,7 @@
   /* ---- 阴影与遮罩：纯黑系 ---- */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35);
 
   --scrim: rgba(0, 0, 0, 0.5);
   --overlay-dim: rgba(0, 0, 0, 0.5);

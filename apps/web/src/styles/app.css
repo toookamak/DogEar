@@ -37,27 +37,74 @@ textarea {
   font-family: inherit;
 }
 
-/* 复选框/单选跟主题色走（原型选中态均为赤陶橙） */
+/* 复选框/单选跟主题强调色走 */
 input[type="checkbox"],
 input[type="radio"] {
   accent-color: var(--amber);
 }
 
+/* 选中文字：用橙柔底，避免浏览器默认蓝在 Notion 白纸上破色 */
+::selection {
+  background-color: var(--amber-soft);
+  color: var(--text);
+}
+
+/* 滚动条定制（2026-09-27 新增）：侧栏 / 内容区 / 详情浮层 / 命令面板四处都有
+ * overflow:auto，系统默认粗滚动条压在白纸上很突兀。Firefox 走标准属性，
+ * Chromium 走 ::-webkit-scrollbar，两者都指到主题线色。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--radius-full-pill);
+  background-color: var(--line-strong);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--faint);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* ---------------------------------------------------------------- 按钮
  * .btn 为统一基类；.btn--primary / .btn--ghost / .btn--pill 为修饰符。
  * .btn-primary / .btn-secondary / .btn-secondary-pill 为既有页面兼容别名。
- * 视觉对齐原型：primary 为赤陶橙实底、ghost 为描边弱按钮、pill 为方形小胶囊。
+ *
+ * 规格（2026-09-27 统一，见 docs/modules/20260927_UI精细化设计.md §1.1/§2）：
+ *   .btn 全族 = 高度 --control-h(32px) + 圆角 --radius-lg(6px) + 字号 --fs-body(13px)，
+ *   差异只在底色与边框色。此前各变体靠 padding 撑高（29 / 31 / 33px 混排，
+ *   确认弹窗里「取消」与「确认」并排就错位 4.6px）。
+ *   独立类 .chip（筛选胶囊）为 28px / 4px，不属按钮族。
  */
 
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-1);
+  height: var(--control-h);
+  padding: 0 var(--space-3);
   border: 1px solid transparent;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.2;
+  font-size: var(--fs-body);
+  line-height: 1;
   white-space: nowrap;
   transition: var(--transition-color);
 }
@@ -72,11 +119,9 @@ input[type="radio"] {
   box-shadow: var(--shadow-focus);
 }
 
-/* Primary（原型 .primary-action：赤陶橙实底白字） */
+/* Primary：Cloudflare 橙实底白字，每屏最多一个 */
 .btn--primary,
 .btn-primary {
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
   background-color: var(--amber);
   color: var(--on-accent);
   font-weight: 700;
@@ -87,12 +132,10 @@ input[type="radio"] {
   background-color: var(--amber-strong);
 }
 
-/* Secondary / Ghost（原型 .secondary-action：描边弱按钮） */
+/* Secondary / Ghost：描边弱按钮 */
 .btn--ghost,
 .btn-secondary {
-  padding: 7px 13px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line-strong);
+  border-color: var(--line-strong);
   background: none;
   color: var(--muted);
 }
@@ -104,15 +147,12 @@ input[type="radio"] {
   border-color: var(--amber);
 }
 
-/* Pill（原型 .filter-chip：方形小胶囊，用于标签与筛选） */
+/* Pill：轻量次级按钮（细边、更淡）。命名沿用历史，语义已是按钮族一员 */
 .btn--pill,
 .btn-secondary-pill {
-  padding: 6px 11px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
+  border-color: var(--line);
   background: none;
   color: var(--muted);
-  font-size: 12.5px;
 }
 
 .btn--pill:hover:not(:disabled),
@@ -143,11 +183,37 @@ input[type="radio"] {
   background-color: var(--panel);
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   padding: 8px 10px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   transition: var(--transition-color);
+}
+
+/* 单行控件统一高度：全站 61 处 .input 里绝大多数是 input / select，
+ * 此前靠 padding 撑高，各页高度不一（28–34px）。textarea 不受影响（另有 .textarea 控高）。 */
+input.input,
+select.input {
+  height: var(--control-h);
+  padding: 0 10px;
+}
+
+/* select 接管外观（2026-09-27 新增）：此前全站下拉都是系统原生外观，各平台不一致，
+ * 是「像原型页」的主要来源之一。去掉原生箭头后自绘 chevron。
+ * 注意：background-image 里的 SVG 无法用 currentColor，只能写死色值，
+ * 故深色主题在下方单独覆写一次。 */
+select.input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23787774' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  cursor: pointer;
+}
+
+[data-theme='dark'] select.input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%239b9b9b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5'/%3E%3C/svg%3E");
 }
 
 .input::placeholder {
@@ -235,8 +301,8 @@ input[type="radio"] {
   border-radius: 6px;
   background: linear-gradient(135deg, var(--amber), var(--amber-strong));
   color: var(--on-accent);
-  font-family: var(--font-serif);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
   font-weight: 700;
   transform: translateY(2px);
 }
@@ -244,7 +310,7 @@ input[type="radio"] {
 /* 品牌旁的版本号（原型 .brand-mode 同款 mono 小字） */
 .topbar-brand-version {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 400;
   letter-spacing: 0.16em;
   color: var(--faint);
@@ -257,14 +323,15 @@ input[type="radio"] {
   flex: 1;
   max-width: 420px;
   margin: 0 auto;
-  padding: 7px 10px;
+  height: var(--control-h);
+  padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background-color: var(--panel);
   color: var(--muted);
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   text-align: left;
   transition: var(--transition-color);
 }
@@ -281,7 +348,7 @@ input[type="radio"] {
 .topbar-kbd {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -297,15 +364,15 @@ input[type="radio"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: var(--icon-btn-size);
+  height: var(--icon-btn-size);
   padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   background: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 15px;
+  font-size: var(--fs-lead);
   line-height: 1;
   transition: var(--transition-color);
 }
@@ -348,8 +415,8 @@ input[type="radio"] {
 
 .page-header-title {
   margin: 0;
-  font-family: var(--font-serif);
-  font-size: 22px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-title);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -385,7 +452,7 @@ input[type="radio"] {
   align-items: baseline;
   padding: 0 var(--space-2);
   margin: var(--space-2) 0 var(--space-2);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -397,14 +464,14 @@ input[type="radio"] {
   margin-left: var(--space-1);
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
 /* 标签分组标题右侧的「管理」入口（改名/合并的完整管理面在组织管理页） */
 .group-manage-link {
   margin-left: auto;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.08em;
   font-weight: 400;
   text-transform: none;
@@ -418,7 +485,7 @@ input[type="radio"] {
 .nav-item-count {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -452,12 +519,12 @@ input[type="radio"] {
   width: 100%;
   padding: 7px var(--space-3);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   background: none;
   color: var(--muted);
   cursor: pointer;
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -485,7 +552,7 @@ input[type="radio"] {
 .nav-item--muted::after {
   content: "停用";
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -498,7 +565,7 @@ input[type="radio"] {
 
 .chip-note {
   margin-left: var(--space-1);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -523,7 +590,7 @@ input[type="radio"] {
 .sidebar-empty {
   padding: var(--space-1) var(--space-2);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--faint);
 }
 
@@ -553,7 +620,7 @@ input[type="radio"] {
     width: min(280px, 86vw);
     min-width: 0;
     transform: translateX(-100%);
-    transition: transform 220ms ease;
+    transition: transform 200ms ease;
     box-shadow: 18px 0 46px var(--drawer-shadow);
   }
 
@@ -592,7 +659,7 @@ input[type="radio"] {
   border-top: 1px solid var(--line);
   background-color: var(--panel);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -622,7 +689,7 @@ input[type="radio"] {
   height: 20px;
   padding: 0 var(--space-2);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   border-radius: var(--radius-sm);
 }
 
@@ -666,12 +733,12 @@ input[type="radio"] {
   background-color: var(--panel);
   box-shadow: var(--shadow-lg);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text);
 }
 
 .sync-card-title {
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 
@@ -705,14 +772,14 @@ input[type="radio"] {
 
 .sync-card-hint {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
 .sync-card-times {
   display: grid;
   gap: 2px;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--muted);
 }
 
@@ -729,7 +796,7 @@ input[type="radio"] {
   padding: 0;
   border: 0;
   background: none;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--amber-strong);
   cursor: pointer;
 }
@@ -742,8 +809,8 @@ input[type="radio"] {
 
 .section-title {
   margin: 0 0 var(--space-3);
-  font-family: var(--font-serif);
-  font-size: 17px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-title-sm);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text);
@@ -751,20 +818,20 @@ input[type="radio"] {
 
 .muted {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--muted);
 }
 
 .mono {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
 }
 
 .empty-note {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--muted);
 }
 
@@ -775,7 +842,7 @@ input[type="radio"] {
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 .alert--success {
@@ -824,7 +891,7 @@ input[type="radio"] {
 .empty-state-text {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--muted);
 }
 
@@ -837,10 +904,10 @@ input[type="radio"] {
   align-items: center;
   gap: 5px;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-full-pill);
   background-color: var(--panel-hover);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--muted);
 }
 
@@ -864,8 +931,8 @@ input[type="radio"] {
 
 /* 大数字用衬线（原型 .library-total strong / .stat-value） */
 .stat-value {
-  font-family: var(--font-serif);
-  font-size: 24px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-display);
   font-weight: 600;
   line-height: 1;
   color: var(--text);
@@ -873,7 +940,7 @@ input[type="radio"] {
 
 .stat-label {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--faint);
@@ -903,7 +970,7 @@ input[type="radio"] {
 .list-row--head {
   padding-bottom: var(--space-1);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--faint);
@@ -925,14 +992,14 @@ input[type="radio"] {
 
 .list-row-title {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--fs-lead);
   font-weight: 600;
   color: var(--text);
 }
 
 .list-row-meta {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -952,7 +1019,7 @@ input[type="radio"] {
 
 .field-label {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--muted);
 }
 
@@ -968,7 +1035,7 @@ input[type="radio"] {
   background: none;
   padding: var(--space-2) var(--space-3);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--muted);
   cursor: pointer;
   transition: var(--transition-color);
@@ -1006,11 +1073,11 @@ input[type="radio"] {
 
 .settings-tab {
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   background: none;
   padding: 9px 12px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--muted);
   cursor: pointer;
   text-align: left;
@@ -1041,7 +1108,7 @@ input[type="radio"] {
 .settings-section {
   background-color: var(--panel);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: var(--space-4);
 }
 
@@ -1078,9 +1145,10 @@ input[type="radio"] {
   gap: var(--space-2);
   flex: 1 1 220px;
   max-width: 240px;
-  padding: 7px 10px;
+  height: var(--control-h);
+  padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background-color: var(--panel);
   transition: var(--transition-color);
 }
@@ -1090,9 +1158,14 @@ input[type="radio"] {
   box-shadow: 0 0 0 2px var(--amber-soft);
 }
 
+/* 图标槽位（2026-09-27 由 Unicode 字形改为内联 SVG）：
+ * SVG 尺寸走 1em，故 font-size 决定图标边长；display 需显式居中。 */
 .toolbar-search-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--faint);
-  font-size: 14px;
+  font-size: var(--fs-lead);
 }
 
 .toolbar-search-input {
@@ -1102,7 +1175,7 @@ input[type="radio"] {
   outline: none;
   background: none;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text);
 }
 
@@ -1111,12 +1184,15 @@ input[type="radio"] {
 }
 
 .toolbar-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
   padding: 0 var(--spacing-2);
   color: var(--faint);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-small);
   line-height: 1;
 }
 
@@ -1134,14 +1210,14 @@ input[type="radio"] {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  height: 32px;
+  height: var(--control-h);
   padding: 0 12px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   background-color: var(--panel);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   font-weight: 600;
   cursor: pointer;
   transition: var(--transition-color);
@@ -1167,11 +1243,11 @@ input[type="radio"] {
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-full-pill);
   background-color: var(--amber);
   color: var(--on-accent);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 400;
 }
 
@@ -1186,7 +1262,7 @@ input[type="radio"] {
   width: min(720px, calc(100vw - 320px));
   padding: var(--space-4);
   border: 1px solid var(--line);
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-lg);
   background-color: var(--panel);
   box-shadow: var(--shadow-lg);
 }
@@ -1199,7 +1275,7 @@ input[type="radio"] {
 .fp-label {
   display: block;
   margin-bottom: var(--space-1);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1212,7 +1288,7 @@ input[type="radio"] {
 
 .toolbar-kbd {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -1228,14 +1304,10 @@ input[type="radio"] {
   margin-left: auto;
 }
 
-.toolbar-sort {
-  font-size: 13px;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background-color: var(--panel);
+.input.toolbar-sort {
+  height: var(--control-h);
+  padding: 0 28px 0 10px;
   color: var(--muted);
-  cursor: pointer;
 }
 
 .toolbar-sort:hover {
@@ -1243,7 +1315,7 @@ input[type="radio"] {
 }
 
 .toolbar-organize {
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 /* 主按钮内的计数胶囊（原型 .primary-count） */
@@ -1255,21 +1327,24 @@ input[type="radio"] {
   height: 17px;
   margin-left: var(--space-1);
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--radius-full-pill);
   background-color: color-mix(in srgb, var(--on-accent) 22%, transparent);
   color: var(--on-accent);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
 }
 
 /* 筛选 chip：对齐原型 .filter-chip（方形 + 细边，选中琥珀） */
 .chip {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-h-sm);
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background-color: var(--panel);
-  padding: 6px 11px;
+  padding: 0 11px;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--muted);
   cursor: pointer;
   white-space: nowrap;
@@ -1290,10 +1365,12 @@ input[type="radio"] {
 /* 视图切换（原型 .view-switcher：内衬容器 + 琥珀实底激活键） */
 .view-switcher {
   display: flex;
+  align-items: center;
   gap: var(--space-1);
-  padding: 5px;
+  height: var(--control-h);
+  padding: 0 3px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
   background-color: var(--panel-raised);
   box-shadow: var(--shadow-sm);
 }
@@ -1308,13 +1385,13 @@ input[type="radio"] {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  height: 30px;
-  padding: 0 13px;
+  height: calc(var(--control-h) - 6px);
+  padding: 0 11px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: none;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
@@ -1329,7 +1406,7 @@ input[type="radio"] {
 .view-btn[aria-pressed="true"] {
   color: var(--on-accent);
   background-color: var(--amber);
-  box-shadow: 0 1px 3px rgba(15, 15, 15, 0.24);
+  box-shadow: var(--shadow-sm);
 }
 
 @media (max-width: 1240px) {
@@ -1350,10 +1427,10 @@ input[type="radio"] {
   gap: 5px;
   height: auto;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-full-pill);
   background-color: var(--panel-hover);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1380,7 +1457,7 @@ input[type="radio"] {
   border: 1px solid var(--amber);
   color: var(--amber);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.06em;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
@@ -1391,12 +1468,15 @@ input[type="radio"] {
 }
 
 .mini-btn {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-h-xs);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: none;
-  padding: 4px 10px;
+  padding: 0 10px;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
   cursor: pointer;
   white-space: nowrap;
@@ -1428,20 +1508,17 @@ input[type="radio"] {
   background-color: var(--panel);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition: var(--transition-state);
 }
 
+/* 卡片 hover 浮起（2026-09-27 裁决，见专项设计文档 §3.1）：
+ * 原实现 hover 转 --panel-raised 灰底，在纯白页面上读作「压下」而非「浮起」，
+ * 与 Notion 式「平时无投影、hover 才轻浮起」语义相反。
+ * 现改为保持白底 + --shadow-card 轻投影 + 1px 上移。 */
 .bm-card:hover {
   border-color: var(--line-strong);
-  background-color: var(--panel-raised);
-}
-
-.bm-card--active {
-  border-color: var(--line-strong);
-}
-
-.bm-card--selected {
-  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
 }
 
 /* 封面区（方案 A · 封面主导）：来源色渐变或封面图 + 顶部信息层 + 左下来源点 */
@@ -1470,7 +1547,7 @@ input[type="radio"] {
   position: absolute;
   right: 12px;
   bottom: -26px;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 126px;
   font-weight: 800;
   line-height: 1;
@@ -1522,13 +1599,13 @@ input[type="radio"] {
   max-width: 70%;
   padding: 3px 8px 3px 4px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background-color: var(--panel-overlay);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--muted);
   text-decoration: none;
-  transition: border-color 0.14s ease, color 0.14s ease;
+  transition: var(--transition-color);
 }
 
 .bm-card-chip:hover {
@@ -1542,11 +1619,11 @@ input[type="radio"] {
   justify-content: center;
   width: 16px;
   height: 16px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   flex: 0 0 auto;
   overflow: hidden;
   font-family: var(--font-sans);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 800;
   color: var(--on-accent);
   background-color: var(--panel-hover);
@@ -1577,9 +1654,9 @@ input[type="radio"] {
   gap: 4px;
   margin-left: auto;
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-full-pill);
   background-color: var(--panel-overlay);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1610,7 +1687,7 @@ input[type="radio"] {
   gap: 6px;
   padding: 2px 9px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-full-pill);
   background-color: var(--panel-overlay);
 }
 
@@ -1629,7 +1706,7 @@ input[type="radio"] {
 
 .bm-card-srcdot .srcdot-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.1em;
   color: var(--muted);
   text-transform: uppercase;
@@ -1660,10 +1737,10 @@ input[type="radio"] {
   border: 1px solid var(--line-strong);
   background-color: var(--panel-overlay);
   color: transparent;
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.14s ease;
+  transition: opacity 150ms ease;
 }
 
 .bm-card-select:checked {
@@ -1683,7 +1760,7 @@ input[type="radio"] {
 .bm-card-select.checked {
   background-color: var(--amber);
   border-color: var(--amber);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5 6.5 12 13 4.5' fill='none' stroke='%23fff9f1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 8.5 6.5 12 13 4.5' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
 }
@@ -1701,7 +1778,7 @@ input[type="radio"] {
 .bm-card-title {
   margin: 0 0 6px;
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   font-weight: 600;
   line-height: 1.4;
   color: var(--text);
@@ -1717,7 +1794,7 @@ input[type="radio"] {
 .bm-card-excerpt {
   margin: 0 0 9px;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 1.5;
   color: var(--muted);
   min-height: 3em;
@@ -1742,10 +1819,10 @@ input[type="radio"] {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 5px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: none;
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1753,7 +1830,7 @@ input[type="radio"] {
 .tag-pill::before {
   content: "#";
   margin-right: 3px;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   color: var(--amber);
   opacity: 0.75;
@@ -1773,7 +1850,7 @@ input[type="radio"] {
 .bm-card-tags-row .pill {
   background: none;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   padding: 2px 8px;
   color: var(--muted);
 }
@@ -1799,7 +1876,7 @@ input[type="radio"] {
 .bm-card-date {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--faint);
   white-space: nowrap;
 }
@@ -1828,7 +1905,7 @@ input[type="radio"] {
 .bm-table-head {
   background-color: var(--panel);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--faint);
@@ -1838,28 +1915,25 @@ input[type="radio"] {
   border-top: 1px solid var(--line-soft);
   background-color: var(--panel);
   cursor: pointer;
-  transition: background-color 150ms ease;
+  transition: var(--transition-color);
 }
 
 .bm-table-row:hover {
   background-color: var(--panel-hover);
 }
 
-/* 键盘焦点可见：没有焦点样式的话，键盘导航等于不可用 */
+/* 键盘焦点可见：没有焦点样式的话，键盘导航等于不可用。
+ * 容器类元素（卡片 / 行 / 瓦片）统一用 outline 而非 box-shadow：
+ * outline 不与 active / selected 的 box-shadow 抢同一属性，二者可叠加。
+ * 控件类元素（按钮 / 输入）仍用橙 ring（--shadow-focus）。
+ * 2026-09-27 补入 .bm-card —— 此前它带 tabIndex={0}（BookmarkCard.tsx）却没有焦点样式，
+ * 键盘 Tab 到网格卡完全无提示。 */
+.bm-card:focus-visible,
 .bm-table-row:focus-visible,
 .bm-board-card:focus-visible,
 .bm-tile:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: -2px;
-}
-
-.bm-table-row--active {
-  background-color: var(--amber-soft);
-  box-shadow: inset 2px 0 var(--amber);
-}
-
-.bm-table-row--selected {
-  box-shadow: inset 2px 0 var(--amber);
 }
 
 .bm-col-main {
@@ -1871,7 +1945,7 @@ input[type="radio"] {
 
 .bm-table-row-title {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -1883,7 +1957,7 @@ input[type="radio"] {
 .bm-col-source,
 .bm-col-date {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--faint);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1930,7 +2004,7 @@ input[type="radio"] {
   border-radius: var(--radius);
   background-color: var(--panel);
   min-height: 120px;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition: var(--transition-color);
 }
 
 .bm-board-col--over {
@@ -1953,7 +2027,7 @@ input[type="radio"] {
   gap: var(--space-2);
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 700;
   color: var(--text);
 }
@@ -1973,11 +2047,11 @@ input[type="radio"] {
 .bm-board-col-count {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
   background-color: var(--panel-raised);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-full-pill);
   padding: 1px 7px;
 }
 
@@ -1995,25 +2069,20 @@ input[type="radio"] {
   gap: 2px;
   padding: 8px 9px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background-color: var(--panel-raised);
   cursor: grab;
   touch-action: none;
   user-select: none;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition: var(--transition-state);
 }
 
+/* 看板内小卡：底已是 --panel-raised，hover 转到 --panel-hover（不能再转白）；
+ * 不加位移，避免与拖拽在视觉上抢戏。 */
 .bm-board-card:hover {
   border-color: var(--line-strong);
   background-color: var(--panel-hover);
-}
-
-.bm-board-card--active {
-  border-color: var(--line-strong);
-}
-
-.bm-board-card--selected {
-  box-shadow: inset 2px 0 var(--amber);
+  box-shadow: var(--shadow-card);
 }
 
 .bm-board-card--dragging {
@@ -2022,7 +2091,7 @@ input[type="radio"] {
 
 .bm-board-card-title {
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -2032,7 +2101,7 @@ input[type="radio"] {
 
 .bm-board-card-domain {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -2043,7 +2112,7 @@ input[type="radio"] {
   border: 1px dashed var(--line);
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--faint);
 }
 
@@ -2062,7 +2131,7 @@ input[type="radio"] {
   background-color: var(--panel-overlay);
   box-shadow: var(--shadow-lg);
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--text);
   overflow: hidden;
@@ -2097,16 +2166,14 @@ input[type="radio"] {
   cursor: pointer;
   min-width: 0;
   overflow: hidden;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition: var(--transition-state);
 }
 
+/* 与 .bm-card 同口径（索引卡也在白纸面上） */
 .bm-tile:hover {
   border-color: var(--line-strong);
-  background-color: var(--panel-hover);
-}
-
-.bm-tile--active {
-  box-shadow: inset 2px 0 var(--amber);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
 }
 
 .bm-tile-head {
@@ -2124,7 +2191,7 @@ input[type="radio"] {
   flex: 0 0 18px;
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background-color: var(--panel-raised);
   overflow: hidden;
@@ -2144,7 +2211,7 @@ input[type="radio"] {
 
 .bm-tile-initial {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   color: var(--muted);
 }
@@ -2161,7 +2228,7 @@ input[type="radio"] {
   flex: 1;
   min-width: 0;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
   text-decoration: none;
   overflow: hidden;
@@ -2188,7 +2255,7 @@ input[type="radio"] {
 .bm-tile-title {
   padding: 5px 12px 0;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   line-height: 1.4;
   color: var(--text);
@@ -2202,7 +2269,7 @@ input[type="radio"] {
 .bm-tile-sub {
   margin: 4px 12px 0;
   font-family: var(--font-sans);
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   line-height: 1.5;
   color: var(--muted);
   overflow: hidden;
@@ -2241,7 +2308,7 @@ input[type="radio"] {
 
 .bm-tile-srclabel {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--faint);
@@ -2255,9 +2322,38 @@ input[type="radio"] {
 
 .bm-tile-date {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--faint);
   white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- 当前项与批量勾选（四种视图统一）
+ * 2026-09-27 新增，见 docs/modules/20260927_UI精细化设计.md §3。
+ * 此前四视图四套做法：网格改边框色、表格与看板用左条、标签视图无选中态。
+ * 现统一为：
+ *   active（当前项）= 橙柔底 + 左 2px 橙条；
+ *   selected（批量勾选）= 左 2px 橙条 + 内描边橙环。
+ * 用内描边环而非改底色，避免洗掉封面图；两条规则同为单类选择器且置于四个视图
+ * 基线之后，因此能覆盖基线、又不至于压过 :hover（0,2,0）。
+ * 同时命中 active 与 selected 时，靠顺序让 selected 的 box-shadow 生效，
+ * active 的底色仍然保留（不同属性，互不覆盖）。
+ * ---------------------------------------------------------------- */
+
+.bm-card--active,
+.bm-table-row--active,
+.bm-board-card--active,
+.bm-tile--active {
+  background-color: var(--amber-soft);
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+  box-shadow: inset 2px 0 var(--amber);
+}
+
+.bm-card--selected,
+.bm-table-row--selected,
+.bm-board-card--selected,
+.bm-tile--selected {
+  box-shadow: inset 2px 0 var(--amber),
+    inset 0 0 0 1px color-mix(in srgb, var(--amber) 45%, transparent);
 }
 
 /* ---------------------------------------------------------------- 批量操作条
@@ -2272,14 +2368,14 @@ input[type="radio"] {
   margin: 0 var(--space-6) var(--space-3);
   padding: 9px 14px;
   border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background-color: var(--panel-raised);
   box-shadow: var(--shadow-sm);
 }
 
 .selection-bar-count {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--amber-strong);
   white-space: nowrap;
 }
@@ -2321,7 +2417,7 @@ input[type="radio"] {
   gap: var(--space-2);
   margin-bottom: var(--space-3);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--faint);
 }
 
@@ -2330,7 +2426,7 @@ input[type="radio"] {
   background: none;
   padding: 0;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--amber);
   cursor: pointer;
 }
@@ -2376,7 +2472,7 @@ input[type="radio"] {
 
 .pager-indicator {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -2467,7 +2563,7 @@ input[type="radio"] {
 
 .log-pager-count {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
@@ -2523,17 +2619,17 @@ input[type="radio"] {
   gap: 5px;
   padding: 3.5px 9px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: var(--radius);
   background: none;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
   transition: var(--transition-color);
 }
 
 .tag-chip::before {
   content: "#";
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   color: var(--amber);
   opacity: 0.75;
@@ -2546,12 +2642,15 @@ input[type="radio"] {
 }
 
 .tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: none;
   padding: 0;
   color: var(--faint);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--fs-small);
   line-height: 1;
 }
 
@@ -2587,10 +2686,10 @@ input[type="radio"] {
   width: min(420px, 100%);
   padding: var(--space-4);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-featured);
   background-color: var(--panel);
   box-shadow: var(--modal-shadow);
-  animation: modal-in 0.18s ease;
+  animation: modal-in 200ms ease;
 }
 
 @keyframes modal-in {
@@ -2600,8 +2699,8 @@ input[type="radio"] {
 
 .modal-title {
   margin: 0 0 var(--space-2);
-  font-family: var(--font-serif);
-  font-size: 20px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-title);
   font-weight: 600;
   color: var(--text);
 }
@@ -2609,7 +2708,7 @@ input[type="radio"] {
 .modal-message {
   margin: 0 0 var(--space-4);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--muted);
 }
 
@@ -2642,14 +2741,14 @@ input[type="radio"] {
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
   border-left-width: 2px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background-color: var(--panel-raised);
   box-shadow: var(--shadow-lg);
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--text);
   pointer-events: auto;
-  animation: toast-in 0.22s ease;
+  animation: toast-in 200ms ease;
 }
 
 @keyframes toast-in {
@@ -2670,7 +2769,7 @@ input[type="radio"] {
   background: none;
   padding: 0 var(--spacing-2);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--amber-strong);
   white-space: nowrap;
   cursor: pointer;
@@ -2685,13 +2784,16 @@ input[type="radio"] {
 .toast--info { border-left-color: var(--amber); }
 
 .toast-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   border: none;
   background: none;
   padding: 0 var(--spacing-2);
   color: var(--faint);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--fs-small);
   line-height: 1;
 }
 
@@ -2715,7 +2817,7 @@ input[type="radio"] {
 .skel-cover,
 .skel-preview {
   display: block;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background-color: var(--panel-hover);
   animation: skel-pulse 1.2s ease-in-out infinite;
 }
@@ -2801,7 +2903,7 @@ input[type="radio"] {
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--line-soft);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--faint);
@@ -2816,8 +2918,8 @@ input[type="radio"] {
 
 .detail-title {
   margin: 0 0 var(--space-1);
-  font-family: var(--font-serif);
-  font-size: 21px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-title);
   font-weight: 600;
   line-height: 1.3;
   color: var(--text);
@@ -2827,22 +2929,22 @@ input[type="radio"] {
 .detail-domain {
   margin: 0 0 var(--space-2);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   color: var(--faint);
   word-break: break-all;
 }
 
 .detail-excerpt {
   margin: 0 0 var(--space-3);
-  font-family: var(--font-serif);
-  font-size: 14px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-lead);
   line-height: 1.55;
   color: var(--muted);
 }
 
 .detail-aside-label {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -2857,7 +2959,7 @@ input[type="radio"] {
 
 .detail-field-label {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
 }
 
@@ -2887,7 +2989,7 @@ input[type="radio"] {
   justify-content: space-between;
   gap: var(--space-3);
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
 }
 
 .detail-fact-row > span {
@@ -2896,7 +2998,7 @@ input[type="radio"] {
 
 .detail-fact-row > strong {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--fs-small);
   font-weight: 400;
   color: var(--muted);
   text-align: right;
@@ -2925,7 +3027,7 @@ input[type="radio"] {
   align-items: center;
   gap: var(--space-1);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   cursor: pointer;
 }
 
@@ -2968,7 +3070,7 @@ input[type="radio"] {
 
 .suggestion-kind {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--amber-strong);
@@ -2976,7 +3078,7 @@ input[type="radio"] {
 
 .suggestion-target {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   color: var(--amber-strong);
 }
@@ -2984,7 +3086,7 @@ input[type="radio"] {
 .suggestion-rationale {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -3028,13 +3130,13 @@ input[type="radio"] {
 
 .channel-field-label {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--muted);
 }
 
 .channel-field-hint {
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -3048,7 +3150,7 @@ input[type="radio"] {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 
 .channel-test-result--ok {
@@ -3084,7 +3186,7 @@ input[type="radio"] {
   width: min(340px, 100%);
   padding: var(--space-6) var(--space-6) var(--space-6);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-featured);
   background-color: var(--panel);
   box-shadow: var(--modal-shadow);
 }
@@ -3096,7 +3198,7 @@ input[type="radio"] {
   gap: 7px;
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 18px;
+  font-size: var(--fs-title-sm);
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--text);
@@ -3112,15 +3214,15 @@ input[type="radio"] {
   border-radius: 6px;
   background: linear-gradient(135deg, var(--amber), var(--amber-strong));
   color: var(--on-accent);
-  font-family: var(--font-serif);
-  font-size: 14px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-lead);
   font-weight: 700;
 }
 
 .auth-subtitle {
   margin: 0 0 var(--space-1);
   font-family: var(--font-sans);
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   text-align: center;
   color: var(--muted);
 }
@@ -3145,7 +3247,7 @@ input[type="radio"] {
   margin: 0;
   padding-left: var(--space-4);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.6;
   color: var(--muted);
 }
@@ -3186,11 +3288,11 @@ input[type="radio"] {
   width: min(560px, 92vw);
   max-height: min(420px, 70vh);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-featured);
   background-color: var(--panel);
   box-shadow: var(--modal-shadow);
   overflow: hidden;
-  animation: modal-in 0.18s ease;
+  animation: modal-in 200ms ease;
 }
 
 .palette-input-row {
@@ -3202,7 +3304,11 @@ input[type="radio"] {
 }
 
 .palette-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--faint);
+  font-size: var(--fs-lead);
 }
 
 .palette-input {
@@ -3212,7 +3318,7 @@ input[type="radio"] {
   outline: none;
   background: none;
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: var(--fs-lead);
   color: var(--text);
 }
 
@@ -3222,7 +3328,7 @@ input[type="radio"] {
 
 .palette-kbd {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--faint);
   padding: 1px var(--space-1);
   border: 1px solid var(--line);
@@ -3238,7 +3344,7 @@ input[type="radio"] {
   margin: 0;
   padding: var(--space-4);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -3254,7 +3360,7 @@ input[type="radio"] {
   background: none;
   cursor: pointer;
   text-align: left;
-  transition: background-color 150ms ease;
+  transition: var(--transition-color);
 }
 
 .palette-item--active {
@@ -3265,7 +3371,7 @@ input[type="radio"] {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  border-radius: var(--radius-small);
+  border-radius: var(--radius-sm);
 }
 
 .palette-item-main {
@@ -3277,7 +3383,7 @@ input[type="radio"] {
 
 .palette-item-title {
   font-family: var(--font-sans);
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3286,7 +3392,7 @@ input[type="radio"] {
 
 .palette-item-meta {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--faint);
 }
 
@@ -3313,7 +3419,7 @@ input[type="radio"] {
 
 .not-found-code {
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 72px;
   font-weight: 600;
   line-height: 1.1;
@@ -3387,7 +3493,7 @@ input[type="radio"] {
 }
 
 .section-title--sm {
-  font-size: 14px;
+  font-size: var(--fs-lead);
 }
 
 .section-title--center {
@@ -3443,7 +3549,7 @@ input[type="radio"] {
 }
 
 .snapshot-btn {
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 /* 徽标 / pill 间距 */
@@ -3460,7 +3566,7 @@ input[type="radio"] {
   padding: var(--spacing-64) var(--spacing-16);
   text-align: center;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--muted);
 }
 
@@ -3472,7 +3578,7 @@ input[type="radio"] {
 .snapshot-hint {
   margin-top: var(--spacing-4);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--faint);
 }
 
@@ -3502,15 +3608,16 @@ input[type="radio"] {
 
 /* ---------------------------------------------------------------- 标签管理（v1.14：改名 / 合并） */
 
-.tag-chip-rename-input {
+.input.tag-chip-rename-input {
   width: 96px;
+  height: auto;
   padding: 2px 6px;
-  font-size: 12px;
+  font-size: var(--fs-small);
 }
 
 .merge-label {
   align-self: center;
-  font-size: 12.5px;
+  font-size: var(--fs-body);
   color: var(--muted);
   white-space: nowrap;
 }

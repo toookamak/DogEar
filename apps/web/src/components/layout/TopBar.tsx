@@ -1,5 +1,6 @@
 import { useLocation } from 'wouter'
 import { useTheme } from '../../theme/useTheme.js'
+import { Icon } from '../ui/Icon.js'
 
 interface TopBarProps {
   sidebarOpen: boolean
@@ -55,7 +56,7 @@ export function TopBar({ sidebarOpen, onToggleSidebar, onLogout }: TopBarProps) 
         onClick={() => openOnWorkbench('palette')}
         aria-label="搜索书签"
       >
-        <span aria-hidden="true">⌕</span>
+        <span aria-hidden="true"><Icon name="search" /></span>
         <span className="topbar-search-label">搜索书签…</span>
         <span className="topbar-kbd">⌘K</span>
       </button>

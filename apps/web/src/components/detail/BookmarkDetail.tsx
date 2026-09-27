@@ -7,6 +7,7 @@ import { SceneSelector } from '../organization/SceneSelector.js'
 import { FolderSelector } from '../organization/FolderSelector.js'
 import { TagSelector } from '../organization/TagSelector.js'
 import { ConfirmDialog } from '../feedback/ConfirmDialog.js'
+import { Icon } from '../ui/Icon.js'
 import { offerUndo } from '../../undo.js'
 import { toast, errorMessage } from '../../toast.js'
 import { STATUS_LABELS, SOURCE_LABELS, SYNC_STATUS_LABELS, formatDateTime, label } from '../../utils/format.js'
@@ -116,7 +117,7 @@ export function BookmarkDetail({
     <>
       <div className="detail-aside-head">
         <span className="detail-aside-label">书签详情</span>
-        <button type="button" className="icon-btn" aria-label="关闭详情" onClick={onClose}>×</button>
+        <button type="button" className="icon-btn" aria-label="关闭详情" onClick={onClose}><Icon name="close" /></button>
       </div>
 
       <div className="detail-badges">
@@ -134,7 +135,9 @@ export function BookmarkDetail({
       {bookmark.excerpt && <p className="detail-excerpt">{bookmark.excerpt}</p>}
 
       <div className="detail-actions-row">
-        <button type="button" className="btn btn--primary" onClick={handleOpenUrl}>打开原文 ↗</button>
+        <button type="button" className="btn btn--primary" onClick={handleOpenUrl}>
+          打开原文 <Icon name="external" />
+        </button>
         <button
           type="button"
           className="btn btn--ghost"

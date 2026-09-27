@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import MiniSearch from 'minisearch'
 import type { BookmarkResponse } from '../../types/api.js'
 import { SYNC_STATUS_LABELS, label } from '../../utils/format.js'
+import { Icon } from '../ui/Icon.js'
 
 interface CommandPaletteProps {
   bookmarks: BookmarkResponse[]
@@ -96,7 +97,7 @@ export function CommandPalette({ bookmarks, onSelect, onClose, open }: CommandPa
       <button type="button" className="palette-scrim" aria-label="关闭搜索" onClick={onClose} />
       <div className="palette">
         <div className="palette-input-row">
-          <span className="palette-icon" aria-hidden="true">⌕</span>
+          <span className="palette-icon" aria-hidden="true"><Icon name="search" /></span>
           <input
             ref={inputRef}
             type="text"
