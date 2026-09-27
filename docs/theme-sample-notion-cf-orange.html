@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DogEar · 主题范例：Notion 风 × Cloudflare 橙</title>
+<style>
+/* =========================================================
+ * DogEar 主题范例：Notion 风 × Cloudflare 橙
+ * 依据 DESIGN.md §9.7 主题口径：复制 :root 重定义色板，
+ * 结构/布局/交互语义不变。本文件为独立视觉范例，未接入仓库代码。
+ * 对标：Notion 的白纸面 + 浅灰侧栏 + 细分隔线 + hover 浅灰反馈；
+ * 强调色：Cloudflare 橙 #F6821F。
+ * ========================================================= */
+
+:root {
+  color-scheme: light;
+
+  /* 纸面：白纸主区 + Notion 浅灰侧栏 */
+  --canvas: #ffffff;
+  --sidebar-bg: #f7f7f5;
+  --panel: #ffffff;
+  --panel-raised: #f7f7f5;
+  --hover: #efefee;          /* hover 统一「浅灰一档」 */
+  --hover-soft: rgba(55, 53, 47, 0.04);
+
+  /* 线：Notion 极淡分隔线 */
+  --line: rgba(55, 53, 47, 0.09);
+  --line-strong: #e3e2de;
+
+  /* 文字：Notion 暖黑 */
+  --text: #37352f;
+  --muted: #787774;
+  --faint: #9f9e9b;
+  --on-accent: #ffffff;
+
+  /* 强调：Cloudflare 橙 */
+  --accent: #f6821f;
+  --accent-strong: #e26f0a;      /* 按钮 hover 加深 */
+  --accent-text: #c2570a;        /* 橙色文字（浅底可读档） */
+  --accent-soft: rgba(246, 130, 31, 0.13);
+  --accent-softer: rgba(246, 130, 31, 0.07);
+
+  /* 语义（Notion 标签色系） */
+  --green: #448361;   --green-soft: rgba(68, 131, 97, 0.14);
+  --blue: #337ea9;    --blue-soft: rgba(51, 126, 169, 0.14);
+  --gray: #787774;    --gray-soft: rgba(120, 119, 116, 0.14);
+  --red: #d44c47;     --red-soft: rgba(212, 76, 71, 0.12);
+  --brown: #9f6b53;   --brown-soft: rgba(159, 107, 83, 0.14);
+
+  --font-sans: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --radius-sm: 3px;
+  --radius: 4px;
+  --radius-lg: 6px;
+
+  --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.06), 0 2px 6px rgba(15, 15, 15, 0.06);
+  --shadow-pop: 0 0 0 1px var(--line), 0 8px 24px rgba(15, 15, 15, 0.12);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: #191919;
+  --sidebar-bg: #202020;
+  --panel: #1f1f1f;
+  --panel-raised: #252525;
+  --hover: #2f2f2f;
+  --hover-soft: rgba(255, 255, 255, 0.03);
+
+  --line: rgba(255, 255, 255, 0.094);
+  --line-strong: #3a3a3a;
+
+  --text: #d4d4d4;
+  --muted: #9b9b9b;
+  --faint: #6e6e6e;
+
+  --accent: #f6821f;
+  --accent-strong: #ff9a3d;
+  --accent-text: #ff9a3d;
+  --accent-soft: rgba(246, 130, 31, 0.2);
+  --accent-softer: rgba(246, 130, 31, 0.1);
+
+  --green: #6cad94;   --green-soft: rgba(108, 173, 148, 0.16);
+  --blue: #6fa5c9;    --blue-soft: rgba(111, 165, 201, 0.16);
+  --gray: #9b9b9b;    --gray-soft: rgba(155, 155, 155, 0.16);
+  --red: #e16f6a;     --red-soft: rgba(225, 111, 106, 0.16);
+  --brown: #c08e6f;   --brown-soft: rgba(192, 142, 111, 0.16);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 0 0 1px var(--line-strong), 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+/* ============ 侧栏 ============ */
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  transition: background 150ms ease;
+}
+
+.side-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.logo {
+  width: 20px; height: 20px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #fff;
+  font-size: 12px; font-weight: 700;
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.side-header .chev { color: var(--faint); font-size: 10px; margin-left: auto; }
+
+.side-actions { padding: 4px 8px 8px; }
+.side-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 4px 8px;
+  border: none; background: none;
+  border-radius: var(--radius-lg);
+  color: var(--muted); font-size: 13.5px;
+  cursor: pointer; text-align: left;
+  transition: background 100ms ease, color 100ms ease;
+}
+.side-btn:hover { background: var(--hover); color: var(--text); }
+.side-btn .kbd {
+  margin-left: auto; font-size: 10.5px; color: var(--faint);
+  border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 4px;
+}
+
+.side-nav { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; margin: 1px 0;
+  border-radius: var(--radius-lg);
+  color: var(--text); cursor: pointer;
+  transition: background 100ms ease;
+  line-height: 20px;
+}
+.nav-item:hover { background: var(--hover); }
+.nav-item.active { background: var(--hover); font-weight: 600; }
+.nav-item .ico { width: 18px; text-align: center; flex-shrink: 0; font-size: 13px; }
+.nav-item .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-item .count {
+  font-size: 11.5px; color: var(--faint); font-weight: 400;
+  background: var(--hover-soft); border-radius: 9999px; padding: 0 6px;
+}
+.nav-item.active .count { color: var(--accent-text); background: var(--accent-soft); }
+
+.side-section {
+  display: flex; align-items: center;
+  padding: 14px 8px 2px;
+  font-size: 12px; font-weight: 500; color: var(--faint);
+}
+.side-section .plus { margin-left: auto; opacity: 0; cursor: pointer; }
+.nav-item:hover .plus, .side-section:hover .plus { opacity: 1; }
+
+.side-footer {
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+.sync-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green); margin-right: 6px;
+}
+.sync-info { font-size: 11.5px; color: var(--faint); padding: 4px 8px; }
+
+/* ============ 主区 ============ */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.topbar {
+  height: 45px;
+  display: flex; align-items: center;
+  padding: 0 14px; gap: 4px;
+  flex-shrink: 0;
+}
+.crumbs { display: flex; align-items: center; gap: 4px; font-size: 13.5px; color: var(--muted); }
+.crumb { padding: 3px 7px; border-radius: var(--radius-lg); cursor: pointer; }
+.crumb:hover { background: var(--hover); }
+.crumb.here { color: var(--text); }
+.crumb-sep { color: var(--line-strong); }
+
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.icon-btn {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  border: none; background: none;
+  border-radius: var(--radius-lg);
+  color: var(--muted); font-size: 14px; cursor: pointer;
+  transition: background 100ms ease;
+}
+.icon-btn:hover { background: var(--hover); }
+
+/* 内容 */
+.content { flex: 1; overflow-y: auto; }
+.page { max-width: 940px; margin: 0 auto; padding: 24px 56px 80px; }
+
+.page-icon { font-size: 44px; line-height: 1.1; cursor: default; }
+.page-title {
+  font-size: 38px; font-weight: 700; letter-spacing: -0.02em;
+  margin: 6px 0 4px;
+}
+.page-sub { font-size: 13px; color: var(--faint); margin-bottom: 18px; }
+.page-sub b { color: var(--accent-text); font-weight: 500; }
+
+/* 视图切换条 */
+.viewbar {
+  display: flex; align-items: center; gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0;
+}
+.vtab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px; margin-bottom: -1px;
+  font-size: 13.5px; color: var(--muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer; border-radius: var(--radius) var(--radius) 0 0;
+  transition: color 100ms ease;
+}
+.vtab:hover { color: var(--text); background: var(--hover-soft); }
+.vtab.active { color: var(--text); font-weight: 500; border-bottom-color: var(--text); }
+.viewbar .spacer { flex: 1; }
+
+.ghost-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 9px;
+  border: none; background: none;
+  border-radius: var(--radius-lg);
+  font-size: 13px; color: var(--muted); cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+.ghost-btn:hover { background: var(--hover); color: var(--text); }
+
+.primary-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; margin-left: 6px;
+  background: var(--accent); color: var(--on-accent);
+  border: none; border-radius: var(--radius-lg);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: background 120ms ease;
+}
+.primary-btn:hover { background: var(--accent-strong); }
+
+/* Callout */
+.callout {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--accent-softer);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  margin: 20px 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.callout .co-ico { font-size: 15px; line-height: 1.4; }
+.callout b { color: var(--accent-text); font-weight: 600; }
+.callout .co-link { color: var(--accent-text); cursor: pointer; text-decoration: none; }
+.callout .co-link:hover { text-decoration: underline; }
+
+/* ============ 数据库表格（Notion 标志性视图） ============ */
+.db-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.db-table th {
+  text-align: left;
+  font-size: 12px; font-weight: 500; color: var(--faint);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.db-table th .th-ico { margin-right: 4px; opacity: 0.75; }
+.db-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+  vertical-align: middle;
+}
+.db-table tbody tr { transition: background 100ms ease; cursor: default; }
+.db-table tbody tr:hover { background: var(--hover-soft); }
+
+.bm-name { display: flex; align-items: center; gap: 8px; min-width: 260px; }
+.favicon {
+  width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: #fff; font-size: 10px; font-weight: 700; flex-shrink: 0;
+}
+.favicon.page { background: var(--accent); }
+.favicon.agent { background: var(--green); }
+.favicon.ext { background: var(--brown); }
+.bm-title { font-weight: 400; }
+.db-table tbody tr:hover .bm-title { color: var(--accent-text); }
+.bm-title-mod { color: var(--accent-text); margin-left: 4px; font-size: 12px; opacity: 0; transition: opacity 120ms ease; }
+.db-table tbody tr:hover .bm-title-mod { opacity: 1; }
+
+.tag {
+  display: inline-block;
+  font-size: 12px; line-height: 1;
+  padding: 3px 7px; border-radius: 3px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.tag.t-orange { background: var(--accent-soft); color: var(--accent-text); }
+.tag.t-green  { background: var(--green-soft); color: var(--green); }
+.tag.t-blue   { background: var(--blue-soft); color: var(--blue); }
+.tag.t-gray   { background: var(--gray-soft); color: var(--gray); }
+.tag.t-red    { background: var(--red-soft); color: var(--red); }
+
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; line-height: 1;
+  padding: 3px 8px 3px 6px; border-radius: 3px;
+  white-space: nowrap;
+}
+.status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status-pill.s-pending { background: var(--accent-soft); color: var(--accent-text); }
+.status-pill.s-ok      { background: var(--green-soft); color: var(--green); }
+.status-pill.s-hold    { background: var(--gray-soft); color: var(--gray); }
+.status-pill.s-push    { background: var(--blue-soft); color: var(--blue); }
+
+.src-cell, .date-cell { font-size: 12.5px; color: var(--faint); white-space: nowrap; }
+.src-cell .favicon { width: 14px; height: 14px; font-size: 8px; vertical-align: -2px; margin-right: 5px; }
+
+/* ============ 画廊卡（Notion Gallery 卡式书签卡） ============ */
+.sec-title {
+  display: flex; align-items: center; gap: 8px;
+  margin: 40px 0 12px;
+  font-size: 15px; font-weight: 600;
+}
+.sec-title .st-ico { font-size: 13px; }
+.sec-title .st-count { font-size: 12px; font-weight: 400; color: var(--faint); }
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.gcard {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  transition: box-shadow 150ms ease, transform 150ms ease;
+}
+.gcard:hover { box-shadow: var(--shadow-card); transform: translateY(-1px); }
+.gcover {
+  height: 84px;
+  position: relative;
+}
+.gcover::after {
+  content: attr(data-mono);
+  position: absolute; right: 10px; bottom: 4px;
+  font-family: Georgia, serif;
+  font-size: 52px; font-weight: 700;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1;
+}
+.gcover.c-orange { background: linear-gradient(135deg, rgba(246,130,31,0.35), rgba(246,130,31,0.65)); }
+.gcover.c-green  { background: linear-gradient(135deg, rgba(68,131,97,0.3), rgba(68,131,97,0.6)); }
+.gcover.c-blue   { background: linear-gradient(135deg, rgba(51,126,169,0.3), rgba(51,126,169,0.6)); }
+.gbody { padding: 10px 12px 12px; }
+.gtitle { font-size: 13.5px; font-weight: 500; line-height: 1.45; }
+.gmeta { font-size: 11.5px; color: var(--faint); margin: 5px 0 8px; }
+.gtags { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* ============ 色板速览 ============ */
+.swatches {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  margin-top: 14px;
+}
+.swatch { display: flex; align-items: center; gap: 8px; }
+.swatch .dot {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.swatch .sw-name { font-size: 12px; color: var(--muted); }
+.swatch .sw-name code { font-family: var(--font-mono); font-size: 11px; color: var(--faint); display: block; }
+
+/* ============ 状态栏 ============ */
+.statusbar {
+  height: 28px; flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  display: flex; align-items: center;
+  padding: 0 14px; gap: 16px;
+  font-size: 11.5px; color: var(--faint);
+  font-family: var(--font-mono);
+}
+.statusbar .sb-item b { color: var(--accent-text); font-weight: 500; }
+
+@media (max-width: 860px) {
+  .sidebar { display: none; }
+  .page { padding: 16px 20px 60px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ 侧栏 ============ -->
+  <aside class="sidebar">
+    <div class="side-header">
+      <span class="logo">D</span>
+      <span>DogEar · 折耳书签</span>
+      <span class="chev">▾</span>
+    </div>
+    <div class="side-actions">
+      <button class="side-btn">🔍 搜索<span class="kbd">⌘K</span></button>
+      <button class="side-btn">⚡ 快速保存<span class="kbd">⌘S</span></button>
+    </div>
+    <nav class="side-nav">
+      <div class="nav-item"><span class="ico">📥</span><span class="label">收集箱</span><span class="count">14</span></div>
+      <div class="nav-item active"><span class="ico">📚</span><span class="label">全部书签</span><span class="count">612</span></div>
+      <div class="nav-item"><span class="ico">⭐</span><span class="label">收藏</span><span class="count">38</span></div>
+      <div class="nav-item"><span class="ico">🗄️</span><span class="label">已归档</span></div>
+
+      <div class="side-section">场景<span class="plus">＋</span></div>
+      <div class="nav-item"><span class="ico">🌙</span><span class="label">晚间阅读</span><span class="count">52</span></div>
+      <div class="nav-item"><span class="ico">💼</span><span class="label">工作资料</span><span class="count">117</span></div>
+
+      <div class="side-section">标签<span class="plus">＋</span></div>
+      <div class="nav-item"><span class="ico" style="color:var(--accent-text)">#</span><span class="label">前端</span><span class="count">86</span></div>
+      <div class="nav-item"><span class="ico" style="color:var(--accent-text)">#</span><span class="label">设计</span><span class="count">43</span></div>
+      <div class="nav-item"><span class="ico" style="color:var(--accent-text)">#</span><span class="label">工具</span><span class="count">65</span></div>
+    </nav>
+    <div class="side-footer">
+      <div class="sync-info"><span class="sync-dot"></span>已同步 Raindrop · 5 分钟前</div>
+    </div>
+  </aside>
+
+  <!-- ============ 主区 ============ -->
+  <div class="main">
+    <header class="topbar">
+      <div class="crumbs">
+        <span class="crumb">📚 书签</span>
+        <span class="crumb-sep">/</span>
+        <span class="crumb here">全部书签</span>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" onclick="toggleTheme()" title="切换明暗">🌙</button>
+        <button class="icon-btn" title="更多">⋯</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="page">
+        <div class="page-icon">📚</div>
+        <h1 class="page-title">全部书签</h1>
+        <div class="page-sub">共 612 条 · 其中 <b>14 条待处理</b> · 上次整理 2 天前</div>
+
+        <!-- 视图切换条 -->
+        <div class="viewbar">
+          <div class="vtab active">📋 全部书签</div>
+          <div class="vtab">表格</div>
+          <div class="vtab">画廊</div>
+          <div class="vtab">看板</div>
+          <div class="spacer"></div>
+          <button class="ghost-btn">🔍 搜索</button>
+          <button class="ghost-btn">⚲ 筛选</button>
+          <button class="ghost-btn">↕ 排序</button>
+          <button class="ghost-btn">⋯</button>
+          <button class="primary-btn">＋ 添加书签</button>
+        </div>
+
+        <!-- Callout：橙色仅有底色时刻之一 -->
+        <div class="callout">
+          <span class="co-ico">💡</span>
+          <span>有 <b>14 条</b>书签保存后还未确认用途，花 3 分钟整理一下？<a class="co-link">立即处理 →</a></span>
+        </div>
+
+        <!-- 数据库表格视图 -->
+        <table class="db-table">
+          <thead>
+            <tr>
+              <th style="width:36%"><span class="th-ico">↳</span>名称</th>
+              <th><span class="th-ico">🏷</span>标签</th>
+              <th><span class="th-ico">◈</span>状态</th>
+              <th><span class="th-ico">↗</span>来源</th>
+              <th><span class="th-ico">🕘</span>添加日期</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="bm-name"><span class="favicon page">W</span><span class="bm-title">设计系统构建指南：从 Token 到组件库</span><span class="bm-title-mod">打开 ↗</span></span></td>
+              <td><span class="tag t-orange">#设计</span><span class="tag t-gray">#前端</span></td>
+              <td><span class="status-pill s-pending">待处理</span></td>
+              <td class="src-cell"><span class="favicon page">W</span>工作台</td>
+              <td class="date-cell">2026-09-25</td>
+            </tr>
+            <tr>
+              <td><span class="bm-name"><span class="favicon ext">C</span><span class="bm-title">Cloudflare Workers 文档：KV、D1 与 Queues</span><span class="bm-title-mod">打开 ↗</span></span></td>
+              <td><span class="tag t-orange">#工具</span><span class="tag t-blue">#部署</span></td>
+              <td><span class="status-pill s-ok">已确认</span></td>
+              <td class="src-cell"><span class="favicon ext">E</span>浏览器插件</td>
+              <td class="date-cell">2026-09-24</td>
+            </tr>
+            <tr>
+              <td><span class="bm-name"><span class="favicon agent">A</span><span class="bm-title">Agent 收集：2026 前端趋势报告合集</span><span class="bm-title-mod">打开 ↗</span></span></td>
+              <td><span class="tag t-green">#行业动态</span></td>
+              <td><span class="status-pill s-push">待推送</span></td>
+              <td class="src-cell"><span class="favicon agent">A</span>Agent</td>
+              <td class="date-cell">2026-09-23</td>
+            </tr>
+            <tr>
+              <td><span class="bm-name"><span class="favicon page">W</span><span class="bm-title">SQLite 性能调优清单（WAL / 索引 / 编译参数）</span><span class="bm-title-mod">打开 ↗</span></span></td>
+              <td><span class="tag t-gray">#数据库</span><span class="tag t-red">重要</span></td>
+              <td><span class="status-pill s-hold">搁置</span></td>
+              <td class="src-cell"><span class="favicon page">W</span>工作台</td>
+              <td class="date-cell">2026-09-21</td>
+            </tr>
+            <tr>
+              <td><span class="bm-name"><span class="favicon ext">C</span><span class="bm-title">RSS 阅读器自托管方案对比：FreshRSS vs Miniflux</span><span class="bm-title-mod">打开 ↗</span></span></td>
+              <td><span class="tag t-blue">#自托管</span></td>
+              <td><span class="status-pill s-ok">已确认</span></td>
+              <td class="src-cell"><span class="favicon ext">E</span>浏览器插件</td>
+              <td class="date-cell">2026-09-20</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 画廊视图预览 -->
+        <div class="sec-title"><span class="st-ico">🖼</span>画廊视图 · 书签卡<span class="st-count">Notion 卡片式：无重投影，hover 才浮起</span></div>
+        <div class="gallery">
+          <div class="gcard">
+            <div class="gcover c-orange" data-mono="D"></div>
+            <div class="gbody">
+              <div class="gtitle">设计系统构建指南：从 Token 到组件库</div>
+              <div class="gmeta">design.example.com · 09-25</div>
+              <div class="gtags"><span class="tag t-orange">#设计</span><span class="tag t-gray">#前端</span></div>
+            </div>
+          </div>
+          <div class="gcard">
+            <div class="gcover c-green" data-mono="W"></div>
+            <div class="gbody">
+              <div class="gtitle">Cloudflare Workers 文档：KV、D1 与 Queues</div>
+              <div class="gmeta">developers.cloudflare.com · 09-24</div>
+              <div class="gtags"><span class="tag t-orange">#工具</span><span class="tag t-blue">#部署</span></div>
+            </div>
+          </div>
+          <div class="gcard">
+            <div class="gcover c-blue" data-mono="S"></div>
+            <div class="gbody">
+              <div class="gtitle">SQLite 性能调优清单（WAL / 索引 / 编译参数）</div>
+              <div class="gmeta">sqlite.org · 09-21</div>
+              <div class="gtags"><span class="tag t-gray">#数据库</span><span class="tag t-red">重要</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 色板速览 -->
+        <div class="sec-title"><span class="st-ico">🎨</span>主题速览<span class="st-count">token 映射一览</span></div>
+        <div class="swatches">
+          <div class="swatch"><span class="dot" style="background:var(--canvas)"></span><span class="sw-name">canvas 页面底<code>#ffffff</code></span></div>
+          <div class="swatch"><span class="dot" style="background:var(--sidebar-bg)"></span><span class="sw-name">sidebar 侧栏<code>#f7f7f5</code></span></div>
+          <div class="swatch"><span class="dot" style="background:var(--hover)"></span><span class="sw-name">hover 浅灰<code>#efefee</code></span></div>
+          <div class="swatch"><span class="dot" style="background:var(--text)"></span><span class="sw-name">text 文字<code>#37352f</code></span></div>
+          <div class="swatch"><span class="dot" style="background:var(--accent)"></span><span class="sw-name">accent 主强调<code>#F6821F</code></span></div>
+          <div class="swatch"><span class="dot" style="background:var(--accent-text)"></span><span class="sw-name">accent-text 可读档<code>#c2570a</code></span></div>
+          <div class="swatch"><span class="dot" style="background:var(--green)"></span><span class="sw-name">green 已确认<code>#448361</code></span></div>
+          <div class="swatch"><span class="dot" style="background:var(--blue)"></span><span class="sw-name">blue 待推送<code>#337ea9</code></span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 状态栏 -->
+    <div class="statusbar">
+      <span class="sb-item">同步：<b>正常</b> · 5 分钟前</span>
+      <span class="sb-item">队列：<b>0</b></span>
+      <span class="sb-item">共 612 条 / 基线 600</span>
+      <span class="sb-item">主题：Notion 风 × Cloudflare 橙（范例）</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const ICONS = { light: "🌙", dark: "☀️" };
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute(
+    "content", t === "dark" ? "#191919" : "#ffffff");
+  const btn = document.querySelector('[title="切换明暗"]');
+  if (btn) btn.textContent = ICONS[t];
+}
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+}
+applyTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+</script>
+</body>
+</html>
