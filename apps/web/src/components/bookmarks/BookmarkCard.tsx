@@ -5,6 +5,7 @@ import {
   STATUS_LABELS,
   SOURCE_LABELS,
   SYNC_STATUS_LABELS,
+  formatDateShort,
   label,
 } from '../../utils/format.js'
 
@@ -18,9 +19,13 @@ interface BookmarkCardProps {
 }
 
 /**
- * 书签卡片（网格视图与导航页共用）：对齐原型三段式结构——
- * 来源条（monogram + 来源 + 状态）/ 预览（有 cover 显示封面图，否则渐变底 + 衬线水印）/ 内容。
- * 样式见 styles/app.css 的 .bm-card；来源与状态着色由 src-* / state-* 修饰符驱动。
+ * 书签卡片（方案 A · 封面主导，2026-09-27 确认稿见 docs/modules/grid-card-structure-options.html）：
+ * 大封面区（有 cover 显示封面图，否则来源色渐变 + 斜纹 + 衬线水印）+
+ * 顶部信息层（选择键 / 域名 chip / 状态徽标）+ 左下来源点；
+ * 正文为两行标题、两行简介与「AI 建议 / 重要 / 私密 / 待推送 + 标签 + 日期」脚注。
+ * 原「来源条 + 独立域名按钮」的纵向三段式已合并：域名 chip 兼任打开原文入口。
+ * 防御性缺省：导航页传入 NavItem 投影（无 source/status/tags/createdAt 等），
+ * 缺字段时对应区块不渲染——不得因缺字段崩溃（2026-09-12 导航页白屏回归的修复口径延续）。
  */
 export function BookmarkCard({
   bookmark,
@@ -33,12 +38,10 @@ export function BookmarkCard({
   const title = bookmark.title || bookmark.url
   // 展示层兜底：元数据未回填时从 URL 取主机名（domain 为可空字段）
   const domain = bookmark.domain ?? bookmark.url.replace(/^https?:\/\//, '').split('/')[0]
-  // 预览区水印与 monogram 的单字：优先域名首字母，缺省回落标题
+  // 封面水印与 chip 图标的单字：优先域名首字母，缺省回落标题
   const mark = (domain || title).charAt(0).toUpperCase()
   const excerpt = bookmark.excerpt ?? bookmark.note ?? ''
-  // 防御性缺省：导航页传入的是投影子集（NavItem，无 source/status/tags 等字段），
-  // 共用组件不得因缺字段崩溃（2026-09-12 导航页白屏回归的修复点）。
-  // source/status 缺省时不渲染来源与状态徽标——导航投影不含这两个字段，
+  // source/status 缺省时不渲染来源点与状态徽标——导航投影不含这两个字段，
   // 用缺省值展示会误导（例如把已收藏条目显示成「待处理」）。
   const source = bookmark.source
   const status = bookmark.status
@@ -55,7 +58,16 @@ export function BookmarkCard({
     setCoverBroken(false)
   }, [remoteCover, proxyCover, bookmark.id])
   const showCover = Boolean(coverSrc) && !coverBroken
-
+  // NavItem 投影无 createdAt（类型上必有、运行时可能缺）；无值时不渲染日期
+  const day = typeof bookmark.createdAt === 'number' ? formatDateShort(bookmark.createdAt) : ''
+  // 脚注区五类内容全空时不渲染，避免导航页出现只剩一条空行
+  const hasFootMeta =
+    pendingSuggestions > 0 ||
+    Boolean(bookmark.important) ||
+    Boolean(bookmark.private) ||
+    bookmark.syncStatus === 'pending' ||
+    tags !== undefined ||
+    Boolean(day)
 
   return (
     <article
@@ -71,24 +83,8 @@ export function BookmarkCard({
         }
       }}
     >
-      <div className={`bm-card-cover${source ? ` src-${source}` : ''}`}>
-        <span className="cover-monogram">
-          {bookmark.favicon ? (
-            <img src={bookmark.favicon} alt="" loading="lazy" />
-          ) : (
-            mark
-          )}
-        </span>
-        {source && <span className="cover-source">{label(SOURCE_LABELS, source)}</span>}
-        {status && (
-          <span className={`cover-status state-${status}`}>
-            {label(STATUS_LABELS, status)}
-          </span>
-        )}
-      </div>
-
       <div
-        className={`bm-card-preview${source ? ` src-${source}` : ''}${showCover ? ' bm-card-preview--photo' : ''}`}
+        className={`bm-card-cover${source ? ` src-${source}` : ''}${showCover ? ' bm-card-cover--photo' : ''}`}
         data-mark={showCover ? undefined : mark}
         aria-hidden="true"
       >
@@ -105,15 +101,44 @@ export function BookmarkCard({
             }}
           />
         )}
-        {selectable && (
-          <input
-            type="checkbox"
-            className={`bm-card-select${selected ? ' checked' : ''}`}
-            checked={Boolean(selected)}
-            aria-label={selected ? '取消选择' : '选择该书签'}
+
+        <div className="bm-card-overlay">
+          {selectable && (
+            <input
+              type="checkbox"
+              className={`bm-card-select${selected ? ' checked' : ''}`}
+              checked={Boolean(selected)}
+              aria-label={selected ? '取消选择' : '选择该书签'}
+              onClick={(event) => event.stopPropagation()}
+              onChange={() => onToggleSelect?.(bookmark.id)}
+            />
+          )}
+          {/* 域名 chip：兼任「打开原链接」入口（替代原独立域名按钮行） */}
+          <a
+            className={`bm-card-chip${source ? ` src-${source}` : ''}`}
+            href={bookmark.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="打开原链接"
+            title="打开原链接"
             onClick={(event) => event.stopPropagation()}
-            onChange={() => onToggleSelect?.(bookmark.id)}
-          />
+          >
+            <span className="chip-ico">
+              {bookmark.favicon ? <img src={bookmark.favicon} alt="" loading="lazy" /> : mark}
+            </span>
+            <span className="chip-dom">{domain}</span>
+          </a>
+          {status && (
+            <span className={`bm-card-flag state-${status}`}>
+              {label(STATUS_LABELS, status)}
+            </span>
+          )}
+        </div>
+
+        {source && (
+          <span className={`bm-card-srcdot srcdot-${source}`}>
+            <span className="srcdot-label">{label(SOURCE_LABELS, source)}</span>
+          </span>
         )}
       </div>
 
@@ -121,48 +146,37 @@ export function BookmarkCard({
         <h3 className="bm-card-title">{title}</h3>
         {excerpt && <p className="bm-card-excerpt">{excerpt}</p>}
 
-        <div className="bm-card-tags-row">
-          {/* AI 建议落点③「Inbox 内」：列表层就能看出哪条有建议待确认，
-              数据来自服务端的 pendingSuggestionCount，不是占位。 */}
-          {pendingSuggestions > 0 && (
-            <span
-              className="pill pill--ai"
-              title={`有 ${pendingSuggestions} 条 AI 整理建议待确认（建议先行，须你确认后才写入）`}
-            >
-              AI 建议 {pendingSuggestions}
-            </span>
-          )}
-          {bookmark.important && <span className="pill pill--important">重要</span>}
-          {bookmark.private && <span className="pill">私密</span>}
-          {bookmark.syncStatus === 'pending' && (
-            <span className="pill pill--pending">{label(SYNC_STATUS_LABELS, bookmark.syncStatus)}</span>
-          )}
-          {tags ? (
-            tags.length > 0 ? (
-              tags.map((tag) => (
-                <span key={tag.id} className="tag-pill">
-                  {tag.name}
-                </span>
-              ))
-            ) : (
-              <span className="tag-pill tag-pill-empty">未整理</span>
-            )
-          ) : null}
-        </div>
-
-        <a
-          className={`bm-card-domain${source ? ` src-${source}` : ''}`}
-          href={bookmark.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="打开原链接"
-          title="打开原链接"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <span className="d-fav">{mark}</span>
-          <span className="d-text">{domain}</span>
-          <span className="d-go">↗</span>
-        </a>
+        {hasFootMeta && (
+          <div className="bm-card-foot">
+            {/* AI 建议落点③「Inbox 内」：列表层就能看出哪条有建议待确认，
+                数据来自服务端的 pendingSuggestionCount，不是占位。 */}
+            {pendingSuggestions > 0 && (
+              <span
+                className="pill pill--ai"
+                title={`有 ${pendingSuggestions} 条 AI 整理建议待确认（建议先行，须你确认后才写入）`}
+              >
+                AI 建议 {pendingSuggestions}
+              </span>
+            )}
+            {bookmark.important && <span className="pill pill--important">重要</span>}
+            {bookmark.private && <span className="pill">私密</span>}
+            {bookmark.syncStatus === 'pending' && (
+              <span className="pill pill--pending">{label(SYNC_STATUS_LABELS, bookmark.syncStatus)}</span>
+            )}
+            {tags ? (
+              tags.length > 0 ? (
+                tags.map((tag) => (
+                  <span key={tag.id} className="tag-pill">
+                    {tag.name}
+                  </span>
+                ))
+              ) : (
+                <span className="tag-pill tag-pill-empty">未整理</span>
+              )
+            ) : null}
+            {day && <span className="bm-card-date">{day}</span>}
+          </div>
+        )}
       </div>
     </article>
   )

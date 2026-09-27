@@ -87,3 +87,11 @@ export function formatAgo(value: number | null | undefined): string {
   if (hours < 24) return `${hours} 小时前`
   return `${Math.floor(hours / 24)} 天前`
 }
+
+/** 短日期（MM-DD）：书签卡片脚注用，无效或缺失返回空串（调用方据此不渲染） */
+export function formatDateShort(value: number | null | undefined): string {
+  if (value == null) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}

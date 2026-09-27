@@ -1331,96 +1331,16 @@ input[type="radio"] {
   border-color: color-mix(in srgb, var(--amber) 45%, transparent);
 }
 
-/* 来源条（原型 .card-cover）：柔和色底 + monogram + 来源 + 状态 */
+/* 封面区（方案 A · 封面主导）：来源色渐变或封面图 + 顶部信息层 + 左下来源点 */
 .bm-card-cover {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 40px;
-  flex: 0 0 40px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--line);
-}
-
-.bm-card-cover.src-page { background-color: var(--amber-soft); }
-.bm-card-cover.src-agent { background-color: var(--mint-soft); }
-.bm-card-cover.src-extension { background-color: var(--rust-soft); }
-.bm-card-cover.src-raindrop { background-color: var(--blue-soft); }
-
-.cover-monogram {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  background-color: var(--panel-raised);
-  border: 1px solid var(--line-strong);
-  overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--muted);
-}
-
-.cover-monogram img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 3px;
-}
-
-.cover-source {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cover-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background-color: var(--panel-overlay);
-  font-size: 10.5px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.cover-status::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-
-.cover-status.state-unread { color: var(--amber-strong); }
-.cover-status.state-unread::before { background-color: var(--amber); }
-.cover-status.state-saved { color: var(--mint); }
-.cover-status.state-saved::before { background-color: var(--mint); }
-.cover-status.state-archived { color: var(--slate); }
-.cover-status.state-archived::before { background-color: var(--slate); }
-
-/* 装饰预览区（原型 .card-preview：柔和渐变 + 衬线大字水印 + 右上选择键） */
-.bm-card-preview {
   position: relative;
-  height: 120px;
-  flex: 0 0 120px;
+  height: 148px;
+  flex: 0 0 148px;
   overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-bottom: 1px solid var(--line);
 }
 
-.bm-card-preview::before {
+.bm-card-cover::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -1432,7 +1352,7 @@ input[type="radio"] {
   );
 }
 
-.bm-card-preview::after {
+.bm-card-cover::after {
   content: attr(data-mark);
   position: absolute;
   right: 12px;
@@ -1445,27 +1365,162 @@ input[type="radio"] {
   pointer-events: none;
 }
 
-.bm-card-preview.src-page {
+.bm-card-cover.src-page {
   background: linear-gradient(135deg, color-mix(in srgb, var(--amber) 16%, transparent), color-mix(in srgb, var(--amber) 36%, transparent));
 }
 
-.bm-card-preview.src-agent {
+.bm-card-cover.src-agent {
   background: linear-gradient(135deg, color-mix(in srgb, var(--mint) 16%, transparent), color-mix(in srgb, var(--mint) 36%, transparent));
 }
 
-.bm-card-preview.src-extension {
+.bm-card-cover.src-extension {
   background: linear-gradient(135deg, color-mix(in srgb, var(--rust) 16%, transparent), color-mix(in srgb, var(--rust) 36%, transparent));
 }
 
-.bm-card-preview.src-raindrop {
+.bm-card-cover.src-raindrop {
   background: linear-gradient(135deg, color-mix(in srgb, var(--blue) 16%, transparent), color-mix(in srgb, var(--blue) 36%, transparent));
 }
 
-
-/* 有封面时关掉斜纹和水印，让图铺满预览区 */
-.bm-card-preview--photo::before,
-.bm-card-preview--photo::after {
+/* 有封面时关掉斜纹和水印，让图铺满封面区 */
+.bm-card-cover--photo::before,
+.bm-card-cover--photo::after {
   display: none;
+}
+
+/* 顶部信息层：选择键 / 域名 chip / 状态徽标 */
+.bm-card-overlay {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+/* 域名 chip：面板覆盖底 + mono 域名 + 来源色首字标，兼任打开原文入口 */
+.bm-card-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 70%;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background-color: var(--panel-overlay);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: border-color 0.14s ease, color 0.14s ease;
+}
+
+.bm-card-chip:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.bm-card-chip .chip-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--on-accent);
+  background-color: var(--panel-hover);
+}
+
+.bm-card-chip .chip-ico img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 2px;
+}
+
+.bm-card-chip.src-page .chip-ico { background-color: var(--amber); }
+.bm-card-chip.src-agent .chip-ico { background-color: var(--mint); }
+.bm-card-chip.src-extension .chip-ico { background-color: var(--rust); }
+.bm-card-chip.src-raindrop .chip-ico { background-color: var(--blue); }
+
+.bm-card-chip .chip-dom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 状态徽标：沿用原型 cover-status 的圆点 + 柔和底样式 */
+.bm-card-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background-color: var(--panel-overlay);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.bm-card-flag::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.bm-card-flag.state-unread { color: var(--amber-strong); }
+.bm-card-flag.state-unread::before { background-color: var(--amber); }
+.bm-card-flag.state-saved { color: var(--mint); }
+.bm-card-flag.state-saved::before { background-color: var(--mint); }
+.bm-card-flag.state-archived { color: var(--slate); }
+.bm-card-flag.state-archived::before { background-color: var(--slate); }
+
+/* 左下来源点：色点 + mono 来源字 */
+.bm-card-srcdot {
+  position: absolute;
+  z-index: 1;
+  left: 10px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background-color: var(--panel-overlay);
+}
+
+.bm-card-srcdot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.bm-card-srcdot.srcdot-page::before { background-color: var(--amber); }
+.bm-card-srcdot.srcdot-agent::before { background-color: var(--mint); }
+.bm-card-srcdot.srcdot-extension::before { background-color: var(--rust); }
+.bm-card-srcdot.srcdot-raindrop::before { background-color: var(--blue); }
+
+.bm-card-srcdot .srcdot-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .bm-card-thumb {
@@ -1478,12 +1533,8 @@ input[type="radio"] {
   background-color: var(--panel-hover);
 }
 
-/* 预览区右上角的选择键（原型 .card-select-btn） */
+/* 封面信息层内的选择键（原型 .card-select-btn）：占位于域名 chip 之前 */
 .bm-card-select {
-  position: absolute;
-  z-index: 1;
-  top: 8px;
-  right: 8px;
   appearance: none;
   -webkit-appearance: none;
   display: inline-flex;
@@ -1556,11 +1607,11 @@ input[type="radio"] {
   font-size: 12px;
   line-height: 1.5;
   color: var(--muted);
-  min-height: 4.5em;
+  min-height: 3em;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
@@ -1631,60 +1682,13 @@ input[type="radio"] {
   border-color: color-mix(in srgb, var(--blue) 35%, transparent);
 }
 
-/* 域名按钮（原型 .card-domain-btn：mono 小按钮 + 首字母圆标） */
-.bm-card-domain {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  width: fit-content;
-  max-width: 100%;
-  margin-top: 8px;
-  padding: 4px 9px;
-  border-radius: 7px;
-  border: 1px solid var(--line);
-  background-color: var(--panel-hover);
+/* 脚注日期：mono 弱化，贴右侧（.bm-card-foot 为 flex-wrap，auto margin 落到行尾） */
+.bm-card-date {
+  margin-left: auto;
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--muted);
-  text-decoration: none;
-  transition: border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
-}
-
-.bm-card-domain .d-fav {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-  font-size: 8px;
-  font-weight: 800;
-}
-
-.bm-card-domain .d-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bm-card-domain .d-go {
-  font-size: 10px;
-  flex: 0 0 auto;
-}
-
-.bm-card-domain.src-page .d-fav { background-color: var(--amber); color: var(--on-accent); }
-.bm-card-domain.src-agent .d-fav { background-color: var(--mint); color: var(--on-accent); }
-.bm-card-domain.src-extension .d-fav { background-color: var(--rust); color: var(--on-accent); }
-.bm-card-domain.src-raindrop .d-fav { background-color: var(--blue); color: var(--on-accent); }
-
-.bm-card-domain:hover {
-  border-color: var(--amber);
-  color: var(--amber);
-  background-color: var(--panel-raised);
-}
-
-.bm-card-domain:hover .d-text {
-  text-decoration: underline;
+  color: var(--faint);
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- 表格列表视图
@@ -1959,27 +1963,27 @@ input[type="radio"] {
   }
 }
 
-/* ---------------------------------------------------------------- 标签（图标）视图
- * （原型 .tabs-card：28px 图标格 + mono 域名 + go 键）
+/* ---------------------------------------------------------------- 标签视图（方案 B · 索引卡）
+ * 头部：站点图标 + mono 域名（点击开原文）+ 状态点；标题两行 + 一行简介；
+ * 底栏浮起面：标签 / 来源 / 日期。无预览区，密度优先。
  */
 
 .bm-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
-  gap: var(--space-4);
+  gap: var(--space-3);
   align-content: start;
 }
 
 .bm-tile {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background-color: var(--panel);
   cursor: pointer;
   min-width: 0;
+  overflow: hidden;
   transition: border-color 0.16s ease, background 0.16s ease;
 }
 
@@ -1995,7 +1999,8 @@ input[type="radio"] {
 .bm-tile-head {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
+  padding: 8px 12px 0;
   min-width: 0;
 }
 
@@ -2003,74 +2008,143 @@ input[type="radio"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
   border: 1px solid var(--line);
   background-color: var(--panel-raised);
   overflow: hidden;
 }
+
+.bm-tile-icon.src-page { border-color: transparent; background-color: var(--amber); }
+.bm-tile-icon.src-agent { border-color: transparent; background-color: var(--mint); }
+.bm-tile-icon.src-extension { border-color: transparent; background-color: var(--rust); }
+.bm-tile-icon.src-raindrop { border-color: transparent; background-color: var(--blue); }
 
 .bm-tile-fav {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: 3px;
+  padding: 2px;
 }
 
 .bm-tile-initial {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--muted);
 }
 
-.bm-tile-title {
+/* 来源色底上的首字母回退字改暖白 */
+.bm-tile-icon.src-page .bm-tile-initial,
+.bm-tile-icon.src-agent .bm-tile-initial,
+.bm-tile-icon.src-extension .bm-tile-initial,
+.bm-tile-icon.src-raindrop .bm-tile-initial {
+  color: var(--on-accent);
+}
+
+.bm-tile-dom {
   flex: 1;
   min-width: 0;
-  font-family: var(--font-sans);
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+  text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.bm-tile-go {
+.bm-tile-dom:hover {
+  color: var(--amber);
+  text-decoration: underline;
+}
+
+.bm-tile-dot {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 5px;
-  border: 1px solid var(--line);
-  background-color: var(--panel-raised);
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1;
-  text-decoration: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
-.bm-tile-go:hover {
-  color: var(--amber-strong);
-  border-color: var(--amber);
-  background-color: var(--amber-soft);
-}
+.bm-tile-dot.state-unread { background-color: var(--amber); }
+.bm-tile-dot.state-saved { background-color: var(--mint); }
+.bm-tile-dot.state-archived { background-color: var(--slate); }
 
-.bm-tile-sub {
+.bm-tile-title {
+  padding: 5px 12px 0;
   font-family: var(--font-sans);
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--muted);
-  height: 36px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.bm-tile-sub {
+  margin: 4px 12px 0;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.bm-tile-foot {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 5px 12px;
+  border-top: 1px solid var(--line-soft);
+  background-color: var(--panel-raised);
+  min-width: 0;
+}
+
+.bm-tile-tags {
+  display: flex;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.bm-tile-foot-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.bm-tile-srclabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.bm-tile-srclabel.src-page { color: var(--amber); }
+.bm-tile-srclabel.src-agent { color: var(--mint); }
+.bm-tile-srclabel.src-extension { color: var(--rust); }
+.bm-tile-srclabel.src-raindrop { color: var(--blue); }
+
+.bm-tile-date {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--faint);
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- 批量操作条

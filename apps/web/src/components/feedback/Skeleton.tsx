@@ -43,11 +43,13 @@ export function Skeleton({ variant = 'grid', count = 8 }: SkeletonProps) {
       <div className="bm-tiles" aria-hidden="true">
         {Array.from({ length: count }).map((_, i) => (
           <div className="bm-tile" key={i}>
+            {/* 与方案 B 索引卡同构：图标域名行 / 标题行 / 底栏 */}
             <div className="bm-tile-head">
               <span className="skel-cover skel-cover--icon" />
-              <span className="skel-line w70" />
+              <span className="skel-line w40" />
             </div>
-            <span className="skel-line" />
+            <span className="bm-tile-title"><span className="skel-line w70" /></span>
+            <span className="bm-tile-foot"><span className="skel-line w40" /></span>
           </div>
         ))}
       </div>
@@ -78,13 +80,11 @@ export function Skeleton({ variant = 'grid', count = 8 }: SkeletonProps) {
     <div className="bm-grid" aria-hidden="true">
       {Array.from({ length: count }).map((_, i) => (
         <div className="bm-card" key={i}>
-          {/* 与 BookmarkCard 三段式同构：来源条 / 预览区 / 内容行 */}
+          {/* 与方案 A 封面主导卡同构：封面区 / 标题行 / 脚注行 */}
           <div className="bm-card-cover" />
-          <div className="bm-card-preview" />
           <div className="bm-card-body">
             <span className="skel-line w70" />
             <span className="skel-line w40" />
-            <span className="skel-line w70" />
           </div>
         </div>
       ))}
