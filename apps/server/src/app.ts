@@ -45,6 +45,7 @@ import { coverFromRaindropExtras, pickCoverUrl, resolveCoverUrl } from './archiv
 import { coverBodyInit, loadCoverBytes } from './archive/cover-cache.js'
 import type { CoverStore } from './archive/cover-store.js'
 import { processSyncQueue, resolveRaindropClient } from './sync/consumer.js'
+import { computeSyncDiff } from './sync/raindrop-diff.js'
 import { pullFromRaindrop } from './sync/raindrop-pull.js'
 import { generateSkillToken, hashSkillToken, readStoredHash, tokensEqual } from './auth/skill-token.js'
 
@@ -497,6 +498,30 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
       readSyncTimestamp('sync.last_pull_at'),
     ])
     return c.json({ pendingPush, failedPush, pendingConflicts, lastPushAt, lastPullAt })
+  })
+
+  /**
+   * 双向差异探测（2026-10-02，计划 §3.5）。
+   *
+   * 与 `/api/sync/status` 的分工：那个回答「队列里有多少、失败了没有」，
+   * 这个回答「**本地与 Raindrop 各差多少、差在改什么**」——即屏 5 胶囊的折叠态与浮条。
+   *
+   * **纯只读**：只做一次远端 GET + 一次本地 id 比对，不入队、不写库，
+   * 因此不依赖 PUT 语义实测，可在推送侧落地前先上。
+   *
+   * `?breakdown=1` 才计算领先明细：要读全部 pending 的 payload，比两个 count 贵得多，
+   * 胶囊悬停这种高频路径不该付这个代价。
+   */
+  app.get('/api/sync/diff', async (c) => {
+    // 差异探测要 fetchBookmarks，而 resolveRaindropClient 返回的是推送用的窄接口
+    // （create/update/delete），故这里按 pull 路由的做法直接取 token 构造真实客户端。
+    const channels = await channelManager.getAllChannels()
+    const raindrop = channels.find((ch) => ch.channel === 'raindrop' && ch.enabled && String(ch.config.token ?? ''))
+    const client = raindrop ? new RaindropClient(String(raindrop.config.token)) : null
+    const diff = await computeSyncDiff(repository, client, {
+      withBreakdown: c.req.query('breakdown') === '1',
+    })
+    return c.json(diff)
   })
 
   app.get('/api/sync/queue', async (c) => {

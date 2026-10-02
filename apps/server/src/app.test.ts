@@ -64,7 +64,8 @@ function repository(): any {
       remove: async () => true,
     },
     settings: { list: async () => [], get: async () => undefined, set: async (key: string, value: unknown) => ({ key, value }) },
-    syncQueue: { enqueue: async () => ({}), getPending: async () => [], updateStatus: async () => undefined, remove: async () => true, countPending: async () => 0 },
+    syncQueue: { enqueue: async () => ({}), getPending: async () => [], updateStatus: async () => undefined, remove: async () => true, countPending: async () => 0, countFailed: async () => 0 },
+    findByRaindropIds: async () => [],
     backups: { create: async (input: Record<string, unknown>) => input, get: async () => undefined, list: async () => [], updateStatus: async () => undefined },
     navRules: { list: async () => [], get: async () => undefined, create: async (input: Record<string, unknown>) => input, update: async () => undefined, remove: async () => undefined },
 
@@ -257,6 +258,27 @@ describe('authentication API', () => {
 
     // limit 越界走 400，不静默兜底
     expect((await app.request('/api/bookmarks/search-index?limit=9999', { headers: { cookie } })).status).toBe(400)
+  })
+
+  /** 双向差异探测（批次 2 · 屏 5 胶囊的数据源）：鉴权 + 回执形状 */
+  it('sync/diff 需登录；未连接 Raindrop 时报 probeError 而非 behind=0', async () => {
+    const app = createApp(repository(), { password: 'secret' })
+
+    expect((await app.request('/api/sync/diff')).status).toBe(401)
+
+    const { cookie } = await login(app)
+    const response = await app.request('/api/sync/diff', { headers: { cookie } })
+    expect(response.status).toBe(200)
+    const body = await response.json() as Record<string, unknown>
+    // 桩仓库里没有配任何通道 ⇒ 探不了远端
+    expect(body.probeError).toBeTruthy()
+    expect(body.behindIsExact).toBe(false)
+    expect(body).toHaveProperty('ahead')
+    expect(body).toHaveProperty('failed')
+    expect(body).toHaveProperty('lastPushAt')
+    expect(body).toHaveProperty('lastPullAt')
+    // breakdown 是按需的，默认不算
+    expect(body).not.toHaveProperty('aheadBreakdown')
   })
 })
 

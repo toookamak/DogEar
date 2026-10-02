@@ -166,8 +166,15 @@ export class RaindropClient {
     return data
   }
 
-  async fetchBookmarks(page = 0, perPage = 50): Promise<{ items: RaindropBookmark[]; total: number }> {
-    const response = await this.request<RaindropResponse<RaindropBookmark[]>>(`/raindrops/0?page=${page}&perpage=${perPage}`)
+  /**
+   * 取一页书签。
+   *
+   * `sort` 默认 `-created`（Raindrop 自身默认）。**端侧差异探测要用 `-lastUpdate`**
+   * （按最近修改降序）：只有这样「新的必在首页」才成立，首屏比对才能算出落后数下界
+   * （计划 §3.5 方案 B）。用默认排序时这个前提不成立，探测会漏数。
+   */
+  async fetchBookmarks(page = 0, perPage = 50, sort = '-created'): Promise<{ items: RaindropBookmark[]; total: number }> {
+    const response = await this.request<RaindropResponse<RaindropBookmark[]>>(`/raindrops/0?page=${page}&perpage=${perPage}&sort=${encodeURIComponent(sort)}`)
     return {
       items: response.items || [],
       total: response.count || 0,
