@@ -16,9 +16,10 @@ function makeRepo(existing: Array<Record<string, any>> = []) {
   let seq = 0
   const repository: any = {
     bookmarks,
+    // 扁平暴露给断言用（`folders` / `tags` 下面的命名空间才是仓储接口）
+    _folders: folders,
+    _tagRows: tagRows,
     mounts,
-    folders,
-    tags: tagRows,
     findByRaindropIds: async (ids: string[]) => bookmarks.filter((b) => ids.includes(String(b.raindropId))),
     findByUrls: async (urls: string[]) => bookmarks.filter((b) => urls.includes(String(b.url))),
     updateMany: async (patches: Array<Record<string, any>>) => {

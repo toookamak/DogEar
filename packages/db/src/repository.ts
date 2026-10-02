@@ -707,10 +707,50 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     const conditions: any[] = [isNull(bookmarks.deletedAt)]
     if (opts.onlyWithoutRaindropId) conditions.push(isNull(bookmarks.raindropId))
     // 排序键与 list 一致（createdAt desc + id 兜底），保证分页导出时顺序稳定
-    return db.select({ id: bookmarks.id, url: bookmarks.url, title: bookmarks.title, note: bookmarks.note, status: bookmarks.status })
+    const rows = await db.select({
+      id: bookmarks.id,
+      url: bookmarks.url,
+      title: bookmarks.title,
+      note: bookmarks.note,
+      status: bookmarks.status,
+      folderId: bookmarks.folderId,
+    })
       .from(bookmarks).where(and(...conditions))
       .orderBy(desc(bookmarks.createdAt), desc(bookmarks.id))
       .limit(limit).offset(offset).all()
+    // 2026-10-02 批次 0：补上标签名与远端 collection id。
+    // 此前导出只带 url/title/note，**用户本地整理好的收藏夹与标签在导出时被静默丢掉**——
+    // 推回 Raindrop 的是一条「裸链接」，等于整理成果没有出口。
+    // 仍维持「一条书签查询 + 两条批量关联查询」，不做逐条关联。
+    const ids = rows.map((row: any) => String(row.id))
+    if (ids.length === 0) return rows
+    const tagRows = await db.select({ bookmarkId: bookmarkTags.bookmarkId, name: tags.name })
+      .from(bookmarkTags)
+      .innerJoin(tags, eq(bookmarkTags.tagId, tags.id))
+      .where(inArray(bookmarkTags.bookmarkId, ids))
+      .all()
+    const folderRows = rows.filter((row: any) => row.folderId)
+    const raindropIds = new Map<string, string>()
+    if (folderRows.length > 0) {
+      const mapped = await db.select({ id: folders.id, raindropId: folders.raindropId })
+        .from(folders)
+        .where(inArray(folders.id, folderRows.map((row: any) => String(row.folderId))))
+        .all()
+      for (const row of mapped as Array<{ id: string; raindropId: string | null }>) {
+        if (row.raindropId) raindropIds.set(row.id, row.raindropId)
+      }
+    }
+    return rows.map((row: any) => {
+      const bookmarkId = String(row.id)
+      return {
+        ...row,
+        tagNames: (tagRows as Array<{ bookmarkId: string; name: string }>)
+          .filter((tag) => tag.bookmarkId === bookmarkId)
+          .map((tag) => tag.name),
+        // 未映射到远端集合时为 null，调用方应留空而不是塞一个错的 id
+        collectionId: row.folderId ? (raindropIds.get(String(row.folderId)) ?? null) : null,
+      }
+    })
   }
   repository.countWithoutRaindropId = async () => {
     const result = await db.select({ count: count() }).from(bookmarks).where(and(isNull(bookmarks.deletedAt), isNull(bookmarks.raindropId))).all()

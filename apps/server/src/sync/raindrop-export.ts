@@ -18,7 +18,14 @@ import type { BookmarkRepository } from '@dogear/db'
 export const EXPORT_PAGE_SIZE = 20
 
 export interface RaindropExportClient {
-  createBookmark(data: { url: string; title?: string; note?: string; tags?: string[] }): Promise<unknown>
+  createBookmark(data: {
+    url: string
+    title?: string
+    note?: string
+    tags?: string[]
+    /** 2026-10-02 批次 0：导出时带上已映射的远端集合（create 路径，安全） */
+    collection?: { $id: number }
+  }): Promise<unknown>
 }
 
 export interface ExportPageOptions {
@@ -67,11 +74,17 @@ export async function exportRaindropPage(
   const written: Array<{ id: string; raindropId: string }> = []
   for (const row of candidates as Array<Record<string, any>>) {
     try {
+      // 2026-10-02 批次 0（0.7）：此前 tags 硬编码为 []，**用户本地整理好的标签在导出时被静默丢掉**。
+      // 本路径是 POST /raindrop（create 新条目，不存在「部分更新 vs 整体替换」的语义分歧），
+      // 所以带上 tags/collection 是安全的，不依赖 PUT 语义实测。
+      const collectionId = row.collectionId ? Number(row.collectionId) : null
       const created = await client.createBookmark({
         url: row.url,
         title: row.title || row.url,
         note: row.note || undefined,
-        tags: [],
+        tags: Array.isArray(row.tagNames) ? row.tagNames.map(String).filter(Boolean) : [],
+        // 只在确实映射到远端集合时带 collection；未映射的留空，不塞一个错的 id
+        ...(collectionId && collectionId > 0 ? { collection: { $id: collectionId } } : {}),
       })
       const remoteId = String((created as { _id?: unknown })._id ?? '')
       if (!remoteId) throw new Error('Raindrop 未返回 _id')

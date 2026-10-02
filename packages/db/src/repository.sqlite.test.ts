@@ -321,4 +321,36 @@ describe('repository on real SQLite（批次 0 · Raindrop 拉取侧）', () => 
     await repository.attachTagsBatch([])
     await repository.attachTagsBatch([{ bookmarkId: String(bm1.id), tagIds: [] }])
   })
+
+  it('listExportRows 带出 tagNames 与已映射的 collectionId（批次 0.7 核心回归）', async () => {
+    const repository = setup()
+    await repository.folders.ensureByRaindropId([
+      { raindropId: 100, name: '论文' },
+      { raindropId: 200, name: '工作' },
+    ])
+    // 还有一个「用户自建、没有远端映射」的 folder——导出时不该给它编一个 collectionId
+    const localOnly = await repository.folders.create({ id: 'folder-local', name: '本地专用' }) as Record<string, unknown>
+
+    const folders = await repository.folders.list() as any[]
+    const byRemote = (id: string) => folders.find((row) => row.raindropId === id)
+    const { id: t1 } = await repository.tags.create({ id: 'tag-e1', name: '渲染' }) as Record<string, unknown>
+    await repository.tags.create({ id: 'tag-e2', name: '图形学' })
+
+    await seedBookmark(repository, { id: 'ex-1', folderId: byRemote('100').id })
+    await seedBookmark(repository, { id: 'ex-2', folderId: localOnly.id })
+    await seedBookmark(repository, { id: 'ex-3' })
+    await repository.attachTagsBatch([{ bookmarkId: 'ex-1', tagIds: [String(t1)] }])
+
+    const rows = await repository.listExportRows({}, 10, 0) as any[]
+    const byId = new Map(rows.map((row) => [String(row.id), row]))
+
+    expect(byId.get('ex-1')!.tagNames).toEqual(['渲染'])
+    expect(byId.get('ex-1')!.collectionId).toBe('100')
+    // 本地自建、无远端映射 → collectionId 为 null，不塞 200 或任何猜测值
+    expect(byId.get('ex-2')!.collectionId).toBeNull()
+    expect(byId.get('ex-2')!.tagNames).toEqual([])
+    // 完全没归类的
+    expect(byId.get('ex-3')!.collectionId).toBeNull()
+    expect(byId.get('ex-3')!.tagNames).toEqual([])
+  })
 })

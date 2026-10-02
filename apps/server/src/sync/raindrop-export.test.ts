@@ -39,6 +39,28 @@ function makeClient(failUrls: Set<string> = new Set()) {
 }
 
 describe('exportRaindropPage', () => {
+  /**
+   * 批次 0（0.7）核心回归：导出必须带上用户本地整理好的标签与远端集合。
+   * 此前 `tags: []` 是硬编码的，等于「整理成果没有出口」——本地挂好的标签
+   * 推回 Raindrop 时被静默丢掉，而回执还显示成功。
+   */
+  it('导出时带上标签与已映射的远端集合（批次 0.7 核心回归）', async () => {
+    const { repository } = makeRepo([
+      { id: 'b1', url: 'https://a.example.com/', title: 'A', note: null, tagNames: ['渲染', '图形学'], collectionId: '100' },
+      { id: 'b2', url: 'https://b.example.com/', title: 'B', note: null, tagNames: [], collectionId: null },
+    ])
+    const client = makeClient()
+
+    await exportRaindropPage(repository, client, { count: 20 })
+
+    const byUrl = new Map(client.created.map((row) => [String(row.url), row]))
+    expect((byUrl.get('https://a.example.com/') as any).tags).toEqual(['渲染', '图形学'])
+    expect((byUrl.get('https://a.example.com/') as any).collection).toEqual({ $id: 100 })
+    // 没标签 / 没映射到远端集合时：标签空数组，且**不塞 collection**（不塞错的 id）
+    expect((byUrl.get('https://b.example.com/') as any).tags).toEqual([])
+    expect((byUrl.get('https://b.example.com/') as any).collection).toBeUndefined()
+  })
+
   it('导出一页：推送远端并批量写回 raindropId 与 synced', async () => {
     const { repository, bookmarks } = makeRepo([
       { id: 'b1', url: 'https://a.example.com/', title: 'A', note: null },
