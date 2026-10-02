@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DogEar 品牌标替换稿 · 2026-10-02</title>
+<style>
+  :root{
+    --paper:#ffffff; --side:#f7f7f5; --panel:#fbfbfa; --line:rgba(55,53,47,.10);
+    --text:#37352f; --muted:#787774; --faint:#9b9a97;
+    --amber:#f6821f; --amber-strong:#e26f0a; --on-accent:#ffffff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:32px;background:var(--paper);color:var(--text);
+    font:13px/1.6 system-ui,"PingFang SC","Microsoft YaHei",sans-serif}
+  h1{font-size:21px;font-weight:600;margin:0 0 4px}
+  h2{font-size:14px;font-weight:600;margin:32px 0 10px}
+  .sub{color:var(--muted);margin:0 0 24px}
+  code{background:var(--panel);padding:1px 5px;border-radius:4px;font-size:12px}
+
+  .row{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap;
+    border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:12px}
+  .row.dark{background:#1b1b19;border-color:#2e2e2c}
+  .row.dark .lab{color:#8a8985}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .lab{font-size:11px;color:var(--faint)}
+
+  /* 模拟顶栏品牌：22px 高 */
+  .topbar-sim{height:44px;background:var(--side);border:1px solid var(--line);border-radius:8px;
+    display:flex;align-items:center;gap:8px;padding:0 14px;margin-bottom:12px}
+  .topbar-sim .mark{height:22px;display:block}
+  .topbar-sim .name{font-weight:700;letter-spacing:.02em}
+  .topbar-sim .ver{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:10px;
+    letter-spacing:.16em;color:var(--faint);margin-left:2px}
+
+  /* 模拟登录卡片：26px 高 */
+  .auth-sim{width:300px;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+    padding:22px;display:flex;flex-direction:column;align-items:center;gap:6px}
+  .auth-sim .brand{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;letter-spacing:.02em}
+  .auth-sim .brand img{height:26px;display:block}
+  .auth-sim .small{color:var(--muted);font-size:13px}
+
+  /* favicon 模拟 */
+  .tab{display:inline-flex;align-items:center;gap:8px;background:#dee1e6;border-radius:8px 8px 0 0;
+    padding:7px 14px 0;font-size:12px;color:#3c4043;max-width:200px}
+  .tab img{width:16px;height:16px;display:block;flex:none}
+  .tab-fav{width:16px;height:16px;border:1px solid var(--line);border-radius:3px;display:block}
+</style>
+</head>
+<body>
+
+<h1>DogEar 品牌标替换稿 · 2026-10-02</h1>
+<p class="sub">
+  稿源为外部提供的 1536×1024 原始 SVG。工程化处理：补 <code>&lt;svg&gt;</code> 开标签、
+  裁到图形范围（原稿四周留白约 40%）、删除未使用的 <code>softLight</code> 滤镜与 <code>bodyClip</code>。
+  另出小尺寸简化版：精细版 7 组渐变叠 12 路径在 16–32px 会糊成橙团，简化版只留 4 个面，靠形状读图。
+</p>
+
+<h2>1 · 精细版 <code>dogear-mark-20261002.svg</code></h2>
+<div class="row">
+  <div class="cell"><img src="dogear-mark-20261002.svg" height="72" alt=""><span class="lab">72</span></div>
+  <div class="cell"><img src="dogear-mark-20261002.svg" height="48" alt=""><span class="lab">48</span></div>
+  <div class="cell"><img src="dogear-mark-20261002.svg" height="32" alt=""><span class="lab">32</span></div>
+  <div class="cell"><img src="dogear-mark-20261002.svg" height="22" alt=""><span class="lab">22</span></div>
+  <div class="cell"><img src="dogear-mark-20261002.svg" height="16" alt=""><span class="lab">16</span></div>
+</div>
+
+<h2>2 · 简化版 <code>dogear-mark-20261002-flat.svg</code></h2>
+<div class="row">
+  <div class="cell"><img src="dogear-mark-20261002-flat.svg" height="72" alt=""><span class="lab">72</span></div>
+  <div class="cell"><img src="dogear-mark-20261002-flat.svg" height="48" alt=""><span class="lab">48</span></div>
+  <div class="cell"><img src="dogear-mark-20261002-flat.svg" height="32" alt=""><span class="lab">32</span></div>
+  <div class="cell"><img src="dogear-mark-20261002-flat.svg" height="22" alt=""><span class="lab">22</span></div>
+  <div class="cell"><img src="dogear-mark-20261002-flat.svg" height="16" alt=""><span class="lab">16</span></div>
+</div>
+
+<h2>3 · 顶栏品牌实位（现状 22px 方块 + D → 新图形标）</h2>
+<div class="topbar-sim">
+  <img class="mark" src="dogear-mark-20261002-flat.svg" alt="">
+  <span class="name">DogEar</span>
+  <span class="ver">v0.1.0</span>
+</div>
+<div class="topbar-sim" style="background:#1b1b19;border-color:#2e2e2c">
+  <img class="mark" src="dogear-mark-20261002-flat.svg" alt="">
+  <span class="name" style="color:#edeceb">DogEar</span>
+  <span class="ver" style="color:#8a8985">v0.1.0</span>
+</div>
+
+<h2>4 · 登录页品牌实位（现状 24px 方块 + D）</h2>
+<div class="auth-sim">
+  <span class="brand"><img src="dogear-mark-20261002-flat.svg" alt="">DogEar</span>
+  <span class="small">登录以继续</span>
+</div>
+
+<h2>5 · 浏览器标签页（现状：深底金字 D）</h2>
+<p class="sub" style="margin-bottom:10px">
+  下面是直接放新图形标的 tab（橙黄图形在浅灰 tab 底上对比充足，不一定需要深色底衬）。
+</p>
+<span class="tab"><img src="dogear-mark-20261002-flat.svg" alt="">DogEar · 工作台</span>
+
+<h2>6 · 深色底检验</h2>
+<div class="row dark">
+  <div class="cell"><img src="dogear-mark-20261002.svg" height="48" alt=""><span class="lab">精细 48</span></div>
+  <div class="cell"><img src="dogear-mark-20261002-flat.svg" height="48" alt=""><span class="lab">简化 48</span></div>
+  <div class="cell"><img src="dogear-mark-20261002-flat.svg" height="22" alt=""><span class="lab">简化 22</span></div>
+</div>
+
+</body>
+</html>

@@ -3,6 +3,7 @@
 > **主题口径（2026-09-27 用户确认，替代 2026-09-12 暖纸风口径）**：默认主题已由「暖纸书桌」更换为「**Notion 风 × Cloudflare 橙**」，浅色与深色两套色板同步更新；历史色板（暖纸书桌 / 深夜书房）见 git 历史。默认设置仍是**非写死的形态**——未来新增主题时，色板、阴影乃至部分组件约束以该主题自己的定义为准，脱离本文相应约束；本文的结构、布局与交互语义仍全局适用。
 > **尺寸与状态口径（2026-09-27 视觉收口，本轮新增）**：新增字号 7 档、控件高度 4 档、圆角按档位归位、四种视图交互态统一、图标规范（§3.1 / §4.1 / §5.2 / §7.1 / §10）。完整验收口径见 `docs/modules/20260927_UI精细化设计.md`。
 > **`docs/theme-sample-notion-cf-orange.html` 的地位（本轮裁决）**：该文件只是**色板演示**，不是组件规格来源。它与本文在「当前项选中样式、分组标签字号字重、状态胶囊圆角、侧栏与顶栏尺寸、卡片封面高与水印透明度」共 5 处不一致；**一律以本文为准**，范例不再承担组件规格（后续如需修订范例，须保持与本文一致）。
+> **品牌字标口径（2026-10-02 用户确认）**：品牌标识由「橙渐变方块 + D」改为**折耳云图形标**（`apps/web/public/brand-mark.svg`，横向 1.53:1），顶栏 / 登录页 / OAuth 回调页三处共用同一文件；favicon 另用 `favicon.svg`（透明底 4 面简化版）。图形标按**视觉中心**对齐而非基线，尺寸与用法见 §4.1。`::before` 画伪元素的旧做法已移除。
 > Token 单一来源：`apps/web/src/styles/tokens.css`（`--canvas/--panel/--amber/--fs-*/--control-h/--radius-*`）。改主题或改刻度先改 tokens，再谈组件。
 > 注：`--amber` 等为历史命名，语义上是「主强调色 accent」，当前值为 Cloudflare 橙 `#f6821f`；`--font-serif` 为历史命名，现指向与 `--font-sans` 相同的无衬线栈。
 
@@ -70,7 +71,7 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 | 区块标题 | 系统无衬线栈 | `--fs-title-sm` 17px / 600 | `-0.01em` 微收字距 |
 | 页面 / 详情 / 模态标题 | 系统无衬线栈 | `--fs-title` 21px / 600 | `-0.01em~-0.02em` 微收字距 |
 | 大数字 | 系统无衬线栈 | `--fs-display` 24px / 600 | `.stat-value` |
-| 品牌字标 | 系统无衬线栈 | 13px / 700 | 橙渐变方块内的「D」 |
+| 品牌字标 | 系统无衬线栈 | 13px / 700 | 折耳云图形标 `/brand-mark.svg` + 文字「DogEar」 |
 
 `--font-serif` 为历史 token 名，现指向与 `--font-sans` 相同的无衬线栈——**新代码不要再用它**，直接写 `--font-sans`。字体全部走系统栈，不外链 Google Fonts，离线不阻塞渲染。
 
@@ -180,7 +181,7 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 | `--radius-featured` | 8px | 弹层：`.modal`、`.palette`、`.auth-card` |
 | `--radius-full-pill` | 9999px | 仅计数徽标、状态 pill 与同步胶囊 / 浮条（`.sync-lamp`、`.sync-strip`） |
 
-例外（不算违规）：品牌字标方块的 `6px`、圆形元素（勾选键、状态点、favicon 圆标、`.account-avatar`、`.sync-lamp-dot`）的 `50%`、骨架屏齐边元素的 `0`。
+例外（不算违规）：圆形元素（勾选键、状态点、favicon 圆标、`.account-avatar`、`.sync-lamp-dot`）的 `50%`、骨架屏齐边元素的 `0`。
 
 控件高度刻度：
 
@@ -190,6 +191,9 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 | `--control-h-sm` | 28px | `.chip` |
 | `--control-h-xs` | 24px | `.mini-btn`、`.sync-strip-btn`、`.account-seg` 内按钮 |
 | `--icon-btn-size` | 30px | `.icon-btn`（仅顶栏） |
+| `--brand-mark-h` | 22px | 品牌图形标 `.brand-mark`（顶栏）；登录卡 `.auth-brand` 内改用 `--control-h-xs` 档 24px |
+
+**品牌图形标**：`/brand-mark.svg` 是折耳云标（云体 + 扬起的黄色折角 + 右侧下垂折页），横向 **1.53:1**，只定高度、**宽度交给内在比例**——写死 `width` 会在换稿时把图拉变形。它替代了此前的「橙渐变方块 + D」（`::before` 伪元素绘制，现已移除）。三处同源，顶栏 / 登录页 / OAuth 回调页共用同一文件，不要各画一份。顶栏与 `.auth-brand` 的对齐都是 `center`：**图形标识对齐按视觉中心，不按文字基线**（按 baseline 会把 22px 的图吊在 13px 字面下沿上方）。favicon 另用 `favicon.svg`（透明底、4 面简化版），浏览器 16px 下精细版的 2px 描边只有 0.03px，叠出来是噪点。
 
 修订说明：本轮修正了 7 处偏离——按钮族原停在 3px（应 6px）、输入原 3px（应 4px）、`.settings-section` 原 4px（应 6px）、模态与命令面板原 6px（应 8px）、`.bm-card-chip` / `.tag-pill` / `.tag-chip` 原硬编码 5px（应 4px）、`.filter-pop` 原引用从未定义的 `--radius-md`（吃 fallback 8px，应 6px）。
 
