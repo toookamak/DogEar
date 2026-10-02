@@ -1,5 +1,5 @@
 import type { BookmarkResponse } from '../../types/api.js'
-import { SOURCE_LABELS, STATUS_LABELS, formatDateTime, label } from '../../utils/format.js'
+import { SOURCE_LABELS, formatDateTime, label } from '../../utils/format.js'
 
 interface Props {
   bookmarks: BookmarkResponse[]
@@ -12,8 +12,11 @@ interface Props {
 }
 
 /**
- * 表格列表视图：六列（选择 / 标题 / 状态 / 来源 / 加入时间 / 操作）。
- * 行内「确认 / 搁置」为高频整理动作，无需先打开详情。
+ * 表格列表视图：**五列**（选择 / 标题 / 来源 / 加入时间 / 操作）。
+ *
+ * v0.8.0：去掉「状态」列与行内「确认/搁置」——两者都是按状态组织的入口，
+ * 留着它们等于 Status 没隐藏（计划决策二）。`onMoveStatus` 形参与
+ * BookmarkBoardView 一并保留，接口未删，可随时放回。
  */
 export function BookmarkTableView({
   bookmarks,
@@ -28,7 +31,6 @@ export function BookmarkTableView({
       <div className="bm-table-head" role="row">
         <span className="bm-col-check" />
         <span className="bm-col-main">标题</span>
-        <span className="bm-col-status">状态</span>
         <span className="bm-col-source">来源</span>
         <span className="bm-col-date">加入时间</span>
         <span className="bm-col-actions">操作</span>
@@ -75,41 +77,14 @@ export function BookmarkTableView({
               </span>
             </span>
 
-            <span className="bm-col-status">
-              <span className={`pill pill--status pill--${bookmark.status}`}>
-                {label(STATUS_LABELS, bookmark.status)}
-              </span>
-            </span>
+            {/* v0.8.0：状态列与行内改状态按钮已隐藏（计划决策二）。
+                两者都是「按状态组织」的入口；留着它们等于 Status 没隐藏。
+                `onMoveStatus` 形参与 BookmarkBoardView 一并保留，可随时放回。 */}
 
             <span className="bm-col-source">{label(SOURCE_LABELS, bookmark.source)}</span>
             <span className="bm-col-date">{formatDateTime(bookmark.createdAt)}</span>
 
-            <span className="bm-col-actions">
-              {onMoveStatus && bookmark.status !== 'saved' && (
-                <button
-                  type="button"
-                  className="mini-btn"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onMoveStatus(bookmark.id, 'saved')
-                  }}
-                >
-                  确认
-                </button>
-              )}
-              {onMoveStatus && bookmark.status !== 'archived' && (
-                <button
-                  type="button"
-                  className="mini-btn"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onMoveStatus(bookmark.id, 'archived')
-                  }}
-                >
-                  搁置
-                </button>
-              )}
-            </span>
+            <span className="bm-col-actions" />
           </div>
         )
       })}

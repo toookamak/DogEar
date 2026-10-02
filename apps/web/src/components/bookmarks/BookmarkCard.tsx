@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import type { BookmarkResponse } from '../../types/api.js'
 import { resolveCoverUrl } from '../../utils/cover-url.js'
 import {
-  STATUS_LABELS,
   SOURCE_LABELS,
   SYNC_STATUS_LABELS,
   formatDateShort,
@@ -116,11 +115,7 @@ export function BookmarkCard({
           />
         )}
 
-        {status && (
-          <span className={`bm-card-flag state-${status}`}>
-            {label(STATUS_LABELS, status)}
-          </span>
-        )}
+        {/* v0.8.0：状态角标已隐藏（计划决策二）。字段与接口保留，可随时放回。 */}
 
         <div className="bm-card-bottom">
           {source && (

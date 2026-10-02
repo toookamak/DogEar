@@ -7,19 +7,23 @@ import type { BookmarkListParams } from '../api/bookmarks.js'
  */
 export interface WorkbenchFilters {
   q: string
+  /** 状态（v0.8.0 起界面隐藏，字段保留可逆；Inbox 固定 unread 不受此影响） */
   status: string
   sceneId: string
   folderId: string
+  /** 具体标签 id，或 `'none'` = 未打标签（与具体 tagId 互斥，服务端按 NOT EXISTS 处理） */
   tagId: string
   source: string
   important: '' | 'true' | 'false'
   createdRange: '' | '7d' | '30d' | 'year'
+  /** 「近 N 天没打开」预设档（v0.8.0）。含**从未打开过**的那些（服务端显式带 isNull 分支） */
+  openedRange: '' | '7d' | '30d' | 'year'
   navVisible: '' | 'true' | 'false'
 }
 
 export const EMPTY_FILTERS: WorkbenchFilters = {
   q: '', status: '', sceneId: '', folderId: '', tagId: '', source: '',
-  important: '', createdRange: '', navVisible: '',
+  important: '', createdRange: '', openedRange: '', navVisible: '',
 }
 
 /** 时间预设档（工具栏筛选弹层）：提交时从当前时间回溯 */
@@ -29,6 +33,25 @@ export const CREATED_RANGES: Array<{ value: WorkbenchFilters['createdRange']; la
   { value: '30d', label: '最近 30 天', days: 30 },
   { value: 'year', label: '最近一年', days: 365 },
 ]
+
+/**
+ * 「最近打开」预设档（v0.8.0）。与服务端口径一致：**只传天数，不传时间戳**——
+ * 调用方要表达的是「一年没碰过」这种相对语义，交前端算时间戳会因时区与时钟漂移出歧义。
+ * 「全部」档不传该参数，**不是**传 0（0 会被服务端判为非法而静默忽略）。
+ */
+export const OPENED_RANGES: Array<{ value: WorkbenchFilters['openedRange']; label: string; days: number | null }> = [
+  { value: '', label: '不限', days: null },
+  { value: '7d', label: '近 7 天没打开', days: 7 },
+  { value: '30d', label: '近 30 天没打开', days: 30 },
+  { value: 'year', label: '一年没打开', days: 365 },
+]
+
+/** 预设档 → 天数串。未知档与空档返回 undefined */
+export function openedRangeToParam(range: WorkbenchFilters['openedRange']): string | undefined {
+  const preset = OPENED_RANGES.find((entry) => entry.value === range)
+  if (!preset || preset.days === null) return undefined
+  return String(preset.days)
+}
 
 /** 预设档 → createdFrom（ISO）。未知档位与空档返回 undefined */
 export function createdRangeToParam(range: WorkbenchFilters['createdRange'], now: Date = new Date()): string | undefined {
@@ -47,6 +70,7 @@ export function activeFilterCount(filters: WorkbenchFilters): number {
   if (filters.tagId) count += 1
   if (filters.important) count += 1
   if (filters.createdRange) count += 1
+  if (filters.openedRange) count += 1
   if (filters.navVisible) count += 1
   return count
 }
@@ -73,6 +97,8 @@ export function buildListParams(filters: WorkbenchFilters, sort: string, isInbox
   if (filters.navVisible) params.navVisible = filters.navVisible
   const createdFrom = createdRangeToParam(filters.createdRange, now)
   if (createdFrom) params.createdFrom = createdFrom
+  const lastOpenedBefore = openedRangeToParam(filters.openedRange)
+  if (lastOpenedBefore) params.lastOpenedBefore = lastOpenedBefore
   if (filters.q.trim()) params.q = filters.q.trim()
   return params
 }

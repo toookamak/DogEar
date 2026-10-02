@@ -10,7 +10,7 @@ import { ConfirmDialog } from '../feedback/ConfirmDialog.js'
 import { Icon } from '../ui/Icon.js'
 import { offerUndo } from '../../undo.js'
 import { toast, errorMessage } from '../../toast.js'
-import { STATUS_LABELS, SOURCE_LABELS, SYNC_STATUS_LABELS, formatDateTime, label } from '../../utils/format.js'
+import { SOURCE_LABELS, SYNC_STATUS_LABELS, formatDateTime, label } from '../../utils/format.js'
 
 interface BookmarkDetailProps {
   bookmark: BookmarkResponse
@@ -121,7 +121,7 @@ export function BookmarkDetail({
       </div>
 
       <div className="detail-badges">
-        <span className={`pill pill--status pill--${bookmark.status}`}>{label(STATUS_LABELS, bookmark.status)}</span>
+        {/* v0.8.0：状态徽标已隐藏（计划决策二：Status 界面隐藏）。字段与接口保留，可随时放回。 */}
         <span className="pill">{label(SOURCE_LABELS, bookmark.source)}</span>
         {bookmark.important && <span className="pill pill--important">重要</span>}
         {bookmark.private && <span className="pill">私密</span>}
@@ -164,17 +164,12 @@ export function BookmarkDetail({
           />
         </label>
 
-        <label className="detail-field">
-          <span className="detail-field-label">状态</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className="input">
-            <option value="unread">待处理</option>
-            <option value="saved">已确认</option>
-            <option value="archived">搁置</option>
-          </select>
-        </label>
+        {/* v0.8.0：状态选择器已隐藏（同上）。保存时仍原样回传当前 status，
+            不让「隐藏入口」变成「静默改值」——被移进回收站或已确认的书签
+            在详情里改备注，不该顺带把状态重置成 unread。 */}
 
         <div className="detail-field">
-          <span className="detail-field-label">场景</span>
+          <span className="detail-field-label">本地场景</span>
           {/* 停用场景的取舍由 SceneSelector 内部经 scenesForPicker 处理：
               隐藏停用项，但保留本页书签已挂的停用场景（否则摘不掉） */}
           <SceneSelector

@@ -40,7 +40,10 @@ const SKELETON_VARIANT: Record<ViewMode, 'grid' | 'tiles' | 'table' | 'board'> =
 function readStoredView(): ViewMode {
   try {
     const stored = window.localStorage.getItem(VIEW_STORAGE_KEY)
-    if (stored === 'grid' || stored === 'tags' || stored === 'list' || stored === 'board') return stored
+    if (stored === 'grid' || stored === 'tags' || stored === 'list') return stored
+    // v0.8.0：看板已从视图切换器移出（它的列就是 Status 三值，留着等于 Status 没隐藏）。
+    // 老用户 localStorage 里存的 'board' 一律回落列表——**不静默把他留在一个没有入口的视图里**。
+    if (stored === 'board') return 'list'
   } catch { /* 隐私模式下不可读，用默认值 */ }
   return 'grid'
 }
@@ -57,6 +60,8 @@ export function WorkbenchPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedBookmark, setSelectedBookmark] = useState<BookmarkResponse | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  /** 整理模式（v0.8.0）：叠加在浏览之上的可进可退态，不改变当前筛选与滚动位置 */
+  const [organizing, setOrganizing] = useState(false)
   const [showSaveForm, setShowSaveForm] = useState(false)
   const [showCommand, setShowCommand] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>(readStoredView)
@@ -371,6 +376,14 @@ export function WorkbenchPage() {
         tags={tags}
         showFilters={!isInbox}
         suggestionCount={pendingSuggestionTotal}
+        organizing={organizing}
+        onToggleOrganize={() => {
+          setOrganizing((v) => {
+            // 退出整理时清空选择：留着一条「已选 12 条」的批量条会让人误以为还在整理
+            if (v) setSelectedIds(new Set())
+            return !v
+          })
+        }}
         scenePrimaryAction={activeScene ? presentation.primaryAction : undefined}
         onQuery={(q) => setFilters((f) => ({ ...f, q }))}
         onFilters={(patch) => setFilters((f) => ({ ...f, ...patch }))}
@@ -402,9 +415,19 @@ export function WorkbenchPage() {
               其中 {selectedSuggestionCount} 条有 AI 建议
             </button>
           )}
-          <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'saved' })}>标为已确认</button>
-          <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'archived' })}>标为搁置</button>
-          <button type="button" className="btn btn--pill" onClick={() => runBatch({ ids: [...selectedIds], status: 'unread' })}>退回待处理</button>
+          {/* v0.8.0：Status 批量三项已隐藏（计划决策二）。字段与接口保留，可随时放回。
+              留下的是与「整理」直接相关的两项：收藏夹与标签。 */}
+          <select
+            className="input"
+            defaultValue=""
+            onChange={(e) => {
+              if (e.target.value) runBatch({ ids: [...selectedIds], folderId: e.target.value })
+              e.target.value = ''
+            }}
+          >
+            <option value="">移入收藏夹…</option>
+            {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+          </select>
           <select
             className="input"
             defaultValue=""
@@ -413,7 +436,7 @@ export function WorkbenchPage() {
               e.target.value = ''
             }}
           >
-            <option value="">添加场景…</option>
+            <option value="">加到本地场景…</option>
             {/* 批量挂场景属挑选器：停用项不可选，故用 scenesForPicker */}
             {scenesForPicker(scenes).map((scene) => (
               <option key={scene.id} value={scene.id}>{scene.name}</option>

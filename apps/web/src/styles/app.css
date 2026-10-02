@@ -752,6 +752,27 @@ select.input {
   color: var(--faint);
 }
 
+/* v0.8.0：分组标题旁的口径注记（如「本地场景 · 不回写」）。
+   用 faint 而非 muted —— 它是注解不是操作，不该跟可点的标题抢注意力。 */
+.sidebar-group-note {
+  margin-left: var(--space-1);
+  font-size: var(--fs-micro);
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  white-space: nowrap;
+}
+
+/* v0.8.0：整理模式开启态。与 active（橙柔底 + 左条）同色系但用实底，
+   区别于「当前选中项」——一个是模式开关，一个是位置指示。 */
+.toolbar-organize--on {
+  background: var(--amber-soft);
+  border-color: color-mix(in srgb, var(--amber) 45%);
+  color: var(--amber-strong);
+  font-weight: 600;
+}
+
 /* 标签分组标题右侧的「管理」入口（改名/合并的完整管理面在组织管理页） */
 .group-manage-link {
   margin-left: auto;
@@ -2082,38 +2103,9 @@ select.input {
   white-space: nowrap;
 }
 
-/* 状态徽标：沿用原型 cover-status 的圆点 + 柔和底样式 */
-/* 状态徽标：右上角独立锚定（沿用原型 cover-status 的圆点 + 柔和底样式） */
-.bm-card-flag {
-  position: absolute;
-  z-index: 1;
-  top: var(--space-2);
-  right: var(--space-2);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-full-pill);
-  background-color: var(--panel-overlay);
-  font-size: var(--fs-micro);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.bm-card-flag::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-
-.bm-card-flag.state-unread { color: var(--amber-strong); }
-.bm-card-flag.state-unread::before { background-color: var(--amber); }
-.bm-card-flag.state-saved { color: var(--mint); }
-.bm-card-flag.state-saved::before { background-color: var(--mint); }
-.bm-card-flag.state-archived { color: var(--slate); }
-.bm-card-flag.state-archived::before { background-color: var(--slate); }
+/* v0.8.0：`.bm-card-flag`（卡片右上角状态徽标）已随 Status 界面隐藏一并撤下，
+   相关 JSX 也已移除。见 BookmarkCard.tsx 对应注释。
+   留待说明：如日后恢复 Status 徽标，把这段连同 JSX 一起放回即可。 */
 
 /* 来源点：底行左端（不再是绝对定位，改由 .bm-card-bottom 布局，与域名 chip 同排） */
 .bm-card-srcdot {
@@ -2332,7 +2324,10 @@ select.input {
 .bm-table-head,
 .bm-table-row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 84px 72px 132px 108px;
+  /* v0.8.0：五列（选择 / 标题 / 来源 / 加入时间 / 操作）——原第六列是「状态」，
+     随 Status 界面隐藏一并去掉。**列数与上面的 grid-template-columns 必须同步**，
+     少改一处会让后面三列整体左移一格（这类错位不会报错，只会静默难看）。 */
+  grid-template-columns: 34px minmax(0, 1fr) 84px 132px 72px;
   align-items: center;
   gap: var(--space-2);
   padding: 8px var(--space-3);

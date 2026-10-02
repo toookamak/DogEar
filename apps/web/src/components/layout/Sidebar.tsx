@@ -108,43 +108,11 @@ export function Sidebar({ open, onNavigate, onLogout }: SidebarProps) {
 
       <div className="sidebar-group">
         {/* v1.14 起各维度行显示「该维度下有多少书签」，来自 GET /api/stats 聚合；
-            此前的近似口径（取已加载列表 / 仅维度条目数）已移除。 */}
-        <h3 className="sidebar-group-title">
-          <Icon name="sparkle" />
-          <span className="sidebar-group-label">场景</span>
-          <span className="group-count">{scenes.length}</span>
-        </h3>
-        {scenes.length === 0 ? (
-          <p className="sidebar-empty">
-            {loaded ? <>还没有场景 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
-          </p>
-        ) : (
-          <div className="sidebar-nav">
-            {/* 停用场景保留入口：停用只是从挑选器消失，已挂上的书签仍要能按它筛到
-                （docs/modules/20260904_数据库设计.md）。故弱化显示而非隐藏。 */}
-            {scenes.map((scene) => {
-              const count = countForDimension(stats?.byScene, scene.id)
-              return (
-                <button
-                  key={scene.id}
-                  type="button"
-                  className={`nav-item${scene.enabled === false ? ' nav-item--muted' : ''}`}
-                  title={scene.enabled === false ? '该场景已停用；仍可筛出已挂在它下面的书签' : undefined}
-                  onClick={() => goFiltered('sceneId', scene.id)}
-                >
-                  <span className="nav-item-label">{scene.name}</span>
-                  {count !== null && <span className="nav-item-count">{count}</span>}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="sidebar-group">
+            此前的近似口径（取已加载列表 / 仅维度条目数）已移除。
+            v0.8.0：文件夹改称「收藏夹」，与 Raindrop 侧用词一致（决策二：Folder + Tag 为主维度）。 */}
         <h3 className="sidebar-group-title">
           <Icon name="folder" />
-          <span className="sidebar-group-label">文件夹</span>
+          <span className="sidebar-group-label">收藏夹</span>
           <span className="group-count">{folders.length}</span>
         </h3>
         {folders.length === 0 ? (
@@ -163,6 +131,43 @@ export function Sidebar({ open, onNavigate, onLogout }: SidebarProps) {
                   onClick={() => goFiltered('folderId', folder.id)}
                 >
                   <span className="nav-item-label">{folder.name}</span>
+                  {count !== null && <span className="nav-item-count">{count}</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="sidebar-group">
+        {/* v0.8.0：场景从第一位降到**最末**（决策四：Folder + Tag 为主维度，Scene 降级为
+            本地维度）。标「不回写」是因为它只存在于本地，不参与 Raindrop 回写——
+            不写清楚的话，用户会以为挂上去的分类会跟着回推。 */}
+        <h3 className="sidebar-group-title">
+          <Icon name="sparkle" />
+          <span className="sidebar-group-label">本地场景</span>
+          <span className="sidebar-group-note">不回写</span>
+          <span className="group-count">{scenes.length}</span>
+        </h3>
+        {scenes.length === 0 ? (
+          <p className="sidebar-empty">
+            {loaded ? <>还没有场景 · <a className="sidebar-empty-link" href="/organization" onClick={(e) => { e.preventDefault(); go('/organization') }}>去创建</a></> : '加载中…'}
+          </p>
+        ) : (
+          <div className="sidebar-nav">
+            {/* 停用场景保留入口：停用只是从挑选器消失，已挂上的书签仍要能按它筛到
+                （docs/modules/20260904_数据库设计.md）。故弱化显示而非隐藏。 */}
+            {scenes.map((scene) => {
+              const count = countForDimension(stats?.byScene, scene.id)
+              return (
+                <button
+                  key={scene.id}
+                  type="button"
+                  className={`nav-item${scene.enabled === false ? ' nav-item--muted' : ''}`}
+                  title={scene.enabled === false ? '该场景已停用；仍可筛出已挂在它下面的书签' : '本地维度：不随整理结果回写到 Raindrop'}
+                  onClick={() => goFiltered('sceneId', scene.id)}
+                >
+                  <span className="nav-item-label">{scene.name}</span>
                   {count !== null && <span className="nav-item-count">{count}</span>}
                 </button>
               )

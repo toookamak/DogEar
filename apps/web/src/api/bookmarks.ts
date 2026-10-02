@@ -20,6 +20,8 @@ export interface BookmarkListParams {
   createdTo?: string
   /** 是否在导航页展示（按 nav_rules 求值集过滤；v1.14） */
   navVisible?: 'true' | 'false'
+  /** 「近 N 天没打开」的**天数**（v1.16；服务端自己换算成时点，不要传绝对时间戳） */
+  lastOpenedBefore?: string
 }
 
 export const bookmarksApi = {
