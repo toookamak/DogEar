@@ -1,12 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import MiniSearch from 'minisearch'
-import type { BookmarkResponse } from '../../types/api.js'
-import { SYNC_STATUS_LABELS, label } from '../../utils/format.js'
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
+import { bookmarkSearchIndex, type SearchHit } from '../../search-index.js'
 import { Icon } from '../ui/Icon.js'
 
 interface CommandPaletteProps {
-  bookmarks: BookmarkResponse[]
-  onSelect: (bookmark: BookmarkResponse) => void
+  /** 打开某条书签。索引里只有瘦投影，完整对象由调用方按 id 取。 */
+  onOpenBookmark: (id: string) => void
   onClose: () => void
   open: boolean
 }
@@ -14,16 +12,21 @@ interface CommandPaletteProps {
 const MAX_RESULTS = 20
 
 /**
- * ⌘K 命令面板：端侧 MiniSearch 检索（标题 / URL / 备注 / 标签）。
- * 支持键盘操作：↑↓ 移动、Enter 打开、Esc 关闭——命令面板必须能全程不碰鼠标。
+ * ⌘K 命令面板：端侧全量检索（2026-10-02 批次 2）。
+ *
+ * **行为变更**：此前把 `WorkbenchPage` 当前页的 `bookmarks` 喂给本地 MiniSearch，
+ * 于是「搜不到没被翻到过的收藏」——3000 条规模下这是大部分收藏。
+ * 现在改读 `bookmarkSearchIndex`（后台预取的瘦投影全量索引），查询零网络往返。
+ *
+ * 面板必须全程不碰鼠标：↑↓ 选择、Enter 打开、Esc 关闭。
  */
-export function CommandPalette({ bookmarks, onSelect, onClose, open }: CommandPaletteProps) {
+export function CommandPalette({ onOpenBookmark, onClose, open }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<BookmarkResponse[]>([])
+  const [results, setResults] = useState<SearchHit[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const miniSearchRef = useRef<MiniSearch | null>(null)
+  const snapshot = useSyncExternalStore(bookmarkSearchIndex.subscribe, bookmarkSearchIndex.getSnapshot)
 
   useEffect(() => {
     if (!open) {
@@ -33,30 +36,14 @@ export function CommandPalette({ bookmarks, onSelect, onClose, open }: CommandPa
       return
     }
     inputRef.current?.focus()
-
-    const miniSearch = new MiniSearch({
-      fields: ['title', 'url', 'note', 'tagText'],
-      storeFields: ['id'],
-      searchOptions: { boost: { title: 2 }, fuzzy: 0.2, prefix: true },
-    })
-    miniSearch.addAll(bookmarks.map((bookmark) => ({
-      ...bookmark,
-      tagText: (bookmark.tags || []).map((tag) => tag.name).join(' '),
-    })))
-    miniSearchRef.current = miniSearch
-  }, [open, bookmarks])
+    // 打开即确保索引就绪：首次是后台预取，之后命中缓存不再请求
+    void bookmarkSearchIndex.ensure()
+  }, [open])
 
   useEffect(() => {
-    if (!query.trim() || !miniSearchRef.current) {
-      setResults([])
-      setActiveIndex(0)
-      return
-    }
-    const ranked = miniSearchRef.current.search(query).map((r) => String(r.id))
-    const byId = new Map(bookmarks.map((b) => [b.id, b]))
-    setResults(ranked.map((id) => byId.get(id)).filter(Boolean).slice(0, MAX_RESULTS) as BookmarkResponse[])
+    setResults(query.trim() ? bookmarkSearchIndex.search(query, MAX_RESULTS) : [])
     setActiveIndex(0)
-  }, [query, bookmarks])
+  }, [query, snapshot.indexed])
 
   // 选中项滚入视野，避免键盘移动后看不到高亮
   useEffect(() => {
@@ -64,11 +51,11 @@ export function CommandPalette({ bookmarks, onSelect, onClose, open }: CommandPa
     node?.scrollIntoView({ block: 'nearest' })
   }, [activeIndex])
 
-  const commit = useCallback((bookmark: BookmarkResponse | undefined) => {
-    if (!bookmark) return
-    onSelect(bookmark)
+  const commit = useCallback((hit: SearchHit | undefined) => {
+    if (!hit) return
+    onOpenBookmark(hit.id)
     onClose()
-  }, [onSelect, onClose])
+  }, [onOpenBookmark, onClose])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') { onClose(); return }
@@ -91,6 +78,8 @@ export function CommandPalette({ bookmarks, onSelect, onClose, open }: CommandPa
   if (!open) return null
 
   const hasQuery = query.trim().length > 0
+  const indexing = snapshot.state === 'loading' || (snapshot.state === 'idle' && !hasQuery)
+  const coverage = snapshot.total ?? snapshot.indexed
 
   return (
     <div className="palette-layer" role="dialog" aria-modal="true" aria-label="搜索书签">
@@ -117,31 +106,47 @@ export function CommandPalette({ bookmarks, onSelect, onClose, open }: CommandPa
         <div className="palette-results" id="palette-results" role="listbox" ref={listRef}>
           {!hasQuery && (
             <p className="palette-hint">
-              输入关键词开始搜索。支持 ↑↓ 选择、Enter 打开。检索在本地完成，不走网络。
+              输入关键词开始搜索。支持 ↑↓ 选择、Enter 打开。
+              {indexing
+                ? ` 正在建立本地索引（${snapshot.indexed}${snapshot.total ? ` / ${snapshot.total}` : ''}）…`
+                : coverage > 0
+                  ? ` 已索引全部 ${coverage.toLocaleString('zh-CN')} 条，检索在本地完成，不走网络。`
+                  : ' 检索在本地完成，不走网络。'}
             </p>
           )}
 
-          {hasQuery && results.length === 0 && (
-            <p className="palette-hint">无匹配结果。当前只检索已加载的书签（{bookmarks.length} 条）。</p>
+          {hasQuery && results.length === 0 && snapshot.state === 'error' && (
+            <p className="palette-hint">索引建立失败：{snapshot.error}。请检查连接后重试。</p>
           )}
 
-          {results.map((bookmark, index) => (
+          {hasQuery && results.length === 0 && snapshot.state !== 'error' && indexing && (
+            <p className="palette-hint">正在建立索引，稍后再试…</p>
+          )}
+
+          {hasQuery && results.length === 0 && !indexing && (
+            <p className="palette-hint">
+              没有匹配「{query.trim()}」的收藏。
+              {coverage > 0 ? ` 已搜完本地全部 ${coverage.toLocaleString('zh-CN')} 条。` : ''}
+            </p>
+          )}
+
+          {results.map((hit, index) => (
             <button
-              key={bookmark.id}
+              key={hit.id}
               type="button"
               role="option"
               aria-selected={index === activeIndex}
               data-index={index}
               className={`palette-item${index === activeIndex ? ' palette-item--active' : ''}`}
               onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => commit(bookmark)}
+              onClick={() => commit(hit)}
             >
-              {bookmark.favicon && <img className="palette-item-fav" src={bookmark.favicon} alt="" loading="lazy" />}
               <span className="palette-item-main">
-                <span className="palette-item-title">{bookmark.title || bookmark.url}</span>
+                <span className="palette-item-title">{hit.title || hit.url}</span>
                 <span className="palette-item-meta">
-                  {bookmark.domain ?? ''}
-                  {bookmark.syncStatus === 'pending' ? ` · ${label(SYNC_STATUS_LABELS, bookmark.syncStatus)}` : ''}
+                  {hit.domain ?? ''}
+                  {hit.folderName ? ` · ${hit.folderName}` : ''}
+                  {hit.tagNames.length > 0 ? ` · ${hit.tagNames.map((tag) => `#${tag}`).join(' ')}` : ''}
                 </span>
               </span>
             </button>

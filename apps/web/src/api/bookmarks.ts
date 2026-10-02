@@ -1,4 +1,5 @@
 import { api } from './client.js'
+import type { SearchIndexResponse } from '@dogear/shared'
 import type { BookmarkResponse, PageResult, InboxResult, BatchUpdateResponse, AccessRecordResponse } from '../types/api.js'
 
 export interface BookmarkListParams {
@@ -24,7 +25,12 @@ export interface BookmarkListParams {
 export const bookmarksApi = {
   list: (params?: BookmarkListParams) => api.get<PageResult<BookmarkResponse>>('/api/bookmarks', params as Record<string, string | undefined>),
   search: (params?: BookmarkListParams) => api.get<PageResult<BookmarkResponse>>('/api/bookmarks/search', params as Record<string, string | undefined>),
-  inbox: (params?: { limit?: number; cursor?: string }) => api.get<InboxResult<BookmarkResponse>>('/api/inbox', params as Record<string, string | undefined>),
+  /**
+   * 端侧全量检索的瘦投影（2026-10-02，批次 2）。刻意不含 cover / excerpt：
+   * 3412 条要常驻浏览器内存，带大字段会让传输量与占用翻数倍。
+   */
+  searchIndex: (params?: { limit?: number; cursor?: string }) =>
+    api.get<SearchIndexResponse>('/api/bookmarks/search-index', params as Record<string, string | undefined>),  inbox: (params?: { limit?: number; cursor?: string }) => api.get<InboxResult<BookmarkResponse>>('/api/inbox', params as Record<string, string | undefined>),
   get: (id: string) => api.get<BookmarkResponse>(`/api/bookmarks/${id}`),
   create: (data: { url: string; note?: string | null; intent?: string | null; important?: boolean; private?: boolean }) => api.post<BookmarkResponse>('/api/bookmarks', data),
   update: (id: string, data: Record<string, unknown>) => api.patch<BookmarkResponse>(`/api/bookmarks/${id}`, data),

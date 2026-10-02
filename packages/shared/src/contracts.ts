@@ -13,6 +13,38 @@ export const paginationQuerySchema = z.object({
 })
 
 /**
+ * 端侧全量检索的查询参数（2026-10-02，批次 2）。
+ * 单独一套 schema：**只收 limit + cursor**，不接排序与时间范围——
+ * 端侧预取要的是「一次拿全、按固定顺序拼」，让调用方传 sort 反而容易拼出重复或漏项。
+ */
+export const searchIndexQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(300).default(200),
+  cursor: z.string().min(1).optional(),
+})
+
+/** 搜索瘦投影的一条记录：只要「能被搜到 + 能点开」的字段，不含 cover / excerpt 等大字段 */
+export const searchIndexItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  url: z.string(),
+  domain: z.string().nullable(),
+  note: z.string().nullable(),
+  /** 标签名预先空格拼接，MiniSearch 可直接作为索引字段 */
+  tagText: z.string(),
+  tagNames: z.array(z.string()),
+  folderName: z.string().nullable(),
+  createdAt: z.string(),
+})
+export type SearchIndexItem = z.infer<typeof searchIndexItemSchema>
+
+export const searchIndexResponseSchema = z.object({
+  items: z.array(searchIndexItemSchema),
+  nextCursor: z.string().nullable(),
+  total: z.number(),
+})
+export type SearchIndexResponse = z.infer<typeof searchIndexResponseSchema>
+
+/**
  * 列表排序键。recent 为默认（createdAt 倒序，与既有行为一致）。
  * title / domain 由数据库层排序，避免「读全量再内存排序」——见 docs/API结构表.md 第 316 行。
  * important（v1.14）：收藏标星优先（important DESC → createdAt DESC）。

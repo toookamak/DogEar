@@ -8,6 +8,7 @@ import { BookmarkTilesView } from '../components/bookmarks/BookmarkTilesView.js'
 import { BookmarkDetail } from '../components/detail/BookmarkDetail.js'
 import { SaveBookmarkForm } from '../components/detail/SaveBookmarkForm.js'
 import { CommandPalette } from '../components/command/CommandPalette.js'
+import { bookmarkSearchIndex } from '../search-index.js'
 import { SuggestionPanel } from '../components/suggestions/SuggestionPanel.js'
 import { EmptyState } from '../components/feedback/EmptyState.js'
 import { Skeleton } from '../components/feedback/Skeleton.js'
@@ -156,6 +157,22 @@ export function WorkbenchPage() {
 
   // 外壳中的撤销成功后通知刷新列表（刷新当前页，替代先前的整页 reload）
   useEffect(() => onDataChanged(() => { void loadBookmarks() }), [loadBookmarks])
+
+  /**
+   * 打开端侧索引命中的书签（2026-10-02 批次 2）。索引里只有瘦投影，
+   * 完整对象按 id 取；取不到就提示而不是静默无反应。
+   */
+  const openBookmarkById = useCallback(async (id: string) => {
+    try {
+      const fresh = await bookmarksApi.get(id)
+      setSelectedBookmark(fresh)
+    } catch (e) {
+      toast.error(errorMessage(e, '打不开这条书签'))
+    }
+  }, [])
+
+  // 工作台数据一变，端侧索引即作废（下次查询时重建，见 search-index.ts 的策略说明）
+  useEffect(() => onDataChanged(() => { bookmarkSearchIndex.invalidate() }), [])
 
   // 筛选/排序/入口变化（loadBookmarks 身份随之变化）：重置到第 1 页
   useEffect(() => {
@@ -518,8 +535,7 @@ export function WorkbenchPage() {
       )}
 
       <CommandPalette
-        bookmarks={bookmarks}
-        onSelect={(b) => setSelectedBookmark(b)}
+        onOpenBookmark={(id) => { void openBookmarkById(id) }}
         onClose={() => setShowCommand(false)}
         open={showCommand}
       />

@@ -24,6 +24,7 @@ import {
   tagRenameInputSchema,
   triggerArchiveSkillInputSchema,
   updateBookmarkSkillInputSchema,
+  searchIndexQuerySchema,
   workbenchCreateBookmarkInputSchema,
   workbenchPatchBookmarkInputSchema,
 } from '@dogear/shared'
@@ -600,6 +601,16 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
       createdFrom, createdTo, ...navFilter,
     }, limit, cursor, { sort })
     return c.json({ items: items.items.map(serializeBookmark), nextCursor: items.nextCursor, total: items.total })
+  })
+
+  app.get('/api/bookmarks/search-index', async (c) => {
+    // 2026-10-02 批次 2：端侧全量检索的瘦投影。与 /api/bookmarks/search 的分工：
+    // 那个是「带条件的分页查询」（按条件命中多少取多少），这个是「一次拿全建本地索引」。
+    // 刻意不含 cover / excerpt——3412 条要常驻浏览器内存，带大字段会让传输量翻数倍。
+    const query = searchIndexQuerySchema.safeParse(c.req.query())
+    if (!query.success) return invalidRequest(c)
+    const result = await repository.listSearchIndex(query.data.limit, query.data.cursor)
+    return c.json(result)
   })
 
   app.patch('/api/bookmarks/batch', async (c) => {

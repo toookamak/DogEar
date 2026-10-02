@@ -158,6 +158,15 @@ export type BookmarkRepository = {
   attachTagsBatch: (pairs: Array<{ bookmarkId: string; tagIds: string[] }>) => Promise<void>
   /** 导出/同步用的瘦投影：只取推送所需列，一条查询搞定（避免 list 的逐条关联查询） */
   listExportRows: (opts: { onlyWithoutRaindropId?: boolean }, limit?: number, offset?: number) => Promise<unknown[]>
+  /**
+   * 端侧全量检索的瘦投影（2026-10-02，批次 2）。只取「能被搜到 + 能点开」的字段：
+   * id / title / url / domain / note / tagText / folderName / createdAt。
+   *
+   * **刻意不含 cover、excerpt、body 等大字段**——3412 条的预取是要常驻浏览器内存的，
+   * 封面 URL 与摘要是其中最大的冗余，带上会让传输量与内存翻数倍。
+   * 命中后由前端按 id 回服务端取完整对象，不靠这份投影渲染列表。
+   */
+  listSearchIndex: (limit?: number, cursor?: string) => Promise<{ items: unknown[]; nextCursor: string | null; total: number }>
   countWithoutRaindropId: () => Promise<number>
   /** 批量写回远端 raindropId 并标 synced（导出成功 / 队列 create 成功共用） */
   updateRaindropIds: (pairs: Array<{ id: string; raindropId: string }>) => Promise<void>
@@ -755,6 +764,67 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
   repository.countWithoutRaindropId = async () => {
     const result = await db.select({ count: count() }).from(bookmarks).where(and(isNull(bookmarks.deletedAt), isNull(bookmarks.raindropId))).all()
     return Number(result[0]?.count ?? 0)
+  }
+  repository.listSearchIndex = async (limit = 100, cursor?: string) => {
+    // 排序与游标**复用 list 的 keyset 机制**（sort='recent'：createdAt DESC + id 兜底），
+    // 不自己拼游标字符串——手写过一版，把 ISO 串拿去和整型 createdAt 比，
+    // 分页不收敛。这里直接走已验证的 paginatedQuery / keysetConditionOf。
+    const page = await db.select({
+      id: bookmarks.id,
+      title: bookmarks.title,
+      url: bookmarks.url,
+      domain: bookmarks.domain,
+      note: bookmarks.note,
+      createdAt: bookmarks.createdAt,
+    })
+      .from(bookmarks)
+      .where(and(isNull(bookmarks.deletedAt), cursor ? keysetConditionOf('recent', cursor) : undefined))
+      .orderBy(desc(bookmarks.createdAt), desc(bookmarks.id))
+      .limit(limit + 1).all()
+    const result = paginatedQuery('recent', page, limit, (row: any) => ({ value: toCursorMs(row.createdAt), id: String(row.id) }))
+    const totalRows = await db.select({ count: count() }).from(bookmarks).where(isNull(bookmarks.deletedAt)).all()
+    const total = Number(totalRows[0]?.count ?? 0)
+    const rows = result.items as any[]
+    if (rows.length === 0) return { items: [], nextCursor: null, total }
+
+    // 标签与收藏夹名：两条批量查询，不逐条关联
+    const ids = rows.map((row) => String(row.id))
+    const tagRows = await db.select({ bookmarkId: bookmarkTags.bookmarkId, name: tags.name })
+      .from(bookmarkTags)
+      .innerJoin(tags, eq(bookmarkTags.tagId, tags.id))
+      .where(inArray(bookmarkTags.bookmarkId, ids))
+      .all()
+    const folderRows = await db.select({ id: bookmarks.id, name: folders.name })
+      .from(bookmarks).leftJoin(folders, eq(bookmarks.folderId, folders.id))
+      .where(inArray(bookmarks.id, ids)).all()
+    const tagsByBookmark = new Map<string, string[]>()
+    for (const row of tagRows as Array<{ bookmarkId: string; name: string }>) {
+      const list = tagsByBookmark.get(row.bookmarkId)
+      if (list) list.push(row.name)
+      else tagsByBookmark.set(row.bookmarkId, [row.name])
+    }
+    const folderByBookmark = new Map<string, string>()
+    for (const row of folderRows as Array<{ id: string; name: string | null }>) {
+      if (row.name) folderByBookmark.set(row.id, row.name)
+    }
+
+    const items = rows.map((row) => {
+      const id = String(row.id)
+      const tagNames = tagsByBookmark.get(id) ?? []
+      return {
+        id,
+        title: row.title,
+        url: row.url,
+        domain: row.domain ?? null,
+        note: row.note ?? null,
+        // 预先拼好：MiniSearch 直接吃这个字段，前端不必每次查询再拼
+        tagText: tagNames.join(' '),
+        tagNames,
+        folderName: folderByBookmark.get(id) ?? null,
+        createdAt: new Date(row.createdAt).toISOString(),
+      }
+    })
+    return { items, nextCursor: result.nextCursor, total }
   }
   repository.updateRaindropIds = async (pairs) => {
     const timestamp = now()

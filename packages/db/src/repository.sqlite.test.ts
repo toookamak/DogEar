@@ -353,4 +353,65 @@ describe('repository on real SQLite（批次 0 · Raindrop 拉取侧）', () => 
     expect(byId.get('ex-3')!.collectionId).toBeNull()
     expect(byId.get('ex-3')!.tagNames).toEqual([])
   })
+
+  it('listSearchIndex 瘦投影：含可搜字段、排除大字段，分页拼接不重不漏（批次 2 核心回归）', async () => {
+    const repository = setup()
+    await repository.folders.ensureByRaindropId([{ raindropId: 100, name: '论文' }])
+    const folders = await repository.folders.list() as any[]
+    const { id: t1 } = await repository.tags.create({ id: 'tag-s1', name: '渲染' }) as Record<string, unknown>
+
+    const total = 25
+    // 同一毫秒创建的条目很多——专门压 keyset 游标的次级键（id）兜底是否可靠
+    const sameInstant = new Date('2026-09-01T00:00:00Z')
+    for (let i = 0; i < total; i += 1) {
+      await seedBookmark(repository, {
+        id: `si-${String(i).padStart(3, '0')}`,
+        title: i === 7 ? 'Houdini 渲染笔记' : `条目 ${i}`,
+        note: i === 7 ? 'VEX 软体' : null,
+        folderId: i % 2 === 0 ? folders.find((f) => f.raindropId === '100').id : null,
+        createdAt: sameInstant,
+      })
+    }
+    await repository.attachTagsBatch([{ bookmarkId: 'si-007', tagIds: [String(t1)] }])
+
+    // 分页拼接：limit=7 逐页取完，必须 25 条不重不漏
+    const collected: any[] = []
+    let cursor: string | undefined
+    let guard = 0
+    do {
+      const page = await repository.listSearchIndex(7, cursor)
+      collected.push(...(page.items as any[]))
+      cursor = page.nextCursor ?? undefined
+      if (++guard > 20) throw new Error('分页未收敛')
+    } while (cursor)
+
+    expect(collected).toHaveLength(total)
+    expect(new Set(collected.map((row) => row.id)).size).toBe(total)
+    expect(page_total(await repository.listSearchIndex(1))).toBe(total)
+
+    // 投影内容：能搜的字段在，大字段不在
+    const hit = collected.find((row) => row.id === 'si-007')!
+    expect(hit.title).toBe('Houdini 渲染笔记')
+    expect(hit.note).toBe('VEX 软体')
+    expect(hit.tagText).toBe('渲染')      // 预拼好给 MiniSearch
+    expect(hit.tagNames).toEqual(['渲染'])
+    expect(hit.folderName).toBeNull()
+    const tagged = collected.find((row) => row.id === 'si-000')!
+    expect(tagged.folderName).toBe('论文')
+    for (const row of collected) {
+      expect(row).not.toHaveProperty('cover')
+      expect(row).not.toHaveProperty('excerpt')
+      expect(row).not.toHaveProperty('body')
+    }
+
+    // 回收站条目不进索引
+    await repository.softDelete('si-000')
+    const afterTrash = await repository.listSearchIndex(100)
+    expect((afterTrash.items as any[]).some((row) => row.id === 'si-000')).toBe(false)
+    expect(afterTrash.total).toBe(total - 1)
+  })
 })
+
+function page_total(page: { total: number }): number {
+  return page.total
+}
