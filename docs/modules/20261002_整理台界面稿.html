@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DogEar 整理台 · 界面稿 v0.4（评审中）</title>
+<title>DogEar 整理台 · 界面稿 v0.5（评审中）</title>
 <style>
 /* ============================================================
    Token 单例源：apps/web/src/styles/tokens.css（值逐项抄录，未新增）
@@ -310,10 +310,12 @@ mark{background:var(--amber-soft);color:var(--text);border-radius:2px;padding:0 
     <h1>DogEar 整理台 · 界面稿</h1>
     <p class="sub">从「独立书签管理器」转向「Raindrop 整理台 + 本地检索」——第一版界面重设计</p>
     <div class="meta">
-      <span>稿版本 v0.4</span><span>状态 评审中</span><span>2026-10-02</span>
-      <span>视觉源 DESIGN.md</span><span>Token 源 tokens.css</span><span>未接入代码</span>
+      <span>稿版本 v0.5</span><span>状态 评审中</span><span>2026-10-02</span>
+      <span>视觉源 DESIGN.md</span><span>Token 源 tokens.css</span><span>实现进度 已标注</span>
     </div>
     <div class="doc-note">
+      <b>v0.5 的变化：这一稿开始带实现进度。</b>v0.1–v0.4 是纯设计稿；到 v0.5，批次 0 与批次 2 的服务端部分已经落地，于是把每一屏的「块」拆成 <span style="color:var(--mint)">已实现</span> 与 <span style="color:var(--red)">仍是设计</span> 两栏，稿子从「想做什么」变成「做到哪、下一步做什么」。完整对照见说明区末的《实现进度》。<b>本轮只改稿，未动任何界面代码。</b>
+      <br><br>
       <b>v0.4 新增屏 6「冲突处理」</b>：你提的「冲突和无法直接修改的差异要落到应用上，处理好了再推送，避免浪费 Raindrop 额度」——落成一条硬原则：<b>只有真正的用户编辑才允许写 Raindrop</b>。三类问题（内容冲突 / 映射失效 / 删除分歧）分开处理，<b>但结局完全一样：处理结果就是一次普通编辑</b>，跟着其他改动一起走批量接口，<b>处理冲突本身不产生任何额外调用</b>。冲突入口从胶囊浮条直达，<b>不跳设置页</b>。
       <br><br>
       <b>v0.3 新增屏 5「同步差异胶囊」</b>：把「一个笼统的待同步 N」拆成 <b>↓ 落后（远端有我没有的）</b> 和 <b>↑ 领先（我改了没给的）</b> 两个方向，折叠态给双计数，展开态给<b>各自独立的上传 / 下载按钮</b>，附上「8 条改标签 · 4 条改收藏夹」这样的领先明细。落后数是<b>下界不是总数</b>——探测只看最近 50 条，宁可少报也不谎报。<b>需新增接口 <code>GET /api/sync/diff</code>，未拍板前不写代码。</b>
@@ -492,15 +494,15 @@ mark{background:var(--amber-soft);color:var(--text);border-radius:2px;padding:0 
               </div>
               <div style="display:flex;flex-direction:column;gap:var(--space-3)">
                 <div>
-                  <div style="font-size:var(--fs-micro);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:var(--space-2)">归类情况</div>
+                  <div style="font-size:var(--fs-micro);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:var(--space-2)">归类情况 <span style="color:var(--mint);letter-spacing:0;text-transform:none">已实现</span></div>
                   <div style="display:flex;gap:var(--space-2);flex-wrap:wrap">
                     <span class="chip" style="height:var(--control-h-sm);border-radius:var(--radius);padding:0 var(--space-3);display:inline-flex;align-items:center;font-size:var(--fs-body);background:var(--panel);border:1px solid var(--line-strong);color:var(--muted)">未打标签</span>
                     <span class="chip" style="height:var(--control-h-sm);border-radius:var(--radius);padding:0 var(--space-3);display:inline-flex;align-items:center;font-size:var(--fs-body);background:var(--panel);border:1px solid var(--line-strong);color:var(--muted)">没有收藏夹</span>
-                    <span class="chip" style="height:var(--control-h-sm);border-radius:var(--radius);padding:0 var(--space-3);display:inline-flex;align-items:center;font-size:var(--fs-body);background:var(--panel);border:1px solid var(--line-strong);color:var(--muted)">同域名散落多处</span>
+                    <span class="chip" style="height:var(--control-h-sm);border-radius:var(--radius);padding:0 var(--space-3);display:inline-flex;align-items:center;font-size:var(--fs-body);background:var(--panel);border:1px dashed var(--line-strong);color:var(--faint)">同域名散落多处 <span style="font-size:var(--fs-micro);margin-left:4px">未实现</span></span>
                   </div>
                 </div>
                 <div>
-                  <div style="font-size:var(--fs-micro);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:var(--space-2)">时间</div>
+                  <div style="font-size:var(--fs-micro);font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:var(--space-2)">时间 <span style="color:var(--mint);letter-spacing:0;text-transform:none">已实现</span></div>
                   <div style="display:flex;gap:var(--space-2);flex-wrap:wrap">
                     <span class="chip" style="height:var(--control-h-sm);border-radius:var(--radius);padding:0 var(--space-3);display:inline-flex;align-items:center;font-size:var(--fs-body);background:var(--panel);border:1px solid var(--line-strong);color:var(--muted)">近 7 天</span>
                     <span class="chip" style="height:var(--control-h-sm);border-radius:var(--radius);padding:0 var(--space-3);display:inline-flex;align-items:center;font-size:var(--fs-body);background:var(--panel);border:1px solid var(--line-strong);color:var(--muted)">近 30 天</span>
@@ -1098,6 +1100,63 @@ mark{background:var(--amber-soft);color:var(--text);border-radius:2px;padding:0 
       <p><b>最关键的一点</b>：三类处理完的最终结果<b>都归结为一次普通的本地编辑</b>，然后跟其他编辑一起走批量推送。<b>没有一条是「专门为了同步」而发起的额外写入</b>——所以<b>处理冲突不消耗额外额度</b>。这是省额度最根本的一招，比「少调几次接口」这种口号可核对得多。</p>
       <p><b>三条硬规则</b>（计划 §3.6）：① <b>拉取只读，永不入队</b>——`raindrop-reconcile.ts` 回填标题/封面时不得触发入队；② <b>推不出去的就不推</b>——映射失效在应用里挂起等处理，<b>不为了消掉差异数字硬推</b>，那只会产生失败重试和垃圾数据；③ <b>规则引擎产生的整理要回写</b>但<b>攒批</b>，且界面上写明「规则产生的整理会回写 Raindrop」——规则的价值就是整理，不推回则本地与 Raindrop 越差越远。</p>
       <p><b>现状差距</b>：现在只有一个笼统的 `conflicts` 表（两端快照 + 本地赢 + kept_local/kept_remote/merged），<b>且面板在设置页</b>，用户不会去看。本屏把它提到主流程，并按「内容 / 映射 / 删除」三类拆开——映射失效与删除分歧<b>目前没有对应的数据结构</b>，需新建。详见计划 §3.6.3。</p>
+
+      <h3>实现进度（v0.5 新增，2026-10-02）</h3>
+      <p>这一稿开始区分「已经写进代码的」和「还只是画的」。提交号见每行末。<b>只有这一节是事实，其余各节仍是设计。</b></p>
+      <table>
+        <tr><th>能力</th><th>状态</th><th>落在哪</th><th>说明</th></tr>
+        <tr>
+          <td>Raindrop 收藏夹与标签<b>拉回来</b></td>
+          <td class="now">已实现</td><td><code>sync/raindrop-taxonomy.ts</code></td>
+          <td>此前 <code>mapRaindropBookmark</code> 把 tags 整个丢弃、<code>collection.$id</code> 没映射到 <code>folder_id</code>，拉回来的书签全是「无标签、无收藏夹」。现在拉书签前先同步清单并建映射。<b>零 schema 改动</b></td>
+        </tr>
+        <tr>
+          <td>Raindrop 收藏夹与标签<b>推回去</b></td>
+          <td style="color:var(--red)">仍是设计</td><td>—</td>
+          <td>押在 <code>PUT /raindrop/{id}</code> 的 <code>tags</code> 语义实测上（部分更新 vs 整体替换）。<b>未测清前不开写</b>，否则可能清空远端已有归类</td>
+        </tr>
+        <tr>
+          <td>导出到 Raindrop 带上标签与收藏夹</td>
+          <td class="now">已实现</td><td><code>listExportRows</code> / <code>raindrop-export.ts</code></td>
+          <td>此前 <code>tags: []</code> 是硬编码的，整理成果出不去。走 <code>POST</code> create，不涉及替换语义</td>
+        </tr>
+        <tr>
+          <td>⌘K 搜全量</td>
+          <td class="now">已实现</td><td><code>GET /api/bookmarks/search-index</code> + <code>search-index.ts</code></td>
+          <td>此前只索引<b>当前页</b>，搜不到没翻到过的收藏（3000 条里那是大部分）。现按后台预取的瘦投影建全量索引，查询零往返</td>
+        </tr>
+        <tr>
+          <td>搜索结果<b>行内直接改</b>收藏夹/标签</td>
+          <td style="color:var(--red)">仍是设计</td><td>—</td>
+          <td>屏 3 里 hover 显形的两个按钮；索引已能出全量结果，但「搜到就能理」这一半还没做</td>
+        </tr>
+        <tr>
+          <td>筛选条件「未打标签」「一年没打开」</td>
+          <td class="now">已实现（服务端）</td><td><code>filterCondition</code></td>
+          <td>屏 1 筛选弹层里的条件。「同域名散落多处」<b>未实现</b>，需要一条子查询</td>
+        </tr>
+        <tr>
+          <td>筛选弹层 / 整理模式 / 隐藏 Status / Scene 降级</td>
+          <td style="color:var(--red)">仍是设计</td><td>—</td>
+          <td>屏 1、屏 2 画的就是这批；服务端条件已具备，<b>界面尚未接线</b></td>
+        </tr>
+        <tr>
+          <td>同步差异胶囊（↑领先 / ↓落后）</td>
+          <td style="color:var(--red)">仍是设计</td><td>—</td>
+          <td>屏 5。需新增 <code>GET /api/sync/diff</code>（落后数靠 <code>sort=-lastUpdate</code> 首屏比对）</td>
+        </tr>
+        <tr>
+          <td>冲突三类处理与入口上移</td>
+          <td style="color:var(--red)">仍是设计</td><td>—</td>
+          <td>屏 6。现状只有一张笼统的 conflicts 表且面板在设置页；映射失效与删除分歧<b>没有对应数据结构</b></td>
+        </tr>
+        <tr>
+          <td>规则引擎</td>
+          <td style="color:var(--red)">未开始</td><td>—</td>
+          <td>批次 5。约束：规则只产出 Folder 与 Tag，不产出 Scene</td>
+        </tr>
+      </table>
+      <p><b>当前处于「拉得对、推不回」的窗口</b>（计划 §9 第 7 条）：本地能看到并整理收藏夹与标签，但推送仍只带 url/title/note，<b>改了标签不会回写 Raindrop</b>。这段时间界面上必须明写「回写收藏夹与标签尚未启用」，否则会以为推了。</p>
 
       <h3>刻意没做的（以及原因）</h3>
       <ul>
