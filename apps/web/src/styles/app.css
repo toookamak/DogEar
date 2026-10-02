@@ -2273,9 +2273,11 @@ select.input {
   opacity: 0.75;
 }
 
+/* 「未整理」是缺省态不是真标签，故去掉 # 前缀；
+   但仍留在 tag-pill 同族里（不加斜体），只降色——斜体会让它读作另一类东西，
+   而同排标签里出现两种字形正是「标签样式不一致」的观感来源。 */
 .tag-pill-empty {
   color: var(--faint);
-  font-style: italic;
 }
 
 .tag-pill-empty::before {
@@ -2719,12 +2721,15 @@ select.input {
   -webkit-box-orient: vertical;
 }
 
+/* 底栏吸底：等高网格里无简介的卡片内容更短，固定 8px 会让底栏悬在中间
+   （有简介的卡片底栏更低，两卡底边齐而底栏不齐）。
+   改为 auto 对齐网格卡 .bm-card-foot 的口径；上方留白由这里的 padding-top 兜底。 */
 .bm-tile-foot {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: 8px;
-  padding: var(--space-1) var(--space-3);
+  margin-top: auto;
+  padding: var(--space-2) var(--space-3) var(--space-1);
   border-top: 1px solid var(--line-soft);
   background-color: var(--panel-raised);
   min-width: 0;
@@ -2736,6 +2741,36 @@ select.input {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+}
+
+/* 索引卡底栏的信息 pill 与网格卡底栏同口径：去掉圆点、弱化为轻量 chip。
+   此前只覆盖了 .bm-card-foot / .bm-card-tags-row，标签视图的底栏 pill 漏网，
+   「重要 / 私密 / 待推送」带着 5px 实心圆点，与相邻的 # 标签 pill 读作两套东西。 */
+.bm-tile-foot .pill {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-0) var(--space-2);
+  color: var(--muted);
+}
+
+.bm-tile-foot .pill::before {
+  content: none;
+}
+
+.bm-tile-foot .pill--ai {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+.bm-tile-foot .pill--important {
+  color: var(--rust);
+  border-color: color-mix(in srgb, var(--rust) 35%, transparent);
+}
+
+.bm-tile-foot .pill--pending {
+  color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 35%, transparent);
 }
 
 .bm-tile-foot-end {
