@@ -411,6 +411,38 @@ describe('repository on real SQLite（批次 0 · Raindrop 拉取侧）', () => 
     expect(afterTrash.total).toBe(total - 1)
   })
 
+  /**
+   * D1 绑定参数上限回归（2026-10-02）。
+   *
+   * `searchIndexQuerySchema` 允许 limit 到 300，而关联查询要把整页 id 塞进
+   * `inArray`。D1 单条语句绑定参数上限约 100，**SQLite 没有这个限制**，
+   * 所以不特意造超过 90 条的数据就永远测不出来——测出来的「全绿」是假的。
+   * 这里造 250 条，把 3 条 id 的分片路径真正走一遍。
+   */
+  it('id 集超过 90 时关联查询分片，结果不重不漏（D1 参数上限回归）', async () => {
+    const repository = setup()
+    const { id: t1 } = await repository.tags.create({ id: 'tag-chunk', name: '渲染' }) as Record<string, unknown>
+    const total = 250
+    for (let i = 0; i < total; i += 1) {
+      await seedBookmark(repository, { id: `ck-${String(i).padStart(3, '0')}` })
+    }
+    // 分散挂标签，确保跨片的行也能被查到
+    for (let i = 0; i < total; i += 37) {
+      await repository.attachTagsBatch([{ bookmarkId: `ck-${String(i).padStart(3, '0')}`, tagIds: [String(t1)] }])
+    }
+
+    // limit 250 > 90 ⇒ 关联查询必然分片（3 片）
+    const page = await repository.listSearchIndex(250)
+    expect((page.items as any[])).toHaveLength(total)
+    expect(page.nextCursor).toBeNull()
+    const tagged = (page.items as any[]).filter((row) => row.tagNames.length > 0)
+    expect(tagged.length).toBe(Math.ceil(total / 37))
+    // 跨片命中的行 tagText 也要正确（不是只查到了某一片）
+    expect(tagged.map((row) => row.id).sort()).toEqual(
+      Array.from({ length: Math.ceil(total / 37) }, (_, k) => `ck-${String(k * 37).padStart(3, '0')}`),
+    )
+  })
+
   it('无状态筛选条件：未打标签 / 没有收藏夹 / 一年没打开（批次 1 核心回归）', async () => {
     const repository = setup()
     await repository.folders.ensureByRaindropId([{ raindropId: 100, name: '论文' }])

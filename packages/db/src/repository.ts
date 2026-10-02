@@ -575,6 +575,23 @@ function chunkByParamBudget(records: Array<Record<string, unknown>>): Array<Arra
   return chunks
 }
 
+/**
+ * 按 id 集查询并合并结果，id 集过长时**自动分片**（每片 90 个）。
+ *
+ * 为什么需要：`listSearchIndex` 的 `limit` 允许到 300，
+ * `listExportRows` 的候选集是 `count + excludeIds.length`（失败累积越多越大）——
+ * 直接 `inArray(ids)` 就会在 D1 上撞 100 绑定参数上限。
+ *
+ * **SQLite 没有这个限制，所以 node:sqlite 上的测试全是绿的**，
+ * 只有真 D1（Workers 部署）才会炸。分片口径与 `idSetCondition` 一致。
+ */
+async function selectByIds<T>(ids: string[], run: (chunk: string[]) => Promise<T[]>): Promise<T[]> {
+  if (!ids.length) return []
+  const out: T[] = []
+  for (let i = 0; i < ids.length; i += 90) out.push(...await run(ids.slice(i, i + 90)))
+  return out
+}
+
 export function createD1BookmarkRepository(database: D1Database): BookmarkRepository {
   // D1 无 SQL 事务能力，显式关闭，避免写路径抛 500
   return createBookmarkRepository(drizzleD1(database), { sqlTransactions: false })
@@ -751,23 +768,24 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     // 此前导出只带 url/title/note，**用户本地整理好的收藏夹与标签在导出时被静默丢掉**——
     // 推回 Raindrop 的是一条「裸链接」，等于整理成果没有出口。
     // 仍维持「一条书签查询 + 两条批量关联查询」，不做逐条关联。
+    // 关联查询**分片**：候选集是 count + excludeIds.length，导出失败累积多了就超 D1 绑定参数上限。
     const ids = rows.map((row: any) => String(row.id))
     if (ids.length === 0) return rows
-    const tagRows = await db.select({ bookmarkId: bookmarkTags.bookmarkId, name: tags.name })
+    const tagRows = await selectByIds(ids, (chunk) => db.select({ bookmarkId: bookmarkTags.bookmarkId, name: tags.name })
       .from(bookmarkTags)
       .innerJoin(tags, eq(bookmarkTags.tagId, tags.id))
-      .where(inArray(bookmarkTags.bookmarkId, ids))
-      .all()
-    const folderRows = rows.filter((row: any) => row.folderId)
-    const raindropIds = new Map<string, string>()
-    if (folderRows.length > 0) {
-      const mapped = await db.select({ id: folders.id, raindropId: folders.raindropId })
+      .where(inArray(bookmarkTags.bookmarkId, chunk))
+      .all() as Promise<Array<{ bookmarkId: string; name: string }>>)
+    const folderIds: string[] = Array.from(new Set(rows.filter((row: any) => row.folderId).map((row: any) => String(row.folderId))))
+    const mapped = await selectByIds<{ id: string; raindropId: string | null }>(folderIds, async (chunk) =>
+      await db.select({ id: folders.id, raindropId: folders.raindropId })
         .from(folders)
-        .where(inArray(folders.id, folderRows.map((row: any) => String(row.folderId))))
-        .all()
-      for (const row of mapped as Array<{ id: string; raindropId: string | null }>) {
-        if (row.raindropId) raindropIds.set(row.id, row.raindropId)
-      }
+        .where(inArray(folders.id, chunk))
+        .all(),
+    )
+    const raindropIds = new Map<string, string>()
+    for (const row of mapped) {
+      if (row.raindropId) raindropIds.set(row.id, row.raindropId)
     }
     return rows.map((row: any) => {
       const bookmarkId = String(row.id)
@@ -807,16 +825,17 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     const rows = result.items as any[]
     if (rows.length === 0) return { items: [], nextCursor: null, total }
 
-    // 标签与收藏夹名：两条批量查询，不逐条关联
+    // 标签与收藏夹名：批量查询，不逐条关联；**必须分片**（limit 可达 300 > D1 100 参数上限）
     const ids = rows.map((row) => String(row.id))
-    const tagRows = await db.select({ bookmarkId: bookmarkTags.bookmarkId, name: tags.name })
+    const tagRows = await selectByIds(ids, (chunk) => db.select({ bookmarkId: bookmarkTags.bookmarkId, name: tags.name })
       .from(bookmarkTags)
       .innerJoin(tags, eq(bookmarkTags.tagId, tags.id))
-      .where(inArray(bookmarkTags.bookmarkId, ids))
-      .all()
-    const folderRows = await db.select({ id: bookmarks.id, name: folders.name })
+      .where(inArray(bookmarkTags.bookmarkId, chunk))
+      .all() as Promise<Array<{ bookmarkId: string; name: string }>>)
+    const folderRows = await selectByIds(ids, (chunk) => db.select({ id: bookmarks.id, name: folders.name })
       .from(bookmarks).leftJoin(folders, eq(bookmarks.folderId, folders.id))
-      .where(inArray(bookmarks.id, ids)).all()
+      .where(inArray(bookmarks.id, chunk))
+      .all() as Promise<Array<{ id: string; name: string | null }>>)
     const tagsByBookmark = new Map<string, string[]>()
     for (const row of tagRows as Array<{ bookmarkId: string; name: string }>) {
       const list = tagsByBookmark.get(row.bookmarkId)
