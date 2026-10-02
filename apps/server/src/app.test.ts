@@ -69,6 +69,21 @@ function repository(): any {
     navRules: { list: async () => [], get: async () => undefined, create: async (input: Record<string, unknown>) => input, update: async () => undefined, remove: async () => undefined },
 
     listRecentOpened: async () => [],
+    listSearchIndex: async (limit = 100, cursor?: string) => ({
+      items: records.slice(0, limit).map((record) => ({
+        id: record.id,
+        title: record.title,
+        url: record.url,
+        domain: null,
+        note: null,
+        tagText: '',
+        tagNames: [],
+        folderName: null,
+        createdAt: new Date().toISOString(),
+      })),
+      nextCursor: cursor ? null : 'next-cursor-token',
+      total: records.length,
+    }),
     list: async (filters?: any, limit?: number, cursor?: string) => {
       return { items: [...records], nextCursor: null }
     },
@@ -207,6 +222,41 @@ describe('authentication API', () => {
   it('keeps health checks public', async () => {
     const app = createApp(repository(), { password: 'secret' })
     expect((await app.request('/health')).status).toBe(200)
+  })
+
+  /**
+   * 批次 2 的端侧检索投影：鉴权、回执形状、分页游标透传。
+   * 这个端点一次返回**全库**的瘦投影，漏掉鉴权就是整库数据裸奔，故单独测。
+   */
+  it('search-index 需登录；已登录时按 limit/cursor 分页返回瘦投影', async () => {
+    const repo = repository()
+    repo.records.push({ id: 'b1', url: 'https://a.example.com/', title: 'A', status: 'unread', source: 'page', syncStatus: 'synced', createdAt: Date.now(), updatedAt: Date.now() })
+    const app = createApp(repo, { password: 'secret' })
+
+    expect((await app.request('/api/bookmarks/search-index')).status).toBe(401)
+    expect((await app.request('/api/bookmarks/search-index', { headers: { cookie: 'dogear_session=invalid' } })).status).toBe(401)
+
+    const { cookie } = await login(app)
+    const first = await app.request('/api/bookmarks/search-index?limit=1', { headers: { cookie } })
+    expect(first.status).toBe(200)
+    const body = await first.json() as { items: any[]; nextCursor: string | null; total: number }
+    expect(body.items).toHaveLength(1)
+    expect(body.nextCursor).toBe('next-cursor-token')
+    expect(body.total).toBe(1)
+    // 瘦投影：可搜字段齐全，大字段不在
+    expect(Object.keys(body.items[0]).sort()).toEqual(
+      ['createdAt', 'domain', 'folderName', 'id', 'note', 'tagNames', 'tagText', 'title', 'url'],
+    )
+    expect(body.items[0]).not.toHaveProperty('cover')
+    expect(body.items[0]).not.toHaveProperty('excerpt')
+
+    // 游标透传：第二页拿它换数据，且不再给下一页游标
+    const second = await app.request('/api/bookmarks/search-index?limit=1&cursor=next-cursor-token', { headers: { cookie } })
+    const secondBody = await second.json() as { nextCursor: string | null }
+    expect(secondBody.nextCursor).toBeNull()
+
+    // limit 越界走 400，不静默兜底
+    expect((await app.request('/api/bookmarks/search-index?limit=9999', { headers: { cookie } })).status).toBe(400)
   })
 })
 
