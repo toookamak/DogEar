@@ -1,12 +1,12 @@
 <!-- 项目名：DogEar · 折耳书签 -->
 
-> **文档版本**：v1.15
-> **应用版本**：v0.7.43
+> **文档版本**：v1.16
+> **应用版本**：v0.8.0
 > **文档状态**：生效
 > **目的和适用范围**：开发约束。实现 `apps/server` 路由与 `packages/shared` Zod 时只按本表的路径、字段、错误码接线。为什么这样设计见 [API 设计](./modules/20260904_API设计.md)。列含义见 [数据库结构表](./数据库结构表.md)。不进 wiki。
 > **权威级别**：模块规则（实现规格）。路径、回执形状、错误码以本文为准。
 > **配套**：[数据库结构表](./数据库结构表.md) · [API 设计](./modules/20260904_API设计.md)
-> **最后更新日期**：2026-09-26
+> **最后更新日期**：2026-10-02
 > **修改记录**：
 >
 > | 文档版本 | 应用版本 | 日期 | 修改摘要 | 修改模型ID |
@@ -29,6 +29,7 @@
 | v1.13 | v0.7.37 | 2026-09-14 | **`save_bookmark` 可选页面元数据（加性）**：入参增加可选 `title`、`excerpt`、`favicon`（Chrome 扩展保存时当场传入；空串视为未传）。调用方已写入的字段事后抓页不覆盖。未传时行为与 v1.12 相同 | composer |
 | v1.14 | v0.7.40 | 2026-09-26 | **管理地基批次一（设计稿 `20260926_管理地基补齐设计.md`）**：①标签改名/合并 `PATCH /api/tags/:id`、`POST /api/tags/:id/merge`（§4.5/§8.4）；②`GET /api/bookmarks` 与 `/search` 加性参数 `createdFrom`/`createdTo`（ISO 日期，时间范围筛选）、`navVisible`（按 nav_rules 求值集过滤）、`sort=important`（收藏标星优先，keyset 分页稳定）；③新增 `GET /api/stats`（侧栏计数/统计聚合，口径同 list：不含回收站、含私密） | glm-5.3-flash |
 | v1.15 | v0.7.43 | 2026-09-26 | **管理地基批次二（同设计稿）**：①`GET /api/backup/export-zip` 加性 query `status`/`folderId`/`tagId`/`createdFrom`/`createdTo`（§4.6.2 按范围导出，所选范围记入 meta.json，不传即全量）；②`POST /api/scenes/:id/merge` 场景合并（§4.5，挂载转移+源删除，同标签合并语义）；③`POST /api/operation-log/cleanup` 日志保留清理（§4.2.12，settings `log.retention_days`/`log.max_entries` 缺省 30 天/5000 条，白名单扩 2 key；Workers Cron 与自托管定时器低频自动执行） | glm-5.3-flash |
+> | v1.16 | v0.8.0 | 2026-10-02 | **定位重构批次 0/1/2**（计划 `docs/TODO/20261002_功能重构计划.md`）：①新增 `GET /api/bookmarks/search-index`——端侧全量检索的**瘦投影**，只含 id/title/url/domain/note/tagText/tagNames/folderName/createdAt，**刻意不含 cover 与 excerpt**（3412 条要常驻浏览器内存，大字段会让传输量与占用翻数倍）；`limit` 上限 300，keyset 游标与 list 同口径（`sort='recent'`）；②新增 `GET /api/sync/diff`——**双向差异探测**，回执 `{ahead, behind, behindIsExact, failed, lastPushAt, lastPullAt, aheadBreakdown?, probeError?}`，**纯只读**（一次远端 GET + 一次本地 raindropId 比对，不入队不写库）；`?breakdown=1` 才计算 `aheadBreakdown`（要读全部 pending payload）；`behind` 是**下界**，须配 `behindIsExact` 解读；未配通道时报 `probeError` 而**不是** `behind=0`；③`GET /api/bookmarks` 与 `/search` 加性 query `lastOpenedBefore`（**天数，非时间戳**）与 `tagId=none`（未打标签，与具体 tagId **互斥**） | minimax-M3.1-Flash-Preview |
 
 # API 结构表
 
@@ -157,9 +158,10 @@ Skill 能力默认：查=开，写新=开，改已有=关。关掉仍保留路�
 | PATCH | `/api/bookmarks/:id` | 只传要改的：`title` `excerpt` `note` `important` `private` `status` `folderId` `tagIds` `sceneIds` | 200 书签 | `sceneIds`/`tagIds` 整份替换，成员 `source=user`；`version+1`；回收站中 → 409 `BOOKMARK_DELETED` |
 | DELETE | `/api/bookmarks/:id` | — | 200 `{ok,deletedAt}` | 软删；再删幂等 |
 | GET | `/api/bookmarks/search` | `q` + 同列表筛选 | 200 `{items,nextCursor}` | 标题/URL/标签名/备注；无正文索引 |
+| GET | `/api/bookmarks/search-index` | `limit`(≤300,缺省 200) `cursor` | 200 `{items[],nextCursor,total}` | **v1.16**：端侧全量检索的**瘦投影**。字段 `id/title/url/domain/note/tagText/tagNames/folderName/createdAt`，**不含 `cover`/`excerpt`**。keyset 游标与 list 同口径（`sort='recent'`），供前端预取后建本地索引；命中后按 `id` 回取完整对象，本投影不用于渲染列表 |
 | PATCH | `/api/bookmarks/batch` | 见下 | 200 `{updated[],skipped[]}` | 最多 100；同一事务；回收站 id 进 skipped |
 
-列表/搜索 query：`status` `sceneId` `folderId`（`none`=无文件夹）`tagId` `important` `source` `q` `limit` `cursor`；**v1.14 加性**：`sort`（`recent` 缺省｜`title`｜`domain`｜`important`=收藏标星优先，`important DESC → createdAt DESC → id` 稳定分页）、`createdFrom`/`createdTo`（ISO 日期时间，`created_at` 闭区间）、`navVisible`（`true|false`，按 nav_rules 求值展示集过滤；求值器候选上限 1000 条与 `/api/nav/feed` 同口径）。回执均为 `{items,nextCursor,total}`。
+列表/搜索 query：`status` `sceneId` `folderId`（`none`=无文件夹）`tagId`（**`none`=未打标签**，v1.16）`important` `source` `q` `limit` `cursor`；**v1.14 加性**：`sort`（`recent` 缺省｜`title`｜`domain`｜`important`=收藏标星优先，`important DESC → createdAt DESC → id` 稳定分页）、`createdFrom`/`createdTo`（ISO 日期时间，`created_at` 闭区间）、`navVisible`（`true|false`，按 nav_rules 求值展示集过滤；求值器候选上限 1000 条与 `/api/nav/feed` 同口径）；**v1.16 加性**：`lastOpenedBefore`（**天数**，非时间戳；命中 `last_opened_at` 为空「从没打开过」**或**早于该时点；非法值条件不生效而非 400）。回执均为 `{items,nextCursor,total}`。
 
 批量体：
 
@@ -184,6 +186,7 @@ Skill 本版无批量。
 | --- | --- | --- | --- |
 | GET | `/api/inbox` | `{bookmarks,nextCursor}` | `status=unread` 且未软删 |
 | GET | `/api/sync/pending-count` | `{pendingCount}` | `sync_queue` 中 `pending` 条数；未入队则为 0。真源写入成功不占用此数 |
+| GET | `/api/sync/diff` | `{ahead,behind,behindIsExact,failed,lastPushAt,lastPullAt,aheadBreakdown?,probeError?}` | **v1.16**：双向差异探测，**纯只读**（一次远端 GET + 一次本地 raindropId 比对；**不入队不写库**，故不依赖 PUT 语义实测）。`ahead`=本地领先（`sync_queue` pending 数）；`behind`=远端有本地没有的条数，按 `-lastUpdate` 取首屏 50 条比对得出，是**下界**，须配 `behindIsExact`（首页全已知时为 `true` 且 behind 确为 0）。`?breakdown=1` 才带 `aheadBreakdown`（按队列条目聚合，**各项之和可能大于 ahead**，一条改多字段会同时计入多项）。**未配通道或远端报错时给 `probeError` 而不给 `behind=0`**——报 0 会被读成「远端没有新东西」，而事实是「不知道」 |
 | POST | `/api/sync/pull` | `{processed pages...,created,skipped,conflicts,errors,hasMore}` | **v1.8**：Raindrop 拉回，**每次只拉一页（50 条）**防风控；新书签 `source=raindrop` 进 Inbox；同 raindropId 两端都有变化 → 本地赢并记入 conflicts（两端快照都存）。需要已启用的 Raindrop 通道，否则 400 |
 | POST | `/api/sync/process` | `{processed,succeeded,failed,requeued,remaining}` | **v1.5 真实消费**：先把退避到期的 failed 重置回 pending，再按通道消费一批（最多 10 条；当前仅 Raindrop 书签推送）。失败按 1s/2s/4s 封顶退避 + `retry_count` 累加，超 8 次不再自动重试。调度另有两处：Workers Cron（`[triggers]` 每 5 分钟）与自托管定时器（60 秒）。入队点见同步设计 §3.1 |
 | POST | `/api/bookmarks/:id/access-records` | 201 记录 | 体可选 `{source:"original"}`；回写 `lastOpenedAt` |
