@@ -220,3 +220,105 @@ describe('repository on real SQLite (v1.14 批次一)', () => {
     expect((rest as any[]).map((row) => row.targetId).sort()).toEqual(['fresh-0', 'fresh-1'])
   })
 })
+
+/**
+ * 批次 0（Raindrop 拉取侧）新增的三个仓储方法。
+ *
+ * **为什么必须真 SQL**：这三个方法全部走 `chunkByParamBudget` 分片插入，
+ * 而服务端测试用的是手写 mock 桩，**不经过分片逻辑**——当初「CI 全绿」正是
+ * 这个盲区造成的。`chunkByParamBudget` 一旦拿到空数组就取 `records[0].length`
+ * 而崩，而「第二次拉取时全部已存在」是**常态**：第一次拉取建好了收藏夹与标签，
+ * 第二次 `ensureByRaindropId` / `ensureMany` 的待插入集合必然为空。
+ */
+describe('repository on real SQLite（批次 0 · Raindrop 拉取侧）', () => {
+  it('tags.ensureMany 建标签并返回 nameKey→id；重复调用不重复建且不抛', async () => {
+    const repository = setup()
+
+    const first = await repository.tags.ensureMany(['渲染', '图形学', 'Houdini', '渲染'])
+    expect(first.size).toBe(3)
+    expect(first.get('渲染')).toBeTruthy()
+    // 键是小写 nameKey：'Houdini' 的规范化形式就是 'houdini'，原始大小写不是键
+    expect(first.get('houdini')).toBeTruthy()
+    expect(first.get('Houdini')).toBeUndefined()
+    expect(await repository.tags.list()).toHaveLength(3)
+
+    // 第二次：全部已存在 → 待插入集合为空，**这一步以前会抛**
+    const second = await repository.tags.ensureMany(['渲染', '图形学', 'houdini'])
+    expect(second.get('渲染')).toBe(first.get('渲染')) // 复用同一个 id，不新建
+    expect(await repository.tags.list()).toHaveLength(3)
+
+    // 混合：已有 + 新增
+    const mixed = await repository.tags.ensureMany(['渲染', 'Blender'])
+    expect(mixed.size).toBe(4)
+    expect(await repository.tags.list()).toHaveLength(4)
+
+    // 空输入直接返回空映射
+    expect((await repository.tags.ensureMany([])).size).toBe(0)
+  })
+
+  it('folders.ensureByRaindropId 建映射并写 raindrop_id；重复调用幂等且不抛', async () => {
+    const repository = setup()
+
+    const first = await repository.folders.ensureByRaindropId([
+      { raindropId: 100, name: '论文' },
+      { raindropId: 200, name: '工作' },
+    ])
+    expect(first).toEqual({ synced: 2, created: 2 })
+    const folders = await repository.folders.list() as any[]
+    expect(folders.map((row) => row.raindropId).sort()).toEqual(['100', '200'])
+
+    // 第二次：全部已存在 → 待插入集合为空，**这一步以前会抛**
+    const second = await repository.folders.ensureByRaindropId([
+      { raindropId: 100, name: '论文' },
+      { raindropId: 200, name: '工作' },
+    ])
+    expect(second).toEqual({ synced: 2, created: 0 })
+    expect(await repository.folders.list()).toHaveLength(2)
+
+    // 同一次调用里重复的 raindropId 只建一个
+    const dup = await repository.folders.ensureByRaindropId([
+      { raindropId: 300, name: 'A' },
+      { raindropId: 300, name: 'A' },
+    ])
+    expect(dup.created).toBe(1)
+    // 空名跳过
+    const blank = await repository.folders.ensureByRaindropId([{ raindropId: 400, name: '   ' }])
+    expect(blank.created).toBe(0)
+  })
+
+  it('attachTagsBatch 只插不改：重复挂载不报错，且不删本地已有挂载', async () => {
+    const repository = setup()
+    const bm1 = await seedBookmark(repository, { id: 'at-1' })
+    const bm2 = await seedBookmark(repository, { id: 'at-2' })
+    const { id: t1 } = await repository.tags.create({ id: 'tag-t1', name: '渲染' }) as Record<string, unknown>
+    const { id: t2 } = await repository.tags.create({ id: 'tag-t2', name: '图形学' }) as Record<string, unknown>
+
+    await repository.attachTagsBatch([
+      { bookmarkId: String(bm1.id), tagIds: [String(t1), String(t2)] },
+      { bookmarkId: String(bm2.id), tagIds: [String(t1)] },
+    ])
+
+    const afterFirst = await repository.get(String(bm1.id)) as any
+    expect(afterFirst.tags.map((tag: any) => tag.name).sort()).toEqual(['图形学', '渲染'].sort())
+
+    // 重复挂载：主键冲突必须被忽略而不是抛错（拉回路径会重复拉到同一批标签）
+    await repository.attachTagsBatch([{ bookmarkId: String(bm1.id), tagIds: [String(t1), String(t2)] }])
+    const afterDup = await repository.get(String(bm1.id)) as any
+    expect(afterDup.tags).toHaveLength(2)
+
+    // **只插不改**：传空数组表示「本次远端没给标签」，本地已有挂载必须留着
+    await repository.attachTagsBatch([{ bookmarkId: String(bm1.id), tagIds: [] }])
+    const afterEmpty = await repository.get(String(bm1.id)) as any
+    expect(afterEmpty.tags).toHaveLength(2)
+
+    // 整批无标签（一整页都没有标签时）曾经会让 records 为空而崩
+    await repository.attachTagsBatch([
+      { bookmarkId: String(bm2.id), tagIds: [] },
+    ])
+    expect((await repository.get(String(bm2.id)) as any).tags).toHaveLength(1)
+
+    // 完全空输入
+    await repository.attachTagsBatch([])
+    await repository.attachTagsBatch([{ bookmarkId: String(bm1.id), tagIds: [] }])
+  })
+})

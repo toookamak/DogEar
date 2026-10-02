@@ -529,8 +529,17 @@ async function runBatched(db: Db, statements: Array<{ run: () => Promise<unknown
   else for (const statement of statements) await statement.run()
 }
 
-/** D1 单条语句最多 100 个绑定参数：多行 VALUES 插入按列数分片（留余量） */
+/**
+ * D1 单条语句最多 100 个绑定参数：多行 VALUES 插入按列数分片（留余量）。
+ *
+ * **空数组是合法输入，这里已兜住**：`Object.keys(records[0])` 遇 `undefined` 会抛，
+ * 而「第二次拉取时全部已存在、records 必为空」是**常态而非边界**——
+ * `attachTagsBatch`（整页无标签）、`tags.ensureMany` 与
+ * `folders.ensureByRaindropId`（第二次拉取起全部命中已有）都会走到空数组。
+ * 判空放在 helper 里而不是各调用方，是为了新增调用点时不会忘记。
+ */
 function chunkByParamBudget(records: Array<Record<string, unknown>>): Array<Array<Record<string, unknown>>> {
+  if (!records.length) return []
   const perChunk = Math.max(1, Math.floor(90 / Math.max(1, Object.keys(records[0]).length)))
   const chunks: Array<Array<Record<string, unknown>>> = []
   for (let i = 0; i < records.length; i += perChunk) chunks.push(records.slice(i, i + perChunk))
