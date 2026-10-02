@@ -410,6 +410,53 @@ describe('repository on real SQLite（批次 0 · Raindrop 拉取侧）', () => 
     expect((afterTrash.items as any[]).some((row) => row.id === 'si-000')).toBe(false)
     expect(afterTrash.total).toBe(total - 1)
   })
+
+  it('无状态筛选条件：未打标签 / 没有收藏夹 / 一年没打开（批次 1 核心回归）', async () => {
+    const repository = setup()
+    await repository.folders.ensureByRaindropId([{ raindropId: 100, name: '论文' }])
+    const folders = await repository.folders.list() as any[]
+    const withFolder = folders.find((f) => f.raindropId === '100')
+    const { id: t1 } = await repository.tags.create({ id: 'tag-f1', name: '渲染' }) as Record<string, unknown>
+
+    const day = 86_400_000
+    const now = Date.now()
+    await seedBookmark(repository, { id: 'f-a', folderId: withFolder.id })
+    await seedBookmark(repository, { id: 'f-b' })
+    await seedBookmark(repository, { id: 'f-c' })
+    await seedBookmark(repository, { id: 'f-d' })
+    await repository.attachTagsBatch([
+      { bookmarkId: 'f-a', tagIds: [String(t1)] },
+      { bookmarkId: 'f-c', tagIds: [String(t1)] },
+    ])
+    // f-a / f-b / f-c 从没打开过（lastOpenedAt 全为 NULL）；f-d 刚打开过一次
+    await repository.createAccessRecord({ id: 'ar-1', bookmarkId: 'f-d' })
+
+    // 未打标签：tagId='none' 与具体 tagId 是**互斥**两支。
+    // 若写成两个独立 if，'none' 会同时叠加 EXISTS(tag_id='none')（查无此标签）
+    // 与 NOT EXISTS，结果恒空——这条断言就是防那个。
+    const untagged = await repository.list({ tagId: 'none' }, 50)
+    expect((untagged.items as any[]).map((row) => row.id).sort()).toEqual(['f-b', 'f-d'])
+    // 具体标签仍走 EXISTS
+    const tagged = await repository.list({ tagId: String(t1) }, 50)
+    expect((tagged.items as any[]).map((row) => row.id).sort()).toEqual(['f-a', 'f-c'])
+    // 两个条件可叠加：无标签 {f-b, f-d} ∩ 从未打开 {f-a, f-b, f-c} = {f-b}
+    const both = await repository.list({ tagId: 'none', lastOpenedBefore: new Date(now - 365 * day) }, 50)
+    expect((both.items as any[]).map((row) => row.id).sort()).toEqual(['f-b'])
+
+    // 「一年没打开」必须包含**从没打开过**的那些：SQLite 里 NULL < cutoff 恒 false，
+    // 只写后半句会把 f-a / f-b / f-c 全漏掉——而它们恰恰是最该清理的一批。
+    const stale = await repository.list({ lastOpenedBefore: new Date(now - 365 * day) }, 50)
+    expect((stale.items as any[]).map((row) => row.id).sort()).toEqual(['f-a', 'f-b', 'f-c'])
+    // 刚打开过的 f-d 不在陈旧集里
+    expect((stale.items as any[]).map((row) => row.id)).not.toContain('f-d')
+    // 比较分支本身也生效：cutoff 设到未来时，刚打开过的 f-d 也应命中
+    const allOpenedBeforeFuture = await repository.list({ lastOpenedBefore: new Date(now + day) }, 50)
+    expect((allOpenedBeforeFuture.items as any[]).map((row) => row.id).sort()).toEqual(['f-a', 'f-b', 'f-c', 'f-d'])
+
+    // 「没有收藏夹」沿用既有的 folderId='none' 口径
+    const noFolder = await repository.list({ folderId: 'none' }, 50)
+    expect((noFolder.items as any[]).map((row) => row.id).sort()).toEqual(['f-b', 'f-c', 'f-d'])
+  })
 })
 
 function page_total(page: { total: number }): number {

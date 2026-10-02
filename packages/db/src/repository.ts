@@ -55,7 +55,10 @@ type BookmarkFilters = {
   status?: string
   sceneId?: string
   folderId?: string | null | 'none'
-  tagId?: string
+  /** 'none' = 「未打标签」（一个都没挂），与具体 tagId 的 EXISTS 语义区分开 */
+  tagId?: string | 'none'
+  /** 「近 N 天没打开」：lastOpenedAt 为空或早于该时刻（2026-10-02 批次 1） */
+  lastOpenedBefore?: Date
   important?: boolean
   source?: string
   q?: string
@@ -500,8 +503,25 @@ function filterCondition(filters: BookmarkFilters = {}) {
   if (filters.sceneId) {
     conditions.push(sql`exists (select 1 from ${bookmarkScenes} where ${bookmarkScenes.bookmarkId} = ${bookmarks.id} and ${bookmarkScenes.sceneId} = ${filters.sceneId})`)
   }
-  if (filters.tagId) {
+  // 2026-10-02 批次 1：无状态筛选条件。
+  // 'none' 与具体 tagId 是**互斥**的两支——若不 else，「未打标签」会同时叠加
+  // EXISTS(tag_id = 'none')（永远查无此标签）与 NOT EXISTS，结果恒为空。
+  // 「未打标签」不是「某些标签」，是「一个都没挂」，故用 NOT EXISTS。
+  if (filters.tagId === 'none') {
+    conditions.push(sql`not exists (select 1 from ${bookmarkTags} where ${bookmarkTags.bookmarkId} = ${bookmarks.id})`)
+  } else if (filters.tagId) {
     conditions.push(sql`exists (select 1 from ${bookmarkTags} where ${bookmarkTags.bookmarkId} = ${bookmarks.id} and ${bookmarkTags.tagId} = ${filters.tagId})`)
+  }
+  // 「近 N 天没打开」：lastOpenedAt 为空（从没打开过）或早于给定时刻。
+  // 两点都必要：① 走 lt() 而非裸 sql 模板，让 Drizzle 按列类型绑定时间戳
+  // （裸模板传 Date 会撞 SQLite 的 datatype mismatch）；② 显式带上 isNull 分支
+  // ——SQLite 里 NULL < cutoff 恒为 false，只写后半句会把「从没打开过」这批
+  // （往往正是最该清理的）整个漏掉。
+  if (filters.lastOpenedBefore !== undefined) {
+    conditions.push(or(
+      isNull(bookmarks.lastOpenedAt),
+      lt(bookmarks.lastOpenedAt, filters.lastOpenedBefore),
+    ))
   }
   if (filters.q) {
     const q = `%${filters.q}%`

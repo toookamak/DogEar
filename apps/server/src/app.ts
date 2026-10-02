@@ -389,6 +389,20 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
  * 求值结果，先跑 evaluateNavFeed 得到 id 集，再交由仓储以分片 IN 过滤。
  * 求值器候选上限 1000 条（既有口径），600 条基线内即全集。
  */
+/**
+ * 「近 N 天没打开」的时间参数（2026-10-02 批次 1）。
+ * 只接受**天数**而非绝对时间戳：调用方要表达的是「最近一年没碰过」这种
+ * 相对语义，交给前端算时间戳会因时区与时钟漂移产生歧义。
+ * 非法值返回 undefined —— 条件不生效，而不是整个请求 400：
+ * 筛选是收敛手段，不该因为一个手滑的参数让整页加载不出来。
+ */
+function parseLastOpenedBefore(value: string | undefined): Date | undefined {
+  if (!value) return undefined
+  const days = Number(value)
+  if (!Number.isFinite(days) || days <= 0) return undefined
+  return new Date(Date.now() - days * 86_400_000)
+}
+
 async function navVisibilityFilter(repository: BookmarkRepository, visible: boolean): Promise<{ navVisibleIds?: string[]; navExcludedIds?: string[] }> {
   const feed = await evaluateNavFeed(repository)
   const ids = feed.map((row) => String((row as Record<string, unknown>)?.id ?? '')).filter(Boolean)
@@ -407,6 +421,7 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
       sceneId: c.req.query('sceneId'),
       folderId: c.req.query('folderId') === 'none' ? 'none' : c.req.query('folderId'),
       tagId: c.req.query('tagId'),
+      lastOpenedBefore: parseLastOpenedBefore(c.req.query('lastOpenedBefore')),
       important: importantQuery === 'true' ? true : importantQuery === 'false' ? false : undefined,
       source: c.req.query('source'),
       createdFrom,
@@ -596,7 +611,8 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
     const items = await repository.search({
       q: c.req.query('q'), status: c.req.query('status'), sceneId: c.req.query('sceneId'),
       folderId: c.req.query('folderId') === 'none' ? 'none' : c.req.query('folderId'),
-      tagId: c.req.query('tagId'), important: c.req.query('important') === undefined ? undefined : c.req.query('important') === 'true',
+      tagId: c.req.query('tagId'),
+      lastOpenedBefore: parseLastOpenedBefore(c.req.query('lastOpenedBefore')), important: c.req.query('important') === undefined ? undefined : c.req.query('important') === 'true',
       source: c.req.query('source'), includeDeleted: false,
       createdFrom, createdTo, ...navFilter,
     }, limit, cursor, { sort })

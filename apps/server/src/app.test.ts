@@ -10,7 +10,7 @@ import { createBackupRoutes } from './backup/backup-routes.js'
 const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite')
 
 function repository(): any {
-  type BookmarkRecord = { id: string; url: string; status: 'unread'; source?: string; note?: string | null; syncStatus: 'pending' | 'synced'; createdAt: number; updatedAt: number }
+  type BookmarkRecord = { id: string; url: string; title?: string | null; status: 'unread'; source?: string; note?: string | null; syncStatus: 'pending' | 'synced'; createdAt: number; updatedAt: number }
   type AccessRecord = { id: string; bookmarkId: string; openedAt: number; source: 'original' }
   const records: BookmarkRecord[] = []
   const accessRecords: AccessRecord[] = []
