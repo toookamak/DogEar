@@ -53,7 +53,10 @@ export function OAuthCallbackPage() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1 className="auth-brand">DogEar</h1>
+        <h1 className="auth-brand">
+          <img className="brand-mark" src="/brand-mark.svg" alt="" width={37} height={24} />
+          DogEar
+        </h1>
 
         {status === 'loading' ? (
           <>

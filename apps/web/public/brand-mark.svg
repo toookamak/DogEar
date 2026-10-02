@@ -1,0 +1,206 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="200 146 1157 756" width="1157" height="756" fill="none" role="img" aria-label="DogEar · 折耳书签">
+  <!--
+    DogEar 品牌标（精细版，2026-10-02 稿）—— 顶栏、登录页、OAuth 回调页共用
+    来源：外部提供的 1536x1024 原始稿。本文件做了三处工程化处理：
+    1) 补回根 <svg> 开标签（原文件只有属性，缺 xmlns 宿主元素）
+    2) 裁到实际图形范围：原稿 x 226-1309 / y 172-876，四周留白约 40%，
+       改成 viewBox="200 146 1157 756"（各边留 26px 呼吸），换算比例 1.53:1
+    3) 删除未使用的 def：filter#softLight（原稿定义但从未引用）、
+       clipPath#bodyClip（同样从未被 clip-path 引用）
+    保留 7 组渐变的多层叠加，视觉与原稿一致。
+  -->
+  <defs>
+    <linearGradient id="de-body" x1="330" y1="815" x2="1000" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF4A16"/>
+      <stop offset="0.3" stop-color="#FF5A13"/>
+      <stop offset="0.62" stop-color="#FF7414"/>
+      <stop offset="1" stop-color="#FF8B16"/>
+    </linearGradient>
+    <radialGradient id="de-body-light" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(677 350) rotate(74) scale(520 610)">
+      <stop offset="0" stop-color="#FF941B" stop-opacity="0.9"/>
+      <stop offset="0.42" stop-color="#FF7615" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#FF4B13" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="de-body-bottom" x1="640" y1="480" x2="640" y2="890" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF7114" stop-opacity="0"/>
+      <stop offset="0.65" stop-color="#FF5B12" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#FF4215" stop-opacity="0.38"/>
+    </linearGradient>
+    <linearGradient id="de-fold" x1="885" y1="195" x2="1280" y2="570" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD85A"/>
+      <stop offset="0.28" stop-color="#FFC94B"/>
+      <stop offset="0.63" stop-color="#FFB52C"/>
+      <stop offset="1" stop-color="#FF9517"/>
+    </linearGradient>
+    <linearGradient id="de-fold-hi" x1="884" y1="190" x2="1020" y2="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE071" stop-opacity="0.75"/>
+      <stop offset="0.5" stop-color="#FFD45A" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#FFB62B" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="de-fold-shadow" x1="969" y1="492" x2="1268" y2="608" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C92C13"/>
+      <stop offset="0.42" stop-color="#E03A15"/>
+      <stop offset="0.78" stop-color="#F04A13"/>
+      <stop offset="1" stop-color="#FF6415"/>
+    </linearGradient>
+    <linearGradient id="de-crease" x1="906" y1="410" x2="1010" y2="535" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E94716" stop-opacity="0.95"/>
+      <stop offset="0.65" stop-color="#E84714" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#E84714" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="de-flap" x1="1040" y1="545" x2="1220" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F24A15"/>
+      <stop offset="0.42" stop-color="#FF5D16"/>
+      <stop offset="0.75" stop-color="#FF6C17"/>
+      <stop offset="1" stop-color="#FF7519"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 1 云体主形 -->
+  <path d="M 466 422
+           C 486 342 531 275 600 226
+           C 665 180 741 174 800 177
+           C 835 178 862 184 883 192
+           L 883 395
+           C 883 444 900 477 931 499
+           C 954 516 979 526 1017 530
+           C 1059 535 1110 531 1160 539
+           C 1220 548 1270 568 1294 596
+           C 1305 610 1309 630 1307 657
+           C 1304 707 1289 759 1261 793
+           C 1235 825 1200 835 1171 824
+           C 1140 813 1125 780 1113 739
+           C 1098 689 1080 636 1051 595
+           C 1042 582 1035 574 1027 570
+           L 1027 774
+           C 1027 832 989 874 923 876
+           L 435 876
+           C 359 876 303 851 267 810
+           C 237 776 226 724 230 663
+           C 234 594 262 531 309 482
+           C 352 438 405 421 466 422
+           Z" fill="url(#de-body)"/>
+
+  <!-- 2 云体柔和高光 -->
+  <path d="M 466 422
+           C 488 340 535 271 605 223
+           C 675 177 760 172 826 181
+           C 746 220 693 275 659 342
+           C 623 413 615 502 632 588
+           C 649 676 682 764 729 875
+           L 435 875
+           C 360 875 304 850 267 809
+           C 237 775 226 724 230 663
+           C 234 594 262 531 309 482
+           C 351 438 405 421 466 422
+           Z" fill="url(#de-body-light)" opacity="0.95"/>
+
+  <!-- 3 云体底部暖色暗部 -->
+  <path d="M 230 650
+           C 229 731 248 782 293 822
+           C 331 856 380 875 438 876
+           L 925 876
+           C 986 874 1027 834 1027 774
+           L 1027 570
+           C 1027 570 1010 589 991 607
+           C 949 646 902 670 843 690
+           C 745 724 635 742 516 740
+           C 401 738 302 704 230 650
+           Z" fill="url(#de-body-bottom)" opacity="0.65"/>
+
+  <!-- 4 右侧下垂折页 -->
+  <path d="M 963 489
+           C 983 511 1002 526 1029 541
+           C 1057 557 1078 585 1095 620
+           C 1115 661 1127 713 1141 758
+           C 1151 793 1163 817 1187 823
+           C 1214 829 1241 812 1261 787
+           C 1290 750 1305 701 1307 657
+           C 1309 624 1301 600 1283 584
+           C 1255 558 1208 545 1159 538
+           C 1111 531 1060 535 1018 530
+           C 994 527 975 519 963 509
+           Z" fill="url(#de-flap)"/>
+
+  <!-- 5 折页内部折痕暗部 -->
+  <path d="M 963 490
+           C 984 511 1004 526 1029 541
+           C 1057 557 1079 585 1096 621
+           C 1080 590 1059 561 1030 544
+           C 1007 530 984 514 965 494
+           Z" fill="url(#de-crease)"/>
+
+  <!-- 6 右上扬起的黄色折角 -->
+  <path d="M 884 191
+           C 900 194 920 203 938 217
+           L 1275 541
+           C 1293 558 1304 579 1307 602
+           C 1309 615 1308 624 1307 630
+           C 1292 594 1255 568 1208 553
+           C 1170 541 1130 536 1085 534
+           L 1019 531
+           C 976 529 945 518 922 494
+           C 897 468 884 437 884 395
+           Z" fill="url(#de-fold)"/>
+
+  <!-- 7 折角顶部高光 -->
+  <path d="M 884 191
+           C 901 193 921 203 939 217
+           L 1275 541
+           C 1252 526 1221 513 1183 503
+           C 1137 491 1080 488 1028 488
+           C 978 488 942 475 919 449
+           C 896 423 884 392 884 351
+           Z" fill="url(#de-fold-hi)" opacity="0.65"/>
+
+  <!-- 8 折角与云体交界暗部 -->
+  <path d="M 884 394
+           C 884 439 898 469 922 494
+           C 945 518 976 529 1019 531
+           C 1062 534 1110 531 1159 538
+           C 1207 545 1254 558 1283 584
+           C 1296 596 1304 610 1307 627
+           C 1290 600 1260 578 1220 565
+           C 1177 551 1125 547 1076 547
+           C 1024 547 984 541 954 525
+           C 914 503 890 465 884 419
+           Z" fill="url(#de-fold-shadow)" opacity="0.95"/>
+
+  <!-- 9 折角二次覆盖，让折叠关系更清楚 -->
+  <path d="M 884 191
+           C 899 193 919 202 938 217
+           L 1276 541
+           C 1288 553 1298 568 1303 584
+           C 1281 563 1245 548 1206 540
+           C 1162 531 1115 533 1070 531
+           L 1019 529
+           C 978 527 948 517 925 495
+           C 897 469 884 437 884 395
+           Z" fill="url(#de-fold)"/>
+
+  <!-- 10 折角边缘暖色描边 -->
+  <path d="M 884 192
+           C 885 262 884 329 884 395
+           C 884 438 898 469 925 495
+           C 949 518 979 528 1019 530
+           C 1071 533 1118 531 1160 538
+           C 1208 545 1253 559 1283 584
+           C 1297 596 1305 611 1307 627" stroke="#FFAA1E" stroke-opacity="0.34" stroke-width="2" fill="none"/>
+
+  <!-- 11 云体与折角交界的柔和暗部 -->
+  <path d="M 883 394
+           C 883 444 900 477 931 499
+           C 954 516 979 526 1017 530
+           C 1022 531 1027 531 1032 531
+           C 1000 523 975 512 955 496
+           C 925 473 910 443 910 402
+           L 910 215
+           C 900 207 892 199 884 193
+           Z" fill="url(#de-crease)" opacity="0.38"/>
+
+  <!-- 12 云顶轮廓微弱柔化 -->
+  <path d="M 466 422
+           C 486 342 531 275 600 226
+           C 665 180 741 174 800 177
+           C 834 178 862 184 883 192" stroke="#FF9B1B" stroke-opacity="0.28" stroke-width="2" fill="none"/>
+</svg>

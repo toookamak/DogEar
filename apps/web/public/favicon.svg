@@ -1,4 +1,94 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="7" fill="#10120f"/>
-  <text x="16" y="22" font-size="17" text-anchor="middle" fill="#d8a950" font-family="Georgia, serif">D</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="200 146 1157 756" width="32" height="32" fill="none" role="img" aria-label="DogEar">
+  <!--
+    DogEar favicon（2026-10-02）——透明底，直接放图形，不加容器衬底。
+    图形是横向 1.53:1，进浏览器 16px 方框时按宽度贴合：实际占 16×10.5px
+    （精细版 1083 宽占 viewBox 的 93.6%，即 15.0px），已实测可读出「云 + 折角」。
+
+    这里用 4 面的简化版而不是 brand-mark.svg 的精细版：精细版在 16px 下，
+    2px 描边只有 0.03px，径向高光也只有几个色阶，叠出来是噪点不是层次。
+    靠形状读图（云体 / 右侧折页 / 黄色折角 / 交界暗部）在小尺寸更稳。
+    viewBox 与 brand-mark.svg 一致，两个文件可同尺寸对位。
+  -->
+  <defs>
+    <linearGradient id="fav-body" x1="330" y1="815" x2="1000" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF5A13"/>
+      <stop offset="1" stop-color="#FF8B16"/>
+    </linearGradient>
+    <linearGradient id="fav-flap" x1="1040" y1="545" x2="1220" y2="820" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F2480F"/>
+      <stop offset="1" stop-color="#FF7520"/>
+    </linearGradient>
+    <linearGradient id="fav-fold" x1="885" y1="195" x2="1280" y2="570" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD85A"/>
+      <stop offset="1" stop-color="#FF9E18"/>
+    </linearGradient>
+    <linearGradient id="fav-crease" x1="969" y1="492" x2="1268" y2="608" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#C92C13"/>
+      <stop offset="1" stop-color="#FF6415"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 云体 -->
+  <path d="M 466 422
+           C 486 342 531 275 600 226
+           C 665 180 741 174 800 177
+           C 835 178 862 184 883 192
+           L 883 395
+           C 883 444 900 477 931 499
+           C 954 516 979 526 1017 530
+           C 1059 535 1110 531 1160 539
+           C 1220 548 1270 568 1294 596
+           C 1305 610 1309 630 1307 657
+           C 1304 707 1289 759 1261 793
+           C 1235 825 1200 835 1171 824
+           C 1140 813 1125 780 1113 739
+           C 1098 689 1080 636 1051 595
+           C 1042 582 1035 574 1027 570
+           L 1027 774
+           C 1027 832 989 874 923 876
+           L 435 876
+           C 359 876 303 851 267 810
+           C 237 776 226 724 230 663
+           C 234 594 262 531 309 482
+           C 352 438 405 421 466 422
+           Z" fill="url(#fav-body)"/>
+
+  <!-- 右侧下垂折页（略深，用来和云体分开） -->
+  <path d="M 963 489
+           C 983 511 1002 526 1029 541
+           C 1057 557 1078 585 1095 620
+           C 1115 661 1127 713 1141 758
+           C 1151 793 1163 817 1187 823
+           C 1214 829 1241 812 1261 787
+           C 1290 750 1305 701 1307 657
+           C 1309 624 1301 600 1283 584
+           C 1255 558 1208 545 1159 538
+           C 1111 531 1060 535 1018 530
+           C 994 527 975 519 963 509
+           Z" fill="url(#fav-flap)"/>
+
+  <!-- 折角与云体的交界暗部：没有这条，黄色折角会直接贴在橙云体上看不出「折」 -->
+  <path d="M 884 394
+           C 884 439 898 469 922 494
+           C 945 518 976 529 1019 531
+           C 1062 534 1110 531 1159 538
+           C 1207 545 1254 558 1283 584
+           C 1296 596 1304 610 1307 627
+           C 1290 600 1260 578 1220 565
+           C 1177 551 1125 547 1076 547
+           C 1024 547 984 541 954 525
+           C 914 503 890 465 884 419
+           Z" fill="url(#fav-crease)"/>
+
+  <!-- 扬起的黄色折角 -->
+  <path d="M 884 191
+           C 899 193 919 202 938 217
+           L 1276 541
+           C 1288 553 1298 568 1303 584
+           C 1281 563 1245 548 1206 540
+           C 1162 531 1115 533 1070 531
+           L 1019 529
+           C 978 527 948 517 925 495
+           C 897 469 884 437 884 395
+           Z" fill="url(#fav-fold)"/>
 </svg>

@@ -37,6 +37,8 @@ export function TopBar({ sidebarOpen, onToggleSidebar }: TopBarProps) {
           className="topbar-brand"
           onClick={() => setLocation('/')}
         >
+          {/* 品牌图形标（折耳云）。装饰性图形，语义由旁边的「DogEar」文字承担，故 alt 空 */}
+          <img className="brand-mark" src="/brand-mark.svg" alt="" width={34} height={22} />
           DogEar
           {/* 版本号（mono 小字，来源 apps/web/package.json，经 __APP_VERSION__ 注入） */}
           <span className="topbar-brand-version">v{__APP_VERSION__}</span>

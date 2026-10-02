@@ -278,10 +278,13 @@ select.input {
   min-width: 0;
 }
 
-/* 品牌（原型 .brand + .brand-mark：赤陶橙小方块 + 名字 + mono 模式标签） */
+/* 品牌（图形标 + 名字 + mono 版本号）
+ * 2026-10-02 图形标由「赤陶橙小方块 + D」换成折耳云 SVG（/brand-mark.svg）。
+ * 对齐从 baseline 改为 center：图形标 22px 高、宽 34px（横向 1.53:1），
+ * 按基线对齐会把图吊在文字基线上、与 13px 字面脱节；图形标识对齐本就按视觉中心，不按基线。 */
 .topbar-brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-2);
   border: none;
   background: none;
@@ -292,20 +295,12 @@ select.input {
   color: var(--text);
 }
 
-.topbar-brand::before {
-  content: "D";
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, var(--amber), var(--amber-strong));
-  color: var(--on-accent);
-  font-family: var(--font-sans);
-  font-size: var(--fs-body);
-  font-weight: 700;
-  transform: translateY(2px);
+/* 品牌图形标：横向 1.53:1，只定高度，宽度交给内在比例——写死 width 会在换稿时拉变形 */
+.brand-mark {
+  display: block;
+  flex: none;
+  height: var(--brand-mark-h);
+  width: auto;
 }
 
 /* 品牌旁的版本号（原型 .brand-mode 同款 mono 小字） */
@@ -3679,19 +3674,8 @@ select.input {
   color: var(--text);
 }
 
-.auth-brand::before {
-  content: "D";
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, var(--amber), var(--amber-strong));
-  color: var(--on-accent);
-  font-family: var(--font-sans);
-  font-size: var(--fs-lead);
-  font-weight: 700;
+.auth-brand .brand-mark {
+  height: var(--control-h-xs);
 }
 
 .auth-subtitle {

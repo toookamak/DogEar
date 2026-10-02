@@ -41,7 +41,10 @@ export function LoginPage({ onSuccess }: { onSuccess?: (next: string) => Promise
   return (
     <div className="auth-page">
       <form onSubmit={handleSubmit} className="auth-card">
-        <h1 className="auth-brand">DogEar</h1>
+        <h1 className="auth-brand">
+          <img className="brand-mark" src="/brand-mark.svg" alt="" width={37} height={24} />
+          DogEar
+        </h1>
         <p className="auth-subtitle">折耳书签 · 个人书签增强工具</p>
 
         <label className="channel-field">
