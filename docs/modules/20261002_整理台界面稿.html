@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DogEar 整理台 · 界面稿 v0.2（评审中）</title>
+<title>DogEar 整理台 · 界面稿 v0.3（评审中）</title>
 <style>
 /* ============================================================
    Token 单例源：apps/web/src/styles/tokens.css（值逐项抄录，未新增）
@@ -215,6 +215,43 @@ mark{background:var(--amber-soft);color:var(--text);border-radius:2px;padding:0 
   cursor:pointer;width:100%;text-align:center;padding:var(--space-2)}
 .linkbtn:hover{color:var(--amber)}
 
+/* ---------- 屏 5：同步差异胶囊（组件稿） ---------- */
+.comp-grid{display:grid;grid-template-columns:1fr 344px;gap:var(--space-8);padding:var(--space-7);align-items:start}
+.comp-col h4{font-size:var(--fs-small);font-weight:600;color:var(--muted);margin-bottom:var(--space-3)}
+.comp-note{font-size:var(--fs-small);color:var(--faint);line-height:1.7;margin-top:var(--space-2);max-width:44ch}
+.diff-lamp{height:var(--control-h);display:inline-flex;align-items:center;gap:var(--space-2);padding:0 var(--space-3);
+  background:var(--panel-raised);border:1px solid var(--line);border-radius:var(--radius-full-pill);
+  font-size:var(--fs-small);color:var(--muted);margin-bottom:var(--space-2);white-space:nowrap}
+.arrow{font-family:var(--font-mono);font-size:var(--fs-micro);width:14px;text-align:center}
+.arrow.up{color:var(--amber)} .arrow.down{color:var(--blue)}
+.num{font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--text)}
+.sep{width:1px;height:14px;background:var(--line-strong)}
+.diff-pop{width:344px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-lg);
+  box-shadow:var(--modal-shadow);padding:var(--space-4)}
+.dhead{font-size:var(--fs-micro);font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);margin-bottom:var(--space-1)}
+.drow{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) 0;border-top:1px solid var(--line-soft)}
+.drow .ic{width:24px;height:24px;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.drow.behind .ic{background:var(--blue-soft);color:var(--blue)}
+.drow.ahead .ic{background:var(--amber-soft);color:var(--amber)}
+.drow .body{flex:1;min-width:0}
+.drow .t{font-size:var(--fs-body);color:var(--text)}
+.drow .t b{font-family:var(--font-mono);font-weight:400}
+.drow .s{font-size:var(--fs-small);color:var(--faint);margin-top:2px;line-height:1.6}
+.dbtn{height:var(--control-h-sm);padding:0 var(--space-3);border-radius:var(--radius);font:inherit;font-size:var(--fs-small);
+  cursor:pointer;display:inline-flex;align-items:center;gap:var(--space-1);white-space:nowrap;flex:0 0 auto;
+  transition:all var(--transition-color)}
+.dbtn--down{background:var(--blue);border:1px solid var(--blue);color:var(--on-accent)}
+.dbtn--down:hover{background:#2b6c92;border-color:#2b6c92;color:var(--on-accent)}
+.dbtn--up{background:var(--amber);border:1px solid var(--amber);color:var(--on-accent);font-weight:600}
+.dbtn--up:hover{background:var(--amber-strong);border-color:var(--amber-strong);color:var(--on-accent)}
+.dbtn--ghost{background:var(--panel);border:1px solid var(--line-strong);color:var(--muted)}
+.dbtn--ghost:hover{background:var(--panel-hover);color:var(--text)}
+.dfoot{display:flex;align-items:center;justify-content:space-between;padding-top:var(--space-3);
+  border-top:1px solid var(--line);font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--faint)}
+.warnline{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);
+  background:var(--red-soft);border-radius:var(--radius);font-size:var(--fs-small);color:var(--red);margin-top:var(--space-2)}
+
 /* ---------- 说明区 ---------- */
 .spec{background:#fff;border:1px solid var(--line);border-radius:var(--radius-featured);padding:var(--space-7);margin-top:var(--space-5)}
 .spec h2{font-size:var(--fs-title);font-weight:600;letter-spacing:-.02em;margin-bottom:var(--space-2)}
@@ -245,11 +282,14 @@ mark{background:var(--amber-soft);color:var(--text);border-radius:2px;padding:0 
     <h1>DogEar 整理台 · 界面稿</h1>
     <p class="sub">从「独立书签管理器」转向「Raindrop 整理台 + 本地检索」——第一版界面重设计</p>
     <div class="meta">
-      <span>稿版本 v0.2</span><span>状态 评审中</span><span>2026-10-02</span>
+      <span>稿版本 v0.3</span><span>状态 评审中</span><span>2026-10-02</span>
       <span>视觉源 DESIGN.md</span><span>Token 源 tokens.css</span><span>未接入代码</span>
     </div>
     <div class="doc-note">
-      <b>v0.2 按你的三条反馈重做：</b>① 主入口<b>回到全预览</b>——侧栏是收藏夹和标签的正常导航，「哪里乱」那类条件降为<b>筛选器里的无状态条件</b>，另给一个<b>独立「整理」入口</b>；② Raindrop 连接<b>回设置页</b>，不再是必选门槛；③ 核实后发现 <b>Raindrop 的收藏夹和标签目前根本没在同步</b>，已列为 P0 阻塞（详见下方说明区与计划 §0.5）。<br>
+      <b>v0.3 新增屏 5「同步差异胶囊」</b>：把「一个笼统的待同步 N」拆成 <b>↓ 落后（远端有我没有的）</b> 和 <b>↑ 领先（我改了没给的）</b> 两个方向，折叠态给双计数，展开态给<b>各自独立的上传 / 下载按钮</b>，附上「8 条改标签 · 4 条改收藏夹」这样的领先明细。落后数是<b>下界不是总数</b>——探测只看最近 50 条，宁可少报也不谎报。<b>需新增接口 <code>GET /api/sync/diff</code>，未拍板前不写代码。</b>
+      <br><br>
+      <b>v0.2 按你的三条反馈重做：</b>① 主入口<b>回到全预览</b>——侧栏是收藏夹和标签的正常导航，「哪里乱」那类条件降为<b>筛选器里的无状态条件</b>，另给一个<b>独立「整理」入口</b>；② Raindrop 连接<b>回设置页</b>，不再是必选门槛；③ 核实后发现 <b>Raindrop 的收藏夹和标签目前根本没在同步</b>，已列为 P0 阻塞（详见说明区与计划 §0.5）。
+      <br><br>
       <b>不变的部分：</b>颜色、字号、圆角、控件高度、间距全部逐项抄自 <code>tokens.css</code>，没新增色值和刻度；没动 <code>DESIGN.md</code>；S3 / WebDAV 按你的要求保留，只在设置页降权，未删除。
     </div>
   </header>
@@ -259,6 +299,7 @@ mark{background:var(--amber-soft);color:var(--text);border-radius:2px;padding:0 
     <button class="tab" role="tab" aria-selected="false" data-t="s3">2 批量整理</button>
     <button class="tab" role="tab" aria-selected="false" data-t="s4">3 全量搜索</button>
     <button class="tab" role="tab" aria-selected="false" data-t="s1">4 设置 · Raindrop 通道</button>
+    <button class="tab" role="tab" aria-selected="false" data-t="s5">5 同步差异胶囊</button>
     <button class="tab" role="tab" aria-selected="false" data-t="spec">设计说明与对照</button>
   </nav>
 
@@ -775,6 +816,97 @@ mark{background:var(--amber-soft);color:var(--text);border-radius:2px;padding:0 
     </div>
   </section>
 
+  <!-- ================= 屏 5：同步差异胶囊 ================= -->
+  <section class="screen" id="s5">
+    <div class="frame-cap"><b>屏 5 · 同步差异胶囊</b><span>把「一个笼统的待同步 N」拆成<b>两个可单独决策的方向</b>：↓ 远端有我没有的，↑ 我改了没给的。折叠态给数字，展开态给选择。</span></div>
+    <div class="app">
+      <div style="background:var(--canvas);height:100%;overflow:auto">
+        <div class="comp-grid">
+          <!-- 左：折叠态的多种情况 -->
+          <div class="comp-col">
+            <h4>折叠态（顶栏常驻）</h4>
+
+            <div class="diff-lamp"><span class="dot warn"></span><span class="arrow up">↑</span><span class="num">12</span><span class="sep"></span><span class="arrow down">↓</span><span class="num">5</span><span style="margin-left:2px">有差异</span></div>
+            <p class="comp-note">两边都有变化——最常见的一种，两个数字都在，不用点开就知道该两边都处理。</p>
+
+            <div style="height:var(--space-3)"></div>
+
+            <div class="diff-lamp"><span class="dot warn"></span><span class="arrow up">↑</span><span class="num">12</span><span style="margin-left:2px">待上传</span></div>
+            <p class="comp-note">只有本地领先：只改了自己的，Raindrop 那边没动。这时候<b>不该诱导你去下载</b>——没东西可下。</p>
+
+            <div style="height:var(--space-3)"></div>
+
+            <div class="diff-lamp"><span class="dot"></span><span class="arrow down">↓</span><span class="num">5</span><span style="margin-left:2px">待下载</span></div>
+            <p class="comp-note">只有远端领先：可能是你在手机上收藏的，电脑这边还没有。</p>
+
+            <div style="height:var(--space-3)"></div>
+
+            <div class="diff-lamp"><span class="dot"></span>已同步</div>
+            <p class="comp-note">两边都是 0 的时候不显示箭头，只留一颗绿点 + 「已同步」——<b>没事的时候就不该占视觉</b>。</p>
+
+            <div style="height:var(--space-3)"></div>
+
+            <div class="diff-lamp"><span class="dot red"></span><span class="num" style="color:var(--red)">上传失败 2</span></div>
+            <p class="comp-note">失败时数字换成失败数并转红，<b>压过差异数</b>——失败比差异更需要处理。</p>
+
+            <h4 style="margin-top:var(--space-6)">颜色分工</h4>
+            <p class="comp-note">
+              <b style="color:var(--amber)">↑ 领先 = 橙</b>（accent，本地出的动作，可点）<br>
+              <b style="color:var(--blue)">↓ 落后 = 蓝</b>（信息，远端来的状态）<br>
+              用两个既有 token 区分方向，不新增色值。橙在 <code>DESIGN.md</code> 里的语义是「可点、被选中、主操作」，正好对应「上传是我要做的动作」；蓝是「信息」，对应「远端的状态通知」。
+            </p>
+          </div>
+
+          <!-- 右：展开态 -->
+          <div>
+            <h4 style="font-size:var(--fs-small);font-weight:600;color:var(--muted);margin-bottom:var(--space-3)">展开态（点开 / 悬停）</h4>
+            <div class="diff-pop">
+              <div class="dhead">与 Raindrop 的差异</div>
+
+              <div class="drow behind">
+                <span class="ic"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.6v8.2M4.4 7.4 8 11l3.6-3.6M2.6 13.4h10.8"/></svg></span>
+                <div class="body">
+                  <div class="t">落后 <b>5</b> 条</div>
+                  <div class="s">Raindrop 上有、本地还没有</div>
+                </div>
+                <button class="dbtn dbtn--down">下载</button>
+              </div>
+
+              <div class="drow ahead">
+                <span class="ic"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13.4V5.2M4.4 8.6 8 5l3.6 3.6M2.6 2.6h10.8"/></svg></span>
+                <div class="body">
+                  <div class="t">领先 <b>12</b> 条</div>
+                  <div class="s">8 条改了标签 · 4 条改了收藏夹</div>
+                </div>
+                <button class="dbtn dbtn--up">上传</button>
+              </div>
+
+              <div class="warnline">
+                <span class="dot red"></span>上传失败 2 条 · 1 条被限流，1 条收藏夹已不存在
+                <div class="spacer"></div>
+              </div>
+
+              <div class="dfoot">
+                <span>上次同步 2 小时前</span>
+                <span>查看日志</span>
+              </div>
+            </div>
+
+            <p class="comp-note" style="margin-top:var(--space-4)">
+              <b>两个按钮是分开的，不是「同步」一个。</b>现状把拉取和推送混成一个动作，你不知道点了会发生什么、哪边会变。拆开之后：<b>下载只动远端→本地，上传只动本地→远端</b>，互不牵连，也不用先想「同步」到底是哪个方向。
+            </p>
+            <p class="comp-note">
+              <b>领先给了明细，落后没给。</b>领先的每次改动都记在队列 payload 里，聚合出来是准的。落后的那 5 条具体是什么，<b>不拉回来就不知道</b>——所以这里不写「查看远端变更」，避免承诺做不到的事；要预览就点「下载」，拉回来直接进列表。
+            </p>
+            <p class="comp-note">
+              <b>「落后 5」是下界，不是总数。</b>探测只看最近 50 条，真有 200 条新书签时也显示 5，点下载继续拉。宁可少报也不谎报。
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ================= 设计说明 ================= -->
   <section class="screen" id="spec">
     <div class="spec">
@@ -829,6 +961,14 @@ mark{background:var(--amber-soft);color:var(--text);border-radius:2px;padding:0 
       <p><b>主操作</b>：<b>用 Raindrop 账号连接</b>（卡片内全宽、38px、橙底）。</p>
       <p><b>关键设计</b>：<b>不做首次引导</b>。打开工作台不会被打断去授权；连接入口安静地待在设置里。保留的是<b>把后果讲清楚</b>——连了会发生什么、什么会被回写、失败了怎么办。</p>
       <p><b>空状态 / 未连接时</b>：工作台顶栏胶囊显示「未连接」，<b>不弹任何引导</b>。点「同步一次」→ toast 提示「未连接 Raindrop，可在设置中连接」并给一个跳转设置的链接，<b>不把人踢出当前上下文</b>。</p>
+
+      <h4>屏 5 · 同步差异胶囊</h4>
+      <p><b>现状</b>：只有一个「待同步 N」，它<b>只代表本地领先</b>。「远端有、本地还没有」这个数字根本不存在，所以现状无法回答「Raindrop 那边变了什么」。</p>
+      <p><b>块</b>：折叠态（灯 + <b>↑领先 / ↓落后</b> 双计数，两向都有变化时并排显示）+ 展开浮条（两个方向各一行，每行 = 图标 + 数字 + 一句白话 + <b>各自的按钮</b>）+ 失败常驻行 + 底部「上次同步 / 查看日志」。</p>
+      <p><b>主操作</b>：浮条内<b>下载</b>与<b>上传</b>两个按钮，按方向配色（落后=蓝 `--blue`，领先=橙 `--amber`）。</p>
+      <p><b>三个关键设计</b>：① <b>拆成两个按钮而不是「同步」</b>——两个方向互不牵连，你不用先判断「同步」是哪个意思；② <b>领先给明细、落后不给</b>——领先的改动记在队列 payload 里可聚合，落后不拉回来就不知道，不做「零成本预览远端变更」这种做不到的承诺；③ <b>「落后 N」是下界不是总数</b>——探测只看最近 50 条，宁可少报也不谎报。</p>
+      <p><b>技术前提</b>：落后数需要新增轻量探测（`sort=-lastUpdate` 首屏比对本地 `raindropId`），新增接口 `GET /api/sync/diff`。方案取舍与接口草案见计划 §3.5。<b>未拍板前不写代码</b>——涉及新接口，按 <code>AGENTS.md</code> 需先确认。</p>
+      <p><b>要改 <code>DESIGN.md</code></b>：本稿的胶囊形态与 <code>DESIGN.md</code> §4「外壳常驻状态区」现存的「待推送 / 拉取 / 推送」口径不一致（现写的是单一「待同步」语义与拉取+推送同排）。<b>本轮未改 <code>DESIGN.md</code></b>，待你确认后单独提请修订。</p>
 
       <h3>刻意没做的（以及原因）</h3>
       <ul>
