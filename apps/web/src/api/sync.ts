@@ -8,6 +8,13 @@ export interface PullSummary {
   skipped: number
   conflicts: number
   errors: string[]
+  /** 2026-10-02 批次 0：本次写入 folders.raindrop_id 的远端根集合数 / 新建的本地 folder 数 */
+  collections: number
+  foldersCreated: number
+  /** 本次写入 bookmark_tags 的挂载条数 */
+  tagged: number
+  /** 映射不到归属的远端集合数（如落在 Raindrop 子集合里）——如实上报，不静默 */
+  unmappedCollections: number
   hasMore: boolean
 }
 

@@ -2,20 +2,27 @@ import { randomUUID } from 'node:crypto'
 import type { BookmarkRepository } from '@dogear/db'
 import { mapRaindropBookmark, type RaindropBookmark } from '../channels/raindrop.js'
 import { collectMetadataPatches, partitionRaindropItems, type RaindropLocal } from './raindrop-reconcile.js'
+import { resolveTaxonomy, syncRaindropTaxonomy, type RaindropTaxonomyClient, type TaxonomyIndex } from './raindrop-taxonomy.js'
 
 /**
  * Raindrop 拉回（双向同步的远端 → 本地侧，同步设计 §3；API 结构表 v1.8）。
  *
  * 行为：
+ * - **先同步分类体系**：拉书签之前先拉收藏夹与标签清单（`syncRaindropTaxonomy`），
+ *   否则第一页书签找不到归属。2026-10-02 批次 0 补；此前 `folder_id` 恒为 NULL、
+ *   `bookmark_tags` 恒为空，等于把「整理」这条路整个堵死。
  * - **低频单页**：每次调用只拉一页（默认 50 条，不自动翻页）。
- * - **批量 D1**：查重/建书签/记冲突/补空封面都按页批量。
+ * - **批量 D1**：查重/建书签/挂标签/记冲突/补空封面都按页批量。
  * - 新书签：raindropId **与 URL** 都找不到才创建（避免工作台/插件先存、再拉回收到重复）。
  * - 已有书签：空封面/简介/raindropId 用远端回填，不覆盖已有标题；内容有差异且远端较新 → 本地赢并记 conflicts。
+ * - **只读**：本路径不向 `sync_queue` 入队（计划 §3.6.1 额度保护第 2 条）。
  */
 
 export interface PullOptions {
   intoInbox?: boolean
   maxPages?: number
+  /** 复用已同步好的分类映射；不传则本次调用内先同步一次 */
+  taxonomy?: TaxonomyIndex
 }
 
 export interface PullSummary {
@@ -24,7 +31,13 @@ export interface PullSummary {
   created: number
   skipped: number
   filled: number
+  tagged: number
   conflicts: number
+  /** 已写入 folders.raindrop_id 的远端根集合数 / 本次新建数 */
+  collections: number
+  foldersCreated: number
+  /** 映射不到的远端集合 id 数量（如落在子集合里）——如实上报，不静默 */
+  unmappedCollections: number
   errors: string[]
   hasMore: boolean
 }
@@ -44,7 +57,7 @@ function differs(existing: Record<string, unknown>, rd: RaindropBookmark): boole
   return false
 }
 
-export interface RaindropPullClient {
+export interface RaindropPullClient extends Partial<RaindropTaxonomyClient> {
   fetchBookmarks(page?: number, perPage?: number): Promise<{ items: RaindropBookmark[]; total: number }>
 }
 
@@ -55,7 +68,16 @@ export async function pullFromRaindrop(
 ): Promise<PullSummary> {
   const intoInbox = options.intoInbox !== false
   const maxPages = Math.max(1, Math.min(options.maxPages ?? 1, 10))
-  const summary: PullSummary = { pages: 0, scanned: 0, created: 0, skipped: 0, filled: 0, conflicts: 0, errors: [], hasMore: false }
+  const summary: PullSummary = { pages: 0, scanned: 0, created: 0, skipped: 0, filled: 0, tagged: 0, conflicts: 0, collections: 0, foldersCreated: 0, unmappedCollections: 0, errors: [], hasMore: false }
+
+  // 先同步分类体系：映射表是「这一页书签属于哪个收藏夹」的必要前提
+  const taxonomy = options.taxonomy ?? await syncRaindropTaxonomy(repository, client as RaindropTaxonomyClient)
+  summary.collections = taxonomy.collections
+  summary.foldersCreated = taxonomy.foldersCreated
+  summary.errors.push(...taxonomy.errors)
+  // 跨页累计的「映射失效」事实（同一集合只在结果里出现一次）
+  const unmappedCollectionIds = new Set<number>()
+  const unmappedTagNames = new Set<string>()
 
   for (let page = 0; page < maxPages; page += 1) {
     let items: RaindropBookmark[] = []
@@ -81,16 +103,40 @@ export async function pullFromRaindrop(
 
     if (fresh.length > 0) {
       try {
-        await repository.createMany(fresh.map((rd) => ({
+        // mapRaindropBookmark 现在会多返回 collectionId / tags，二者都不是 bookmarks 的列，
+        // 必须显式挑出来再落库，不能整包塞进 createMany（会插到不存在的列上）。
+        const mapped = fresh.map((rd) => mapRaindropBookmark(rd))
+        const resolved = resolveTaxonomy(taxonomy, mapped)
+        for (const name of resolved.unmappedTags) unmappedTagNames.add(name)
+        resolved.unmappedCollectionIds.forEach((id) => unmappedCollectionIds.add(id))
+
+        const created = await repository.createMany(mapped.map((row, i) => ({
           id: randomUUID(),
-          ...mapRaindropBookmark(rd),
-          note: remoteNote(rd) || null,
+          url: row.url,
+          title: row.title,
+          excerpt: row.excerpt,
+          cover: row.cover,
+          type: row.type,
+          domain: row.domain,
+          note: remoteNote(fresh[i]) || null,
+          // 映射不到就留 null（计划 §3.6.3：映射失效如实上报，不塞错的 folder）
+          folderId: resolved.folderIds[i],
           status: intoInbox ? 'unread' as const : 'saved' as const,
           source: 'raindrop' as const,
           private: false,
+          raindropId: row.raindropId,
+          raindropExtras: row.raindropExtras,
           syncStatus: 'synced' as const,
         })))
-        summary.created += fresh.length
+        summary.created += created.length
+
+        const pairs = created
+          .map((record, i) => ({ bookmarkId: String((record as { id?: unknown }).id ?? ''), tagIds: resolved.tagIds[i] }))
+          .filter((pair) => pair.bookmarkId && pair.tagIds.length > 0)
+        if (pairs.length > 0) {
+          await repository.attachTagsBatch(pairs)
+          summary.tagged += pairs.reduce((sum, pair) => sum + pair.tagIds.length, 0)
+        }
       } catch (error) {
         summary.errors.push(`批量写入失败：${error instanceof Error ? error.message : String(error)}`)
       }
@@ -151,5 +197,9 @@ export async function pullFromRaindrop(
     }
   }
 
+  summary.unmappedCollections = unmappedCollectionIds.size
+  if (unmappedTagNames.size > 0) {
+    summary.errors.push(`有 ${unmappedTagNames.size} 个远端标签未能映射到本地：${Array.from(unmappedTagNames).slice(0, 5).join('、')}${unmappedTagNames.size > 5 ? ' …' : ''}`)
+  }
   return summary
 }

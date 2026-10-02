@@ -149,6 +149,13 @@ export type BookmarkRepository = {
   findByUrls: (urls: string[]) => Promise<unknown[]>
   updateMany: (patches: Array<{ id: string } & Record<string, unknown>>) => Promise<void>
   createMany: (inputs: BookmarkInput[]) => Promise<unknown[]>
+  /**
+   * 批量挂标签（2026-10-02，Raindrop 拉回侧专用）。**只插不改**：
+   * 拉回来的标签是远端事实，本地若已挂同名标签则命中主键冲突后忽略，
+   * 绝不在拉取路径上删除本地已有挂载——那会把「拉取」变成一次破坏性写入。
+   * 一次 50 条书签的标签在 D1 上是 1~2 个子请求，不是逐条 N 次。
+   */
+  attachTagsBatch: (pairs: Array<{ bookmarkId: string; tagIds: string[] }>) => Promise<void>
   /** 导出/同步用的瘦投影：只取推送所需列，一条查询搞定（避免 list 的逐条关联查询） */
   listExportRows: (opts: { onlyWithoutRaindropId?: boolean }, limit?: number, offset?: number) => Promise<unknown[]>
   countWithoutRaindropId: () => Promise<number>
@@ -195,8 +202,8 @@ export type BookmarkRepository = {
 
 type ResourceRepositories = {
   scenes: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean>; merge: (sourceId: string, targetId: string) => Promise<SceneMergeResult> }
-  folders: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean> }
-  tags: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; remove: (id: string) => Promise<boolean>; rename: (id: string, input: { name: string }) => Promise<TagRenameResult>; merge: (sourceId: string, targetId: string) => Promise<TagMergeResult> }
+  folders: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean>; ensureByRaindropId: (items: Array<{ raindropId: number; name: string }>) => Promise<{ synced: number; created: number }> }
+  tags: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; remove: (id: string) => Promise<boolean>; rename: (id: string, input: { name: string }) => Promise<TagRenameResult>; merge: (sourceId: string, targetId: string) => Promise<TagMergeResult>; ensureMany: (names: string[]) => Promise<Map<string, string>> }
   suggestions: { list: (bookmarkId: string, status?: string) => Promise<PageResult<unknown>>; create: (input: Record<string, unknown>) => Promise<unknown>; resolve: (id: string, status: string) => Promise<unknown | undefined>; accept: (id: string, actor?: string) => Promise<unknown | undefined> }
   operationLog: {
     list: (filters?: Record<string, unknown>) => Promise<unknown[]>
@@ -556,6 +563,23 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     }
     return created
   }
+  repository.attachTagsBatch = async (pairs) => {
+    const timestamp = now()
+    const seen = new Set<string>()
+    const records: Array<Record<string, unknown>> = []
+    for (const pair of pairs) {
+      const unique = Array.from(new Set(pair.tagIds.filter(Boolean)))
+      for (const tagId of unique) {
+        const key = `${pair.bookmarkId}::${tagId}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        records.push({ bookmarkId: pair.bookmarkId, tagId, source: 'raindrop', createdAt: timestamp })
+      }
+    }
+    for (const chunk of chunkByParamBudget(records)) {
+      await db.insert(bookmarkTags).values(chunk).onConflictDoNothing().run()
+    }
+  }
   repository.list = async (filters = {}, limit = 50, cursor?: string, opts?: { orderBy?: string; sort?: CursorSort }) => {
     const sort: CursorSort = opts?.sort ?? 'recent'
     const filterOnly = filterCondition(filters)
@@ -815,10 +839,70 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     create: async (input) => { const timestamp = now(); const record = { ...input, parentId: input.parentId ?? null, sortOrder: input.sortOrder ?? 0, createdAt: timestamp, updatedAt: timestamp }; await db.insert(folders).values(record).run(); return record },
     update: async (id, input) => { await db.update(folders).set({ ...input, updatedAt: now() }).where(eq(folders.id, id)).run(); return (await db.select().from(folders).where(eq(folders.id, id)).all())[0] },
     remove: async (id) => { await db.update(bookmarks).set({ folderId: null, updatedAt: now() }).where(eq(bookmarks.folderId, id)).run(); await db.delete(folders).where(eq(folders.id, id)).run(); return true },
+    /**
+     * 按远端 Raindrop 集合 id 批量确保本地 folder 存在（2026-10-02，批次 0 拉取侧）。
+     * 写 `folders.raindrop_id` 建立双向映射——该列 M5 阶段就预留了，此前一直为空。
+     * 已存在同 `raindrop_id` 的**不重复创建**；同名的本地 folder 也不覆盖
+     * （用户自己建的同名文件夹是用户的，不因为远端也有一个就吞掉）。
+     */
+    ensureByRaindropId: async (items) => {
+      if (!items.length) return { synced: 0, created: 0 }
+      const timestamp = now()
+      const existing = await db.select({ id: folders.id, raindropId: folders.raindropId }).from(folders).all()
+      const known = new Set(existing.map((row: any) => String(row.raindropId ?? '')).filter(Boolean))
+      const seen = new Set<string>()
+      const records: Array<Record<string, unknown>> = []
+      for (const item of items) {
+        const key = String(item.raindropId)
+        if (known.has(key) || seen.has(key)) continue
+        const name = item.name.trim()
+        if (!name) continue
+        seen.add(key)
+        records.push({ id: crypto.randomUUID(), name, parentId: null, sortOrder: 0, raindropId: key, createdAt: timestamp, updatedAt: timestamp })
+      }
+      for (const chunk of chunkByParamBudget(records)) {
+        await db.insert(folders).values(chunk).run()
+      }
+      return { synced: items.length, created: records.length }
+    },
   }
   repository.tags = {
     list: async () => db.select().from(tags).orderBy(tags.name).all(),
     create: async (input) => { const name = String(input.name); const nameKey = String(input.nameKey ?? name.toLowerCase()); const found = await db.select().from(tags).where(eq(tags.nameKey, nameKey)).all(); if (found[0]) return found[0]; const record = { id: input.id, name, nameKey, createdAt: now() }; await db.insert(tags).values(record).run(); return record },
+    /**
+     * 按名字批量确保标签存在，返回 `nameKey → tagId` 映射（2026-10-02，批次 0 拉取侧）。
+     *
+     * 为什么要批量：一次拉回 50 条书签可能带 100+ 个不重复标签，逐条 `create`
+     * 就是 100+ 次子请求，**必然超出 Workers Free 档单次调用 50 子请求的上限**。
+     * 这里走「1 次 list 查全量 + 1~2 次分片插入」。
+     *
+     * 键口径：Raindrop 的标签**本身就是字符串名**，没有独立 id，所以 `name_key`（小写）
+     * 就是天然的映射键——这也是批次 0 能做到零 schema 改动的原因。
+     */
+    ensureMany: async (names) => {
+      const wanted = Array.from(new Set(names.map((n) => String(n ?? '').trim()).filter(Boolean)))
+      if (!wanted.length) return new Map<string, string>()
+      const existing = await db.select({ id: tags.id, name: tags.name, nameKey: tags.nameKey }).from(tags).all()
+      const mapping = new Map<string, string>()
+      for (const row of existing as Array<{ id: string; name: string; nameKey: string }>) {
+        if (!mapping.has(row.nameKey)) mapping.set(row.nameKey, row.id)
+      }
+      const timestamp = now()
+      const records = wanted
+        .filter((name) => !mapping.has(name.toLowerCase()))
+        .map((name) => ({ id: crypto.randomUUID(), name, nameKey: name.toLowerCase(), createdAt: timestamp }))
+      for (const chunk of chunkByParamBudget(records)) {
+        await db.insert(tags).values(chunk).onConflictDoNothing().run()
+      }
+      // 插入后回读一次：拿到新标签的 id（D1 的 RETURNING 行为与 SQLite 并不一致，回读最稳）
+      if (records.length) {
+        const inserted = await db.select({ id: tags.id, nameKey: tags.nameKey }).from(tags).where(inArray(tags.nameKey, records.map((r) => r.nameKey))).all()
+        for (const row of inserted as Array<{ id: string; nameKey: string }>) {
+          if (!mapping.has(row.nameKey)) mapping.set(row.nameKey, row.id)
+        }
+      }
+      return mapping
+    },
     remove: async (id) => { await db.delete(bookmarkTags).where(eq(bookmarkTags.tagId, id)).run(); await db.delete(tags).where(eq(tags.id, id)).run(); return true },
     /** 改名（API 结构表 v1.14）：name_key 唯一，撞名返回 name_conflict；标签按 id 挂载，改名对所有书签即时生效 */
     rename: async (id, input) => tx(async (t) => {

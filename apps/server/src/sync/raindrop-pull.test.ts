@@ -6,6 +6,10 @@ import { pullFromRaindrop, type RaindropPullClient } from './raindrop-pull.js'
 function makeRepo(existing: Array<Record<string, any>> = []) {
   const bookmarks = existing
   const conflicts: Array<Record<string, any>> = []
+  const folders: Array<Record<string, any>> = []
+  const tagRows: Array<Record<string, any>> = []
+  const mounts: Array<{ bookmarkId: string; tagId: string; source: string }> = []
+  let seq = 0
   const repository: any = {
     bookmarks,
     conflicts: {
@@ -55,25 +59,73 @@ function makeRepo(existing: Array<Record<string, any>> = []) {
       bookmarks.push(...records)
       return records
     },
+    attachTagsBatch: async (pairs: Array<{ bookmarkId: string; tagIds: string[] }>) => {
+      for (const pair of pairs) {
+        for (const tagId of pair.tagIds) {
+          if (!mounts.some((m) => m.bookmarkId === pair.bookmarkId && m.tagId === tagId)) {
+            mounts.push({ bookmarkId: pair.bookmarkId, tagId, source: 'raindrop' })
+          }
+        }
+      }
+    },
     get: async (id: string) => bookmarks.find((b) => b.id === id),
+    folders: {
+      list: async () => folders,
+      ensureByRaindropId: async (items: Array<{ raindropId: number; name: string }>) => {
+        let created = 0
+        for (const item of items) {
+          if (folders.some((f) => f.raindropId === String(item.raindropId))) continue
+          folders.push({ id: `f-${++seq}`, name: item.name, raindropId: String(item.raindropId) })
+          created += 1
+        }
+        return { synced: items.length, created }
+      },
+    },
+    tags: {
+      ensureMany: async (names: string[]) => {
+        const mapping = new Map<string, string>()
+        for (const row of tagRows) mapping.set(String(row.name).toLowerCase(), row.id)
+        for (const name of names) {
+          const key = name.toLowerCase()
+          if (mapping.has(key)) continue
+          const id = `t-${++seq}`
+          tagRows.push({ id, name, nameKey: key })
+          mapping.set(key, id)
+        }
+        return mapping
+      },
+    },
   }
-  return { repository, bookmarks, conflicts }
+  return { repository, bookmarks, conflicts, folders, tagRows, mounts }
 }
+
+const REMOTE_COLLECTIONS = [
+  { _id: 100, title: '论文', count: 2, sort: 0, public: false },
+  { _id: -1, title: 'Unsorted', count: 0, sort: 1, public: false },
+]
+const REMOTE_TAGS = [
+  { _id: 1, name: '渲染', count: 1 },
+  { _id: 2, name: 'Houdini', count: 1 },
+]
 
 function fakeClient(pages: RaindropBookmark[][]): RaindropPullClient {
   return {
     async fetchBookmarks(page = 0) {
       return { items: pages[page] ?? [], total: pages.reduce((n, p) => n + p.length, 0) }
     },
+    async getCollections() { return REMOTE_COLLECTIONS },
+    async getTags() { return REMOTE_TAGS },
   }
 }
 
+/** 2026-10-02：默认给正的 collection 与真实 tags，不再一律 `-1` + 无标签 */
 function rd(id: number, over: Partial<RaindropBookmark> = {}): RaindropBookmark {
   return {
     _id: id,
     link: `https://rd-${id}.example.com/`,
     title: `Remote ${id}`,
-    collection: { $id: -1 },
+    collection: { $id: 100 },
+    tags: ['渲染'],
     note: '',
     excerpt: '',
     created: '2026-09-01T00:00:00Z',
@@ -89,6 +141,40 @@ describe('Raindrop 拉回（L2 双向的远端→本地侧）', () => {
     expect(summary).toMatchObject({ created: 2, skipped: 0, conflicts: 0, pages: 1 })
     expect(bookmarks).toHaveLength(2)
     expect(bookmarks[0]).toMatchObject({ source: 'raindrop', status: 'unread', raindropId: '1', excerpt: '远端简介' })
+  })
+
+  /**
+   * 批次 0 的核心回归：拉回时**先同步分类体系**，书签带上 folderId 与标签挂载。
+   * 此前 `getCollections()` / `getTags()` 零调用、`mapRaindropBookmark` 丢弃 tags 与
+   * collection，所以这条路径完全没有验证——CI 全绿而功能是空的。
+   */
+  it('先同步收藏夹/标签清单，再把归属与挂载写进新书签（批次 0 核心回归）', async () => {
+    const { repository, bookmarks, folders, tagRows, mounts } = makeRepo()
+
+    const summary = await pullFromRaindrop(repository, fakeClient([[rd(1), rd(2, { tags: ['Houdini'] })]]))
+
+    expect(summary.collections).toBe(1)
+    expect(summary.foldersCreated).toBe(1)
+    expect(folders[0]).toMatchObject({ name: '论文', raindropId: '100' })
+    expect(bookmarks.every((b) => b.folderId === folders[0].id)).toBe(true)
+    expect(tagRows.map((t) => t.name).sort()).toEqual(['Houdini', '渲染'].sort())
+    expect(summary.tagged).toBe(2)
+    expect(mounts).toHaveLength(2)
+  })
+
+  it('拉取不产生任何 sync_queue 入队（额度保护第 2 条：拉取只读）', async () => {
+    const { repository, bookmarks } = makeRepo()
+    const summary = await pullFromRaindrop(repository, fakeClient([[rd(1), rd(2)]]))
+    // 拉回创建的书签必须是 synced（不是 pending），否则会被消费器当成「本地领先」推回远端
+    expect(summary.created).toBe(2)
+    expect(bookmarks.every((b) => b.syncStatus === 'synced')).toBe(true)
+  })
+
+  it('远端集合未同步时 folderId 留空并计入 unmappedCollections，不静默归类', async () => {
+    const { repository, bookmarks } = makeRepo()
+    const summary = await pullFromRaindrop(repository, fakeClient([[rd(1, { collection: { $id: 999 } })]]))
+    expect(summary.unmappedCollections).toBe(1)
+    expect(bookmarks[0].folderId).toBeNull()
   })
 
   it('skips unchanged bookmarks', async () => {

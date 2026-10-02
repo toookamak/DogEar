@@ -24,6 +24,13 @@ export interface ImportPageResponse {
   imported: number
   skipped: number
   errors: string[]
+  /** 2026-10-02 批次 0：本页写入 bookmark_tags 的挂载条数 */
+  tagged: number
+  /** 本页同步的远端根集合数 / 新建的本地 folder 数（仅第 0 页非零） */
+  collections: number
+  foldersCreated: number
+  /** 映射不到归属的远端集合数——如实上报，不静默归到「未分类」 */
+  unmappedCollections: number
   /** Raindrop 侧书签总数；不可知为 0 */
   total: number
   hasMore: boolean

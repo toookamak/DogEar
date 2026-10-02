@@ -25,6 +25,12 @@ export function mapRaindropBookmark(rd: RaindropBookmark) {
     rd.type === 'article' || rd.type === 'video' || rd.type === 'image' ? rd.type : 'link'
   const excerpt = (rd.excerpt || '').trim() || null
   const note = (rd.note || '').trim() || null
+  // 2026-10-02 补：此前 tags 与 collectionId 被整体丢弃，导致拉回来的书签全是「无标签、无收藏夹」
+  const tags = Array.from(new Set((rd.tags ?? []).map((t) => String(t ?? '').trim()).filter(Boolean)))
+  const rawCollectionId = typeof rd.collection?.$id === 'number' ? rd.collection.$id : null
+  // Raindrop 系统集合：-1 = Unsorted（无归属）、-99 = Trash。本地一律视为「无收藏夹」，
+  // 不为它们建同名 folder，否则会凭空多出两个用户没建过的分类。
+  const collectionId = rawCollectionId !== null && rawCollectionId > 0 ? rawCollectionId : null
   return {
     url: rd.link,
     title: (rd.title || '').trim() || rd.link,
@@ -34,6 +40,14 @@ export function mapRaindropBookmark(rd: RaindropBookmark) {
     type,
     domain,
     raindropId: String(rd._id),
+    /**
+     * Raindrop 原始集合 id。**不直接写进 bookmarks.folder_id**——本地 folderId 是 UUID，
+     * 必须经 `folders.raindrop_id` 映射后才安全（数据库结构表禁止拿 Raindrop `_id` 当本地主键）。
+     * 映射不到时调用方留 `folderId = null` 并如实上报，不静默塞错的 folder。
+     */
+    collectionId,
+    /** 去空白、去空串、去重后的原始标签名；由调用方按 `tags.name_key` 映射到本地标签 id */
+    tags,
     raindropExtras: JSON.stringify({
       excerpt: rd.excerpt,
       type: rd.type,
