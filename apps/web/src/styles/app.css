@@ -562,15 +562,6 @@ select.input {
 .sync-strip-item--warn,
 .sync-strip-item--warn b { color: var(--amber-strong); }
 
-/* v0.8.0：回写范围说明（收藏夹与标签暂不回写）。
-   用 faint 而非 warn——它讲的是**能力边界**不是待办或故障，
-   染成告警色会让人以为出了错。分隔线把它与「待推送/失败」这类实时态分开。 */
-.sync-strip-item--note {
-  color: var(--faint);
-  padding-left: var(--space-2);
-  border-left: 1px solid var(--line);
-}
-
 .sync-strip-link {
   padding: 0;
   border: 0;
