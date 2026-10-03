@@ -3852,6 +3852,69 @@ select.input {
   color: var(--faint);
 }
 
+/* 行内快改（P1b-3，界面稿屏 4 的「结果行内 hover 显形」）：
+   主命中区吸收原按钮样式；快改按钮 hover / 键盘 active 行才显形，平时不占视觉 */
+.palette-item-hit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.palette-item-acts {
+  display: none;
+  flex-shrink: 0;
+  gap: var(--space-1);
+}
+
+.palette-item:hover .palette-item-acts,
+.palette-item--active .palette-item-acts {
+  display: inline-flex;
+}
+
+.palette-picker {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+.palette-picker-title {
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--fs-small);
+  color: var(--faint);
+}
+
+.palette-picker-option {
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--fs-body);
+  color: var(--text);
+  transition: var(--transition-color);
+}
+
+.palette-picker-option:hover {
+  background-color: var(--amber-soft);
+}
+
+.palette-picker-option--cancel {
+  color: var(--faint);
+  border-top: 1px solid var(--line-soft);
+  margin-top: var(--space-1);
+}
+
 /* ---------------------------------------------------------------- 导航页 */
 
 .nav-section {

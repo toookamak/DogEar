@@ -1,15 +1,30 @@
 import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react'
 import { bookmarkSearchIndex, type SearchHit } from '../../search-index.js'
 import { Icon } from '../ui/Icon.js'
+import type { FolderResponse, TagResponse } from '../../types/api.js'
 
 interface CommandPaletteProps {
   /** 打开某条书签。索引里只有瘦投影，完整对象由调用方按 id 取。 */
   onOpenBookmark: (id: string) => void
   onClose: () => void
   open: boolean
+  /**
+   * 行内快改（P1b-3，整理台界面稿屏 4 的「结果行内 hover 显形改收藏夹/加标签」）。
+   * 面板本身不持有组织数据与写逻辑：选项来自 props，执行交给调用方的批量通道
+   * （单条 = 一条的批量，走同一套回执/刷新/入队路径）。
+   */
+  onQuickEdit?: (id: string, change: { folderId?: string; addTagIds?: string[] }) => void
+  folders?: FolderResponse[]
+  tags?: TagResponse[]
 }
 
 const MAX_RESULTS = 20
+
+interface QuickPick {
+  id: string
+  title: string
+  mode: 'folder' | 'tag'
+}
 
 /**
  * ⌘K 命令面板：端侧全量检索（2026-10-02 批次 2）。
@@ -19,11 +34,13 @@ const MAX_RESULTS = 20
  * 现在改读 `bookmarkSearchIndex`（后台预取的瘦投影全量索引），查询零网络往返。
  *
  * 面板必须全程不碰鼠标：↑↓ 选择、Enter 打开、Esc 关闭。
+ * 行内快改是鼠标加速器（hover 显形），键盘主路径不变——键盘用户 Enter 打开详情后编辑。
  */
-export function CommandPalette({ onOpenBookmark, onClose, open }: CommandPaletteProps) {
+export function CommandPalette({ onOpenBookmark, onClose, open, onQuickEdit, folders = [], tags = [] }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchHit[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
+  const [picker, setPicker] = useState<QuickPick | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const snapshot = useSyncExternalStore(bookmarkSearchIndex.subscribe, bookmarkSearchIndex.getSnapshot)
@@ -33,6 +50,7 @@ export function CommandPalette({ onOpenBookmark, onClose, open }: CommandPalette
       setQuery('')
       setResults([])
       setActiveIndex(0)
+      setPicker(null)
       return
     }
     inputRef.current?.focus()
@@ -58,7 +76,13 @@ export function CommandPalette({ onOpenBookmark, onClose, open }: CommandPalette
   }, [onOpenBookmark, onClose])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') { onClose(); return }
+    if (e.key === 'Escape') {
+      // 两层 Esc：先收起行内选择面板，再关整个面板
+      if (picker) { setPicker(null); return }
+      onClose()
+      return
+    }
+    if (picker) return // 选择面板打开时方向键不驱动结果列表
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       setActiveIndex((i) => (results.length ? (i + 1) % results.length : 0))
@@ -130,27 +154,80 @@ export function CommandPalette({ onOpenBookmark, onClose, open }: CommandPalette
             </p>
           )}
 
-          {results.map((hit, index) => (
-            <button
-              key={hit.id}
-              type="button"
-              role="option"
-              aria-selected={index === activeIndex}
-              data-index={index}
-              className={`palette-item${index === activeIndex ? ' palette-item--active' : ''}`}
-              onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => commit(hit)}
-            >
-              <span className="palette-item-main">
-                <span className="palette-item-title">{hit.title || hit.url}</span>
-                <span className="palette-item-meta">
-                  {hit.domain ?? ''}
-                  {hit.folderName ? ` · ${hit.folderName}` : ''}
-                  {hit.tagNames.length > 0 ? ` · ${hit.tagNames.map((tag) => `#${tag}`).join(' ')}` : ''}
-                </span>
-              </span>
-            </button>
-          ))}
+          {picker ? (
+            <div className="palette-picker" role="menu" aria-label={picker.mode === 'folder' ? '移入收藏夹' : '添加标签'}>
+              <p className="palette-picker-title">
+                {picker.mode === 'folder' ? '移入收藏夹' : '添加标签'} · {(picker.title || '').slice(0, 24)}
+              </p>
+              {picker.mode === 'folder'
+                ? folders.map((folder) => (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    role="menuitem"
+                    className="palette-picker-option"
+                    onClick={() => { onQuickEdit?.(picker.id, { folderId: folder.id }); setPicker(null) }}
+                  >
+                    {folder.name}
+                  </button>
+                ))
+                : tags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    role="menuitem"
+                    className="palette-picker-option"
+                    onClick={() => { onQuickEdit?.(picker.id, { addTagIds: [tag.id] }); setPicker(null) }}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              {((picker.mode === 'folder' && folders.length === 0) || (picker.mode === 'tag' && tags.length === 0)) && (
+                <p className="palette-picker-title">还没有可选项，先到「组织管理」新建。</p>
+              )}
+              <button type="button" className="palette-picker-option palette-picker-option--cancel" onClick={() => setPicker(null)}>
+                取消（Esc）
+              </button>
+            </div>
+          ) : (
+            results.map((hit, index) => (
+              <div
+                key={hit.id}
+                role="option"
+                aria-selected={index === activeIndex}
+                data-index={index}
+                className={`palette-item${index === activeIndex ? ' palette-item--active' : ''}`}
+                onMouseEnter={() => setActiveIndex(index)}
+              >
+                {/* 主命中区仍是打开动作；行内快改是 hover 显形的鼠标加速器（界面稿屏 4） */}
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className="palette-item-hit"
+                  onClick={() => commit(hit)}
+                >
+                  <span className="palette-item-main">
+                    <span className="palette-item-title">{hit.title || hit.url}</span>
+                    <span className="palette-item-meta">
+                      {hit.domain ?? ''}
+                      {hit.folderName ? ` · ${hit.folderName}` : ''}
+                      {hit.tagNames.length > 0 ? ` · ${hit.tagNames.map((tag) => `#${tag}`).join(' ')}` : ''}
+                    </span>
+                  </span>
+                </button>
+                {onQuickEdit && (
+                  <span className="palette-item-acts">
+                    <button type="button" className="mini-btn" title="移入收藏夹" onClick={() => setPicker({ id: hit.id, title: hit.title, mode: 'folder' })}>
+                      改收藏夹
+                    </button>
+                    <button type="button" className="mini-btn" title="添加标签" onClick={() => setPicker({ id: hit.id, title: hit.title, mode: 'tag' })}>
+                      加标签
+                    </button>
+                  </span>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

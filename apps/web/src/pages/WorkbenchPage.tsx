@@ -636,6 +636,9 @@ export function WorkbenchPage() {
         onOpenBookmark={(id) => { void openBookmarkById(id) }}
         onClose={() => setShowCommand(false)}
         open={showCommand}
+        onQuickEdit={(id, change) => { void runBatch({ ids: [id], ...change }) }}
+        folders={folders}
+        tags={tags}
       />
 
       {/* 批量影响面确认（P1b-2）：大集合改动先把「将改什么、影响几条」摆出来再动手 */}
