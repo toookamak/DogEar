@@ -578,8 +578,10 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
     return c.json({ items })
   })
 
-  // Raindrop 拉回（双向同步的远端→本地侧）：每次只拉一页（50 条），防 API 风控；
-  // 新书签进 Inbox（source=raindrop），已有书签内容冲突时本地赢并记入 conflicts
+  // Raindrop 拉回（双向同步的远端→本地侧）：默认单页（50 条）；catchUp=true 时由
+  // 服务端连续翻页直到追平或安全上限（40 页 / 2000 条）——「拉取」=「追平」，
+  // 不再让用户为 3000 条的库手点 69 次。新书签进 Inbox（source=raindrop），
+  // 已有书签内容冲突时本地赢并记入 conflicts
   app.post('/api/sync/pull', async (c) => {
     // 拉取需要完整的 Raindrop 读接口（fetchBookmarks），不走推送用的结构化解析器
     const channels = await channelManager.getAllChannels()
@@ -588,10 +590,11 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
       return c.json({ error: { code: 'VALIDATION_ERROR', message: '没有已启用且配置了 Token 的 Raindrop 通道' } }, 400)
     }
     const client = new RaindropClient(String(raindrop.config.token))
-    const body = await c.req.json().catch(() => ({})) as { intoInbox?: boolean; maxPages?: number }
+    const body = await c.req.json().catch(() => ({})) as { intoInbox?: boolean; maxPages?: number; catchUp?: boolean }
     const summary = await pullFromRaindrop(repository, client, {
       intoInbox: body.intoInbox,
       maxPages: typeof body.maxPages === 'number' ? body.maxPages : 1,
+      catchUp: body.catchUp === true,
     })
     if (summary.conflicts > 0) {
       await repository.operationLog.append({

@@ -463,6 +463,12 @@ select.input {
 
 .sync-lamp-count.is-err { color: var(--red); }
 .sync-lamp-count.is-ok { color: var(--mint); }
+/* 折叠态显示「↓落后」时：蓝=远端信息态（DESIGN.md §2），与绿/红的本地状态区分 */
+.sync-lamp-count.is-behind { color: var(--blue); }
+
+/* 浮条里的落后条目：同一条蓝色语义。title 承载「至少 N」的完整口径 */
+.sync-strip-item--behind,
+.sync-strip-item--behind b { color: var(--blue); }
 
 /* 向左滑出的浮条（方案 D 镜像）。
  * justify-content: flex-end 是关键：内容贴住右缘，宽度由 0 增长时最右侧先出现、

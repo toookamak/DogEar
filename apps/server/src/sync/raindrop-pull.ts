@@ -21,6 +21,12 @@ import { resolveTaxonomy, syncRaindropTaxonomy, type RaindropTaxonomyClient, typ
 export interface PullOptions {
   intoInbox?: boolean
   maxPages?: number
+  /**
+   * 追平模式（P1a，计划 §3.2「全量循环由服务端驱动」）：连续翻页直到远端拉完
+   * 或达到安全上限——用户点一次「拉取」就是「追平」，而不是买一张 50 条的票。
+   * 上限是防风控与单次调用时长的硬闸（拉取只读不入队，撞上限时 hasMore=true 如实上报）。
+   */
+  catchUp?: boolean
   /** 复用已同步好的分类映射；不传则本次调用内先同步一次 */
   taxonomy?: TaxonomyIndex
 }
@@ -67,7 +73,11 @@ export async function pullFromRaindrop(
   options: PullOptions = {},
 ): Promise<PullSummary> {
   const intoInbox = options.intoInbox !== false
-  const maxPages = Math.max(1, Math.min(options.maxPages ?? 1, 10))
+  // 追平模式的上限：40 页 = 2000 条。默认（非追平）仍单页、硬上限 10 页不变。
+  const CATCH_UP_MAX_PAGES = 40
+  const maxPages = options.catchUp
+    ? Math.max(1, Math.min(options.maxPages ?? CATCH_UP_MAX_PAGES, CATCH_UP_MAX_PAGES))
+    : Math.max(1, Math.min(options.maxPages ?? 1, 10))
   const summary: PullSummary = { pages: 0, scanned: 0, created: 0, skipped: 0, filled: 0, tagged: 0, conflicts: 0, collections: 0, foldersCreated: 0, unmappedCollections: 0, errors: [], hasMore: false }
 
   // 先同步分类体系：映射表是「这一页书签属于哪个收藏夹」的必要前提

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
-import { syncApi, type SyncStatusResponse } from '../../api/sync.js'
+import { syncApi, type SyncDiffResponse, type SyncStatusResponse } from '../../api/sync.js'
 import { notifyDataChanged } from '../../undo.js'
 import { toast, errorMessage } from '../../toast.js'
 import { formatAgo } from '../../utils/format.js'
-import { latestSyncAt, syncLamp, type SyncLamp } from '../../utils/sync-presentation.js'
+import { aheadLabel, behindLabel, capsuleCount, latestSyncAt, syncLamp, type SyncLamp } from '../../utils/sync-presentation.js'
 
 /**
  * 顶栏右上角的同步胶囊（2026-09-27，方案 D 镜像：展开方向向左）。
@@ -26,6 +26,10 @@ export function SyncCapsule() {
   const [status, setStatus] = useState<SyncStatusResponse | null>(null)
   const [syncError, setSyncError] = useState(false)
   const [loading, setLoading] = useState(false)
+  /** 双向差异（↑领先/↓落后）。**不随 30s 轮询刷新**——额度保护 §3.6.2：
+   *  探测每次要打 1 次真实 Raindrop API，只在挂载、展开胶囊、同步动作后取一次。 */
+  const [diff, setDiff] = useState<SyncDiffResponse | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
   /** 点击钉住展开态；仅悬停时不留住，移开即收 */
   const [pinned, setPinned] = useState(false)
   const [busy, setBusy] = useState<'pull' | 'push' | null>(null)
@@ -53,12 +57,29 @@ export function SyncCapsule() {
     setLoading(false)
   }, [])
 
+  /** 差异探测：挂载 / 展开胶囊 / 拉取推送完成后各取一次；失败静默降级为「不渲染 ↓」 */
+  const loadDiff = useCallback(async () => {
+    setDiffLoading(true)
+    try {
+      setDiff(await syncApi.diff())
+    } catch {
+      setDiff(null)
+    }
+    setDiffLoading(false)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     void (async () => { if (!cancelled) await load() })()
+    void (async () => { if (!cancelled) await loadDiff() })()
     const interval = setInterval(() => { void load() }, 30000)
     return () => { cancelled = true; clearInterval(interval) }
-  }, [load])
+  }, [load, loadDiff])
+
+  // 展开胶囊时重算一次差异：用户「点开看状态」的时机正是最需要新鲜数字的时候
+  useEffect(() => {
+    if (pinned) void loadDiff()
+  }, [pinned, loadDiff])
 
   // 点外部 / Esc 收起钉住的展开态（mousedown 先于 click，避免「点开又立刻关上」）
   useEffect(() => {
@@ -77,15 +98,15 @@ export function SyncCapsule() {
     }
   }, [pinned])
 
-  /** 拉取：单页低频拉回；文案与设置页 ChannelManager 的「拉取」保持一致 */
+  /** 拉取 = 追平（catchUp）：服务端连续翻页直到拉完或安全上限，一次动作完成「下载」 */
   const handlePull = async () => {
     setBusy('pull')
     setActionError(null)
     try {
-      const summary = await syncApi.pull()
-      const parts = [`新增 ${summary.created} 条`]
+      const summary = await syncApi.pull({ catchUp: true })
+      const parts = [`新增 ${summary.created} 条，共扫 ${summary.scanned} 条`]
       if (summary.conflicts > 0) parts.push(`${summary.conflicts} 条冲突待处理（浮条里「管理冲突」）`)
-      if (summary.hasMore) parts.push('远端还有更多，可再次拉取')
+      if (summary.hasMore) parts.push(`已达单次安全上限（${summary.pages} 页），远端仍有更多，可再次拉取`)
       if (summary.created > 0 || summary.conflicts > 0) {
         toast.success(`拉取完成：${parts.join('，')}`)
         // 新增了书签就让列表刷新，否则用户拉完看不到新内容
@@ -94,6 +115,7 @@ export function SyncCapsule() {
         toast.info('拉取完成：远端没有新内容')
       }
       await load()
+      await loadDiff()
     } catch (e) {
       // 失败原因同时进 toast 与浮条：toast 会消失，浮条留到下次成功
       setActionError(errorMessage(e, '拉取失败'))
@@ -131,6 +153,7 @@ export function SyncCapsule() {
         toast[totalFailed > 0 ? 'info' : 'success'](`推送完成：${parts.join('，')}`)
       }
       await load()
+      await loadDiff()
     } catch (e) {
       setActionError(errorMessage(e, '推送失败'))
       toast.error(errorMessage(e, '推送失败'))
@@ -143,6 +166,18 @@ export function SyncCapsule() {
   const failedPush = status?.failedPush ?? 0
   const pendingConflicts = status?.pendingConflicts ?? 0
 
+  // 双向差异呈现：↑领先 / ↓落后（探测失败时不渲染 ↓，见 sync-presentation 的不撒谎约束）
+  const ahead = aheadLabel(diff)
+  const behind = behindLabel(diff)
+  const behindTitle = diff
+    ? diff.probeError
+      ? `差异探测失败：${diff.probeError}`
+      : diff.behindIsExact
+        ? 'Raindrop 上有、本地还没有的条数。点「拉取」下载追平。'
+        : '至少这个数——探测只扫了远端首屏，真实值可能更多。点「拉取」继续下载。'
+    : ''
+  const folded = capsuleCount(pendingPush, diff)
+
   /**
    * 「上次同步」取推送与拉取中较晚的一次（2026-09-27 修正）。
    *
@@ -154,12 +189,12 @@ export function SyncCapsule() {
 
   // 同步中优先于其它态：正在跑的时候「待推送」数字本来就在变，报红黄没有意义
   const lamp: SyncLamp = syncLamp(busy !== null, failedPush, pendingPush, actionError !== null)
-  const countText = syncError ? '—' : pendingPush ?? '—'
+  const countText = syncError ? '—' : folded.text
   const lampLabel = syncError
     ? '同步状态读取失败'
     : `同步状态：待推送 ${pendingPush ?? '未知'}${failedPush > 0 ? `，推送失败 ${failedPush}` : ''}${
-        pendingConflicts > 0 ? `，待处理冲突 ${pendingConflicts}` : ''
-      }${busy ? '，正在同步' : ''}${actionError ? `；上次操作失败：${actionError}` : ''}`
+        behind ? `，远端落后 ${behind}` : ''
+      }${diff?.probeError ? '，差异未知（探测失败）' : ''}${pendingConflicts > 0 ? `，待处理冲突 ${pendingConflicts}` : ''}${busy ? '，正在同步' : ''}${actionError ? `；上次操作失败：${actionError}` : ''}`
 
   return (
     <div className={`syncbox${pinned ? ' is-open' : ''}`} ref={rootRef}>
@@ -197,6 +232,26 @@ export function SyncCapsule() {
               </button>
             </div>
             <span className="sync-strip-item">待推送 <b>{pendingPush ?? '—'}</b></span>
+            {behind && (
+              // 落后是远端状态不是本地动作：蓝色=信息（DESIGN.md §2），按钮仍是左侧的「拉取」
+              <span className="sync-strip-item sync-strip-item--behind" title={behindTitle}>
+                落后 <b>{behind}</b>
+              </span>
+            )}
+            {ahead && (
+              <span className="sync-strip-item" title="本地已改、等待回写 Raindrop 的条数（与「待推送」同源）">
+                {ahead}
+              </span>
+            )}
+            {!behind && diff?.probeError && (
+              // 探测失败必须显式说「不知道」，静默不渲染会被读成「落后 0」
+              <span
+                className="sync-strip-item sync-strip-item--behind"
+                title={behindTitle}
+              >
+                {diffLoading ? '差异探测中…' : '差异未知'}
+              </span>
+            )}
             {failedPush > 0 && (
               // 完整退避说明进 title：单行浮条塞不下，硬塞会把「拉取」挤出可视区
               <span
@@ -249,7 +304,7 @@ export function SyncCapsule() {
           <span className={`sync-lamp-dot${lamp === 'warn' ? ' is-on-warn' : lamp === 'syncing' ? ' is-alt-warn' : ''}`} />
           <span className={`sync-lamp-dot${lamp === 'ok' ? ' is-on-ok' : lamp === 'syncing' ? ' is-alt-ok' : ''}`} />
         </span>
-        <span className={`sync-lamp-count${lamp === 'err' ? ' is-err' : lamp === 'ok' ? ' is-ok' : ''}`}>
+        <span className={`sync-lamp-count${lamp === 'err' ? ' is-err' : lamp === 'ok' ? ' is-ok' : folded.behind ? ' is-behind' : ''}`}>
           {countText}
         </span>
       </button>

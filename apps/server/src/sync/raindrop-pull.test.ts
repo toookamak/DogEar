@@ -221,6 +221,40 @@ describe('Raindrop 拉回（L2 双向的远端→本地侧）', () => {
     expect(summary.scanned).toBe(1)
   })
 
+  it('catchUp mode loops until the remote is exhausted and reports hasMore=false', async () => {
+    const { repository } = makeRepo()
+    const pages = [[rd(1), rd(2)], [rd(3)], []]
+    const summary = await pullFromRaindrop(repository, fakeClient(pages), { catchUp: true })
+    expect(summary.pages).toBe(3)
+    expect(summary.created).toBe(3)
+    expect(summary.scanned).toBe(3)
+    expect(summary.hasMore).toBe(false)
+  })
+
+  it('catchUp mode stops at the safety cap with hasMore=true (honest under-count)', async () => {
+    const { repository } = makeRepo()
+    // 每页都是满页（50 条）的假远端：永远拉不完
+    const full = Array.from({ length: 50 }, (_, i) => rd(i + 1))
+    const client: RaindropPullClient = {
+      async fetchBookmarks(page = 0) {
+        return { items: full.map((b) => ({ ...b, _id: b._id + page * 1000 })), total: 999999 }
+      },
+      async getCollections() { return REMOTE_COLLECTIONS },
+      async getTags() { return REMOTE_TAGS },
+    }
+    const summary = await pullFromRaindrop(repository, client, { catchUp: true })
+    expect(summary.pages).toBe(40)
+    expect(summary.scanned).toBe(40 * 50)
+    expect(summary.hasMore).toBe(true)
+  })
+
+  it('non-catchUp maxPages cap is unchanged (10)', async () => {
+    const { repository } = makeRepo()
+    const pages = Array.from({ length: 15 }, (_, p) => [rd(p + 1)])
+    const summary = await pullFromRaindrop(repository, fakeClient(pages), { maxPages: 99 })
+    expect(summary.pages).toBe(10)
+  })
+
   it('does not duplicate a bookmark that already exists by URL, and fills empty cover', async () => {
     const { repository, bookmarks } = makeRepo([
       { id: 'b-old', url: 'https://rd-1.example.com/', title: '先存的', cover: null, raindropId: null },

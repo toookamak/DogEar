@@ -46,3 +46,48 @@ export function latestSyncAt(
   if (pull == null) return push
   return Math.max(push, pull)
 }
+
+/**
+ * 双向差异的呈现（计划 §3.5，2026-10-03 接线）。
+ *
+ * 三个刻意的克制，全部来自「不撒谎」：
+ * - **领先给「条」**：`↑N`——它来自本地 `sync_queue`，是准确值。
+ * - **落后给「至少 N」语义**：探测只扫远端首屏，`behindIsExact=false` 时真实值
+ *   只会更多，显示 `↓N+` 而不是谎称「一共 N 条」。
+ * - **探测失败 ≠ 落后 0**：未配通道或远端报错时返回 null，界面**不渲染** ↓——
+ *   显示 0 会被读成「远端没有新东西」，而事实是「我们不知道」。
+ */
+export interface DiffCounts {
+  ahead: number
+  behind: number
+  behindIsExact: boolean
+  probeError?: string
+}
+
+/** 领先标签：0 或无效时不渲染（null） */
+export function aheadLabel(diff: DiffCounts | null): string | null {
+  if (!diff || !Number.isFinite(diff.ahead) || diff.ahead <= 0) return null
+  return `↑${diff.ahead}`
+}
+
+/** 落后标签：0 且无探测错误时不渲染；探测失败时不渲染（不能显示成 ↓0） */
+export function behindLabel(diff: DiffCounts | null): string | null {
+  if (!diff) return null
+  if (diff.probeError) return null
+  if (!Number.isFinite(diff.behind) || diff.behind <= 0) return null
+  return diff.behindIsExact ? `↓${diff.behind}` : `↓${diff.behind}+`
+}
+
+/**
+ * 折叠态主计数：待推送优先（它是本地动作、可直接消掉），其次落后，最后是占位。
+ * 两侧都干净时显示待推送数本身（通常为 0），维持既有读法。
+ */
+export function capsuleCount(
+  pendingPush: number | null,
+  diff: DiffCounts | null,
+): { text: string; behind: boolean } {
+  if ((pendingPush ?? 0) > 0) return { text: String(pendingPush), behind: false }
+  const behind = behindLabel(diff)
+  if (behind) return { text: behind, behind: true }
+  return { text: pendingPush == null ? '—' : String(pendingPush), behind: false }
+}
