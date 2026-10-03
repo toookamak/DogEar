@@ -466,9 +466,41 @@ select.input {
 /* 折叠态显示「↓落后」时：蓝=远端信息态（DESIGN.md §2），与绿/红的本地状态区分 */
 .sync-lamp-count.is-behind { color: var(--blue); }
 
+/* 折叠态双计数（界面稿 v0.3）：↑领先 / ↓落后 并排，分隔线隔开；
+ * 领先=琥珀（本地出的动作）、落后=蓝（远端信息）、失败=红（压过一切）。
+ * 用 --amber-strong 而非 --amber：计数是状态不是按钮，accent 橙会诱导误点 */
+.sync-lamp-counts {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.sync-lamp-part + .sync-lamp-part {
+  margin-left: var(--space-1);
+  padding-left: var(--space-1);
+  border-left: 1px solid var(--line-strong);
+}
+
+.sync-lamp-part.is-ahead { color: var(--amber-strong); }
+.sync-lamp-part.is-behind, .sync-lamp-part.is-unknown { color: var(--blue); }
+.sync-lamp-part.is-failed { color: var(--red); }
+
 /* 浮条里的落后条目：同一条蓝色语义。title 承载「至少 N」的完整口径 */
 .sync-strip-item--behind,
 .sync-strip-item--behind b { color: var(--blue); }
+
+/* 浮条里的领先条目：琥珀=本地出的动作（界面稿 v0.3 色彩分工），
+ * 与「待同步」的旧读法同源但改名「待回写」——改动会自动回写，这不是欠账 */
+.sync-strip-item--ahead,
+.sync-strip-item--ahead b { color: var(--amber-strong); }
+
+/* 领先明细 / 落后白话：注解不是操作，用 faint（同侧栏「不回写」注记的口径） */
+.sync-strip-detail {
+  font-size: var(--fs-micro);
+  color: var(--faint);
+}
 
 /* 向左滑出的浮条（方案 D 镜像）。
  * justify-content: flex-end 是关键：内容贴住右缘，宽度由 0 增长时最右侧先出现、
@@ -482,15 +514,18 @@ select.input {
   top: 50%;
   right: calc(100% + var(--space-2));
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   justify-content: flex-end;
-  gap: var(--space-2);
+  gap: var(--space-1);
   width: max-content;
   max-width: 0;
-  height: var(--control-h);
+  min-height: var(--control-h);
   padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--radius-full-pill);
+  /* 多行浮条不再是单行胶囊：按弹层圆角 8px（--radius-featured，DESIGN.md §5.2）；
+   * 保留 pill token 的引用点只剩折叠态的 .sync-lamp 本体 */
+  border-radius: var(--radius-featured);
   background-color: var(--panel);
   box-shadow: var(--shadow-lg);
   white-space: nowrap;
@@ -505,8 +540,8 @@ select.input {
 
 .syncbox:hover .sync-strip,
 .syncbox.is-open .sync-strip {
-  max-width: 380px;
-  padding: 0 var(--space-3);
+  max-width: 480px;
+  padding: var(--space-2) var(--space-3);
   border-color: var(--line);
   opacity: 1;
   visibility: visible;
@@ -517,6 +552,21 @@ select.input {
 
 .syncbox.is-open .sync-strip {
   border-color: var(--line-strong);
+}
+
+/* 多行浮条的一行：贴右缘继承自父级的 align-items，行内仍从右往左读 */
+.sync-strip-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.sync-strip-row--meta {
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--line-soft);
+  align-self: stretch;
 }
 
 .sync-strip-acts {

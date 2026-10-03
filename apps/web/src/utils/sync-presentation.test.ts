@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aheadLabel, behindLabel, capsuleCount, latestSyncAt, syncLamp } from './sync-presentation.js'
+import { aheadBreakdownText, aheadLabel, behindLabel, capsuleFolded, latestSyncAt, syncLamp } from './sync-presentation.js'
 
 describe('syncLamp', () => {
   it('同步中优先于其他一切（包括失败与积压）', () => {
@@ -44,7 +44,7 @@ describe('latestSyncAt', () => {
   })
 })
 
-describe('双向差异呈现（aheadLabel / behindLabel / capsuleCount）', () => {
+describe('双向差异呈现（aheadLabel / behindLabel / capsuleFolded / aheadBreakdownText）', () => {
   it('落后为 0 时不渲染 ↓', () => {
     expect(behindLabel({ ahead: 0, behind: 0, behindIsExact: true })).toBe(null)
   })
@@ -65,14 +65,38 @@ describe('双向差异呈现（aheadLabel / behindLabel / capsuleCount）', () =
     expect(aheadLabel(null)).toBe(null)
   })
 
-  it('折叠态计数：待推送优先，其次落后，两侧干净显示待推送数本身', () => {
-    expect(capsuleCount(4, { ahead: 2, behind: 8, behindIsExact: true })).toEqual({ text: '4', behind: false })
-    expect(capsuleCount(0, { ahead: 2, behind: 8, behindIsExact: true })).toEqual({ text: '↓8', behind: true })
-    expect(capsuleCount(0, { ahead: 0, behind: 0, behindIsExact: true })).toEqual({ text: '0', behind: false })
-    expect(capsuleCount(null, null)).toEqual({ text: '—', behind: false })
+  it('折叠态：失败压过一切（红色失败数是唯一显示，界面稿 v0.3）', () => {
+    const folded = capsuleFolded(2, 5, { ahead: 5, behind: 8, behindIsExact: true })
+    expect(folded).toEqual({ parts: [{ text: '失败 2', kind: 'failed' }], synced: false })
   })
 
-  it('折叠态计数：探测失败时不落入落后分支', () => {
-    expect(capsuleCount(0, { ahead: 0, behind: 0, behindIsExact: false, probeError: 'x' })).toEqual({ text: '0', behind: false })
+  it('折叠态：两侧都有 → 双计数并排；只有一侧 → 只显示那一侧', () => {
+    expect(capsuleFolded(0, 3, { ahead: 3, behind: 8, behindIsExact: true })).toEqual({
+      parts: [
+        { text: '↑3', kind: 'ahead' },
+        { text: '↓8', kind: 'behind' },
+      ],
+      synced: false,
+    })
+    expect(capsuleFolded(0, 0, { ahead: 2, behind: 0, behindIsExact: true }).parts).toEqual([{ text: '↑2', kind: 'ahead' }])
+    expect(capsuleFolded(0, 0, { ahead: 0, behind: 8, behindIsExact: false }).parts).toEqual([{ text: '↓8+', kind: 'behind' }])
+  })
+
+  it('折叠态：两侧皆 0 → 已同步（没事不占视觉）', () => {
+    expect(capsuleFolded(0, 0, { ahead: 0, behind: 0, behindIsExact: true })).toEqual({ parts: [], synced: true })
+  })
+
+  it('折叠态：探测失败时显示「未知」而不是已同步——不知道就不能宣布一致', () => {
+    expect(capsuleFolded(0, 0, { ahead: 0, behind: 0, behindIsExact: false, probeError: '超时' })).toEqual({
+      parts: [{ text: '未知', kind: 'unknown' }],
+      synced: false,
+    })
+  })
+
+  it('领先明细：只列非零类目，空/未取回返回 null', () => {
+    expect(aheadBreakdownText(undefined)).toBe(null)
+    expect(aheadBreakdownText({ tags: 0, folder: 0, title: 0, note: 0, other: 0 })).toBe(null)
+    expect(aheadBreakdownText({ tags: 8, folder: 4, title: 0, note: 2, other: 0 })).toBe('8 条改标签 · 4 条改收藏夹 · 2 条改备注')
+    expect(aheadBreakdownText({ tags: 0, folder: 1, title: 0, note: 0, other: 3 })).toBe('1 条改收藏夹 · 3 条其它')
   })
 })

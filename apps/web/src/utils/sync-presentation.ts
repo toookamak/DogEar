@@ -79,15 +79,47 @@ export function behindLabel(diff: DiffCounts | null): string | null {
 }
 
 /**
- * 折叠态主计数：待推送优先（它是本地动作、可直接消掉），其次落后，最后是占位。
- * 两侧都干净时显示待推送数本身（通常为 0），维持既有读法。
+ * 折叠态呈现（界面稿 v0.3 的确认口径，2026-10-03 落地）：
+ * - **失败压过一切**：队列里有推不过去的条目时只显示红色失败数——它比差异更紧急；
+ * - **双计数并排**：↑领先 / ↓落后 两侧都有时并排（分隔线交给 CSS），只有一侧时
+ *   只显示那一侧，不诱导去点无内容的按钮；
+ * - **两侧皆 0**：`synced`——界面只留绿点 + 「已同步」，没事时不占视觉；
+ * - **探测失败 ≠ 已同步**：不知道远端状态就不能宣布「已同步」，显示「未知」。
  */
-export function capsuleCount(
-  pendingPush: number | null,
-  diff: DiffCounts | null,
-): { text: string; behind: boolean } {
-  if ((pendingPush ?? 0) > 0) return { text: String(pendingPush), behind: false }
+export interface CapsulePart {
+  text: string
+  kind: 'ahead' | 'behind' | 'failed' | 'unknown'
+}
+
+export interface CapsuleFolded {
+  parts: CapsulePart[]
+  synced: boolean
+}
+
+export function capsuleFolded(failedPush: number, pendingPush: number | null, diff: DiffCounts | null): CapsuleFolded {
+  if (failedPush > 0) return { parts: [{ text: `失败 ${failedPush}`, kind: 'failed' }], synced: false }
+  const ahead = aheadLabel(diff)
   const behind = behindLabel(diff)
-  if (behind) return { text: behind, behind: true }
-  return { text: pendingPush == null ? '—' : String(pendingPush), behind: false }
+  const parts: CapsulePart[] = []
+  if (ahead) parts.push({ text: ahead, kind: 'ahead' })
+  if (behind) parts.push({ text: behind, kind: 'behind' })
+  if (parts.length > 0) return { parts, synced: false }
+  // 走到这里说明 ahead/behind 都没渲染：要么真是 0，要么探测失败（behind 不可信）
+  if (diff?.probeError) return { parts: [{ text: '未知', kind: 'unknown' }], synced: false }
+  return { parts: [], synced: true }
+}
+
+/**
+ * 领先明细一行文案（界面稿 v0.3：「领先的改动记在队列里，明细可以给全」）。
+ * 只列非零类目，全零或未取回（接口默认不算 breakdown）时返回 null。
+ */
+export function aheadBreakdownText(b?: { tags: number; folder: number; title: number; note: number; other: number }): string | null {
+  if (!b) return null
+  const segments: string[] = []
+  if (b.tags > 0) segments.push(`${b.tags} 条改标签`)
+  if (b.folder > 0) segments.push(`${b.folder} 条改收藏夹`)
+  if (b.title > 0) segments.push(`${b.title} 条改标题`)
+  if (b.note > 0) segments.push(`${b.note} 条改备注`)
+  if (b.other > 0) segments.push(`${b.other} 条其它`)
+  return segments.length > 0 ? segments.join(' · ') : null
 }

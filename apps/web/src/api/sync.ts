@@ -70,8 +70,10 @@ export const syncApi = {
    */
   pull: (opts?: { intoInbox?: boolean; catchUp?: boolean }) =>
     api.post<PullSummary>('/api/sync/pull', { intoInbox: opts?.intoInbox ?? true, catchUp: opts?.catchUp === true }),
-  /** 差异探测。**不要轮询**（额度保护 §3.6.2）：仅在打开/展开胶囊与同步动作后取一次 */
-  diff: () => api.get<SyncDiffResponse>('/api/sync/diff'),
+  /** 差异探测。**不要轮询**（额度保护 §3.6.2）：仅在打开/展开胶囊与同步动作后取一次。
+   *  `withBreakdown` 要读全部 pending payload，代价更高——只在展开胶囊时带。 */
+  diff: (withBreakdown = false) =>
+    api.get<SyncDiffResponse>('/api/sync/diff', withBreakdown ? { breakdown: '1' } : undefined),
   conflicts: {
     list: (resolution = 'pending') =>
       api.get<{ items: ConflictRecord[] }>('/api/conflicts', { resolution }),
