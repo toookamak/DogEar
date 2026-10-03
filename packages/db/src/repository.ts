@@ -149,6 +149,12 @@ export type BookmarkRepository = {
   get: (id: string, includeDeleted?: boolean) => Promise<unknown | undefined>
   findByRaindropId: (raindropId: string) => Promise<unknown | undefined>
   findByRaindropIds: (raindropIds: string[]) => Promise<unknown[]>
+  /**
+   * 取一批书签已挂的标签 id（2026-10-02，Raindrop 拉取侧回填用）。
+   * 拉回时要判断「本地是否已有标签」才能决定回填还是跳过——逐条查 N 次不划算，
+   * 且 D1 单次调用有 50 子请求上限，故必须批量。
+   */
+  findTagIdsByBookmarkIds: (bookmarkIds: string[]) => Promise<Map<string, string[]>>
   findByUrls: (urls: string[]) => Promise<unknown[]>
   updateMany: (patches: Array<{ id: string } & Record<string, unknown>>) => Promise<void>
   createMany: (inputs: BookmarkInput[]) => Promise<unknown[]>
@@ -738,6 +744,28 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
     const unique = [...new Set(urls.filter(Boolean))]
     if (!unique.length) return []
     return db.select().from(bookmarks).where(and(inArray(bookmarks.url, unique), isNull(bookmarks.deletedAt))).all()
+  }
+  repository.findTagIdsByBookmarkIds = async (bookmarkIds) => {
+    const mapping = new Map<string, string[]>()
+    const unique = [...new Set(bookmarkIds.filter(Boolean))]
+    for (const id of unique) mapping.set(id, [])
+    if (!unique.length) return mapping
+    const rows = await db.select({ bookmarkId: bookmarkTags.bookmarkId, tagId: bookmarkTags.tagId })
+      .from(bookmarkTags)
+      // 分片：批量回填一次可能要查几百条，D1 单语句绑定参数上限约 100
+      .where(inArray(bookmarkTags.bookmarkId, unique.slice(0, 90)))
+      .all() as Array<{ bookmarkId: string; tagId: string }>
+    let chunkStart = 90
+    while (chunkStart < unique.length) {
+      const more = await db.select({ bookmarkId: bookmarkTags.bookmarkId, tagId: bookmarkTags.tagId })
+        .from(bookmarkTags)
+        .where(inArray(bookmarkTags.bookmarkId, unique.slice(chunkStart, chunkStart + 90)))
+        .all() as Array<{ bookmarkId: string; tagId: string }>
+      rows.push(...more)
+      chunkStart += 90
+    }
+    for (const row of rows) mapping.get(row.bookmarkId)?.push(row.tagId)
+    return mapping
   }
   repository.updateMany = async (patches) => {
     if (!patches.length) return

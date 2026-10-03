@@ -66,16 +66,32 @@ export async function importRaindropPage(
   const byUrl = repository.findByUrls
     ? await repository.findByUrls(result.items.map((rd) => rd.link))
     : []
-  const { fresh, matched } = partitionRaindropItems(result.items, [...byId, ...byUrl] as RaindropLocal[])
+  const locals = [...byId, ...byUrl] as RaindropLocal[]
+  if (repository.findTagIdsByBookmarkIds) {
+    const tagMap = await repository.findTagIdsByBookmarkIds(locals.map((row) => String(row.id)))
+    for (const row of locals) row.tagIds = tagMap.get(String(row.id)) ?? []
+  }
+  const { fresh, matched } = partitionRaindropItems(result.items, locals)
   summary.skipped = matched.length
 
-  const patches = collectMetadataPatches(matched)
-  if (patches.length > 0 && repository.updateMany) {
+  // 2026-10-02：已存在的书签也回填收藏夹与标签。
+  // 这是「之前导入过、现在重新导入能不能补上归类」的关键——不回填的话，
+  // 老数据永远是「有标题没归类」，用户会以为导入没生效。
+  const reconcile = collectMetadataPatches(matched, taxonomy ?? undefined)
+  if (reconcile.metadata.length > 0 && repository.updateMany) {
     try {
-      await repository.updateMany(patches)
-      summary.filled = patches.length
+      await repository.updateMany(reconcile.metadata)
+      summary.filled = reconcile.metadata.length
     } catch (e) {
-      summary.errors.push(`回填封面失败：${e instanceof Error ? e.message : String(e)}`)
+      summary.errors.push(`回填失败：${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  if (reconcile.tagAttachments.length > 0 && repository.attachTagsBatch) {
+    try {
+      await repository.attachTagsBatch(reconcile.tagAttachments)
+      summary.tagged += reconcile.tagAttachments.reduce((sum, pair) => sum + pair.tagIds.length, 0)
+    } catch (e) {
+      summary.errors.push(`回填标签失败：${e instanceof Error ? e.message : String(e)}`)
     }
   }
 

@@ -99,6 +99,11 @@ export async function pullFromRaindrop(
       ? await repository.findByUrls(items.map((rd) => rd.link))
       : []
     const locals = [...byId, ...byUrl] as RaindropLocal[]
+    // 回填需要知道「本地这条已经挂了哪些标签」——逐条查会在 D1 上超子请求上限
+    if (repository.findTagIdsByBookmarkIds) {
+      const tagMap = await repository.findTagIdsByBookmarkIds(locals.map((row) => String(row.id)))
+      for (const row of locals) row.tagIds = tagMap.get(String(row.id)) ?? []
+    }
     const { fresh, matched } = partitionRaindropItems(items, locals)
 
     if (fresh.length > 0) {
@@ -142,13 +147,22 @@ export async function pullFromRaindrop(
       }
     }
 
-    const patches = collectMetadataPatches(matched)
-    if (patches.length > 0 && repository.updateMany) {
+    const reconcile = collectMetadataPatches(matched, taxonomy)
+    if (reconcile.metadata.length > 0 && repository.updateMany) {
       try {
-        await repository.updateMany(patches)
-        summary.filled += patches.length
+        await repository.updateMany(reconcile.metadata)
+        summary.filled += reconcile.metadata.length
       } catch (error) {
-        summary.errors.push(`回填封面失败：${error instanceof Error ? error.message : String(error)}`)
+        summary.errors.push(`回填失败：${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    // 已存在的书签补标签/收藏夹（2026-10-02）：这是「重新导入能补上归类」的关键
+    if (reconcile.tagAttachments.length > 0) {
+      try {
+        await repository.attachTagsBatch(reconcile.tagAttachments)
+        summary.tagged += reconcile.tagAttachments.reduce((sum, pair) => sum + pair.tagIds.length, 0)
+      } catch (error) {
+        summary.errors.push(`回填标签失败：${error instanceof Error ? error.message : String(error)}`)
       }
     }
 

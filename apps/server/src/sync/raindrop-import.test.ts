@@ -180,7 +180,7 @@ describe('importRaindropPage', () => {
     expect(folders[0].raindropId).toBe('100')
   })
 
-  it('落在未同步的远端集合里：folderId 留空并计入 unmappedCollections，不静默归类', async () => {
+  it('远端集合未同步：folderId 留空并计入 unmappedCollections，不静默归类', async () => {
     const { repository, bookmarks, folders } = makeRepo()
     const client = fakeClient([[{ ...makeItems(1)[0], collection: { $id: 999 } }]])
 
