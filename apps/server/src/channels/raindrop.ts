@@ -181,12 +181,13 @@ export class RaindropClient {
     }
   }
 
-  async createBookmark(data: { url: string; title?: string; note?: string; tags?: string[] }): Promise<RaindropBookmark> {
+  async createBookmark(data: { url: string; title?: string; note?: string; tags?: string[]; collection?: { $id: number } }): Promise<RaindropBookmark> {
     const body = {
       link: data.url,
       title: data.title,
       note: data.note,
       tags: data.tags,
+      collection: data.collection,
     }
 
     const response = await this.request<{ result: boolean; item: RaindropBookmark }>('/raindrop', {
@@ -195,6 +196,28 @@ export class RaindropClient {
     })
 
     return response.item
+  }
+
+  /**
+   * 批量更新（PUT /raindrops/{collectionId}，ids 单次 ≤ 100）。批次 0.8，额度保护核心：
+   * 200 条改动 = 2 次调用而非 200 次（限流 120 请求/分钟）。
+   *
+   * 语义为 2026-10-03 用真实 token 实测（契约见 docs/modules/20260904_同步功能设计.md §3.1.1）：
+   * - path 的 collectionId 是**作用域**：只影响该集合内的 ids，不在其中的条目被静默跳过——
+   *   所以调用方必须按条目「远端当前所在集合」分组，宁可不攒也不能错攒；
+   * - tags 是**追加**：把列出的标签加到每条上，不减已有标签（减标签只能走单条替换路径）；
+   * - tags 空数组会**清空**远端标签——调用方必须剔除，这里再挡一层；
+   * - collection 携带时为移动目标，形态必须是 `{$id}`（`{id}` 会被静默忽略）。
+   */
+  async updateBookmarksBulk(collectionId: number, data: { ids: number[]; tags?: string[]; collection?: { $id: number } }): Promise<void> {
+    if (!data.ids.length) return
+    const body: Record<string, unknown> = { ids: data.ids }
+    if (data.tags?.length) body.tags = data.tags
+    if (data.collection) body.collection = data.collection
+    await this.request(`/raindrops/${collectionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    })
   }
 
   async updateBookmark(raindropId: number, data: Record<string, unknown>): Promise<RaindropBookmark> {

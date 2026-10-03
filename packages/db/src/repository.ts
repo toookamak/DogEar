@@ -220,7 +220,7 @@ export type BookmarkRepository = {
 
 type ResourceRepositories = {
   scenes: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean>; merge: (sourceId: string, targetId: string) => Promise<SceneMergeResult> }
-  folders: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean>; ensureByRaindropId: (items: Array<{ raindropId: number; name: string }>) => Promise<{ synced: number; created: number }> }
+  folders: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; update: (id: string, input: Record<string, unknown>) => Promise<unknown | undefined>; remove: (id: string) => Promise<boolean>; ensureByRaindropId: (items: Array<{ raindropId: number; name: string }>) => Promise<{ synced: number; created: number }>; raindropIdOf: (id: string) => Promise<string | null> }
   tags: { list: () => Promise<unknown[]>; create: (input: Record<string, unknown>) => Promise<unknown>; remove: (id: string) => Promise<boolean>; rename: (id: string, input: { name: string }) => Promise<TagRenameResult>; merge: (sourceId: string, targetId: string) => Promise<TagMergeResult>; ensureMany: (names: string[]) => Promise<Map<string, string>> }
   suggestions: { list: (bookmarkId: string, status?: string) => Promise<PageResult<unknown>>; create: (input: Record<string, unknown>) => Promise<unknown>; resolve: (id: string, status: string) => Promise<unknown | undefined>; accept: (id: string, actor?: string) => Promise<unknown | undefined> }
   operationLog: {
@@ -1050,6 +1050,15 @@ export function createBookmarkRepository(db: Db, options: RepositoryOptions = {}
         await db.insert(folders).values(chunk).run()
       }
       return { synced: items.length, created: records.length }
+    },
+    /**
+     * folderId → 远端 Raindrop collection id（批次 0.5 消费器反查用）。
+     * 未映射、为空或 folder 不存在都返回 null，由调用方决定挂起或降级。
+     */
+    raindropIdOf: async (id) => {
+      const rows = await db.select({ raindropId: folders.raindropId }).from(folders).where(eq(folders.id, id)).all()
+      const raw = rows[0]?.raindropId
+      return raw === null || raw === undefined || String(raw) === '' ? null : String(raw)
     },
   }
   repository.tags = {

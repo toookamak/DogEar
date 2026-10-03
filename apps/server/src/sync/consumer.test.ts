@@ -12,6 +12,7 @@ interface FakeClientCalls {
   created: Array<Record<string, unknown>>
   updated: Array<{ id: number; data: Record<string, unknown> }>
   deleted: number[]
+  bulk?: Array<{ collectionId: number; data: { ids: number[]; tags?: string[]; collection?: { $id: number } } }>
   failOn?: (action: string) => Error | undefined
 }
 
@@ -33,6 +34,12 @@ function makeFakeClient(calls: FakeClientCalls) {
       const error = calls.failOn?.('delete')
       if (error) throw error
       calls.deleted.push(id)
+    },
+    async updateBookmarksBulk(collectionId: number, data: { ids: number[]; tags?: string[]; collection?: { $id: number } }) {
+      const error = calls.failOn?.('bulk')
+      if (error) throw error
+      calls.bulk = calls.bulk ?? []
+      calls.bulk.push({ collectionId, data })
     },
   }
 }
@@ -56,10 +63,16 @@ function makeItem(overrides: Partial<SyncQueueItem>): SyncQueueItem {
 }
 
 /** 内存版 sync_queue + 书签仓，覆盖消费器用到的最小面（批量接口） */
-function makeRepo(items: SyncQueueItem[]) {
+function makeRepo(items: SyncQueueItem[], options?: { folderRemote?: Map<string, string | null> }) {
   const bookmarks = new Map<string, Record<string, unknown>>()
+  const folderRemote = options?.folderRemote ?? new Map<string, string | null>()
   const repo: SyncQueueRepositoryShape & { bookmarks: Map<string, Record<string, unknown>> } = {
     bookmarks,
+    folders: {
+      async raindropIdOf(folderId: string) {
+        return folderRemote.get(folderId) ?? null
+      },
+    },
     syncQueue: {
       async getPending(limit = 50) {
         return items.filter((i) => i.status === 'pending').slice(0, limit)
@@ -177,5 +190,74 @@ describe('sync queue consumer (L2)', () => {
     const summary = await processSyncQueue(repo, async () => makeFakeClient(calls))
     expect(summary.succeeded).toBe(1)
     expect(calls.updated).toEqual([{ id: 111222, data: { url: 'https://example.com' } }])
+  })
+
+  // ── 批次 0.5/0.6/0.8：payload 契约与攒批（语义 2026-10-03 实测，见同步设计 §3.1.1）──
+
+  it('update carries full tag set only when edited, and [] clears remote tags', async () => {
+    const item = makeItem({ action: 'update', payload: JSON.stringify({ url: 'https://example.com', raindropId: '1', tags: ['a', 'b'] }) })
+    const cleared = makeItem({ id: 'q-2', action: 'update', payload: JSON.stringify({ url: 'https://example.com', raindropId: '2', tags: [] }) })
+    const repo = makeRepo([item, cleared])
+    const calls: FakeClientCalls = { created: [], updated: [], deleted: [] }
+    await processSyncQueue(repo, async () => makeFakeClient(calls))
+    expect(calls.updated).toEqual([
+      { id: 1, data: { url: 'https://example.com', tags: ['a', 'b'] } },
+      { id: 2, data: { url: 'https://example.com', tags: [] } },
+    ])
+  })
+
+  it('update resolves folderId to remote collection and suspends when unmapped', async () => {
+    const mapped = makeItem({ action: 'update', payload: JSON.stringify({ url: 'https://example.com', raindropId: '1', folderId: 'f-1' }) })
+    const unmapped = makeItem({ id: 'q-2', action: 'update', payload: JSON.stringify({ url: 'https://example.com', raindropId: '2', folderId: 'f-x' }) })
+    const removed = makeItem({ id: 'q-3', action: 'update', payload: JSON.stringify({ url: 'https://example.com', raindropId: '3', folderId: null }) })
+    const repo = makeRepo([mapped, unmapped, removed], { folderRemote: new Map([['f-1', '42']]) })
+    const calls: FakeClientCalls = { created: [], updated: [], deleted: [] }
+    const summary = await processSyncQueue(repo, async () => makeFakeClient(calls))
+    expect(calls.updated).toEqual([
+      { id: 1, data: { url: 'https://example.com', collection: { $id: 42 } } },
+      { id: 3, data: { url: 'https://example.com', collection: { $id: -1 } } },
+    ])
+    expect(summary.failed).toBe(1)
+    expect(unmapped.error).toContain('未映射')
+  })
+
+  it('groups pure add-tag updates into one bulk call per (source collection, tag set)', async () => {
+    const mkAdd = (id: string, raindropId: string, src: number) => makeItem({
+      id, action: 'update',
+      payload: JSON.stringify({ url: 'https://example.com', raindropId, addTags: ['js'], srcCollection: src }),
+    })
+    const repo = makeRepo([mkAdd('q-1', '1', 10), mkAdd('q-2', '2', 10), mkAdd('q-3', '3', 20)])
+    const calls: FakeClientCalls = { created: [], updated: [], deleted: [] }
+    const summary = await processSyncQueue(repo, async () => makeFakeClient(calls))
+    expect(summary.succeeded).toBe(3)
+    expect(calls.updated).toHaveLength(0)
+    expect(calls.bulk).toEqual([
+      { collectionId: 10, data: { ids: [1, 2], tags: ['js'] } },
+      { collectionId: 20, data: { ids: [3], tags: ['js'] } },
+    ])
+  })
+
+  it('never sends bulk with empty tags and fails contract-breaking addTags payloads', async () => {
+    const emptyAdd = makeItem({ action: 'update', payload: JSON.stringify({ url: 'https://example.com', raindropId: '1', addTags: [], srcCollection: 10 }) })
+    const mixed = makeItem({ id: 'q-2', action: 'update', payload: JSON.stringify({ url: 'https://example.com', raindropId: '2', title: 't', addTags: ['js'], srcCollection: 10 }) })
+    const missingSrc = makeItem({ id: 'q-3', action: 'update', payload: JSON.stringify({ url: 'https://example.com', raindropId: '3', addTags: ['js'] }) })
+    const repo = makeRepo([emptyAdd, mixed, missingSrc])
+    const calls: FakeClientCalls = { created: [], updated: [], deleted: [] }
+    const summary = await processSyncQueue(repo, async () => makeFakeClient(calls))
+    expect(calls.bulk ?? []).toHaveLength(0)
+    expect(summary.failed).toBe(3)
+    expect(mixed.error).toContain('不得与')
+  })
+
+  it('routes update without raindropId through create with tags and collection', async () => {
+    const item = makeItem({
+      action: 'update',
+      payload: JSON.stringify({ url: 'https://example.com', folderId: 'f-1', tags: ['a'] }),
+    })
+    const repo = makeRepo([item], { folderRemote: new Map([['f-1', '42']]) })
+    const calls: FakeClientCalls = { created: [], updated: [], deleted: [] }
+    const summary = await processSyncQueue(repo, async () => makeFakeClient(calls))
+    expect(summary.succeeded).toBe(1)
+    expect(calls.created).toEqual([{ url: 'https://example.com', tags: ['a'], collection: { $id: 42 } }])
   })
 })

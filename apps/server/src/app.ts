@@ -328,26 +328,74 @@ export function createApp(repository: BookmarkRepository, options: AppOptions = 
     }
   }
 
-  /** 书签写操作后的推送入队；任何失败都不影响主写操作（队列消费侧对未入队变更无感知） */
+  /**
+   * 书签写操作后的推送入队；任何失败都不影响主写操作（队列消费侧对未入队变更无感知）。
+   *
+   * payload 契约（批次 0.5/0.6，语义实测见同步设计 §3.1.1）：
+   * - url / raindropId 是定位符，恒带；
+   * - title / note / tags / folderId **只在被编辑时携带**——单条 PUT 不带的字段远端保持
+   *   原值（部分更新语义），tags 一旦携带必须是全量集合（整体替换，[] = 清空）；
+   * - addTags + srcCollection 是批量加标签的攒批形态（追加语义），两者必须成对出现；
+   * - folderId 存本地 id，消费时反查 folders.raindrop_id（映射可能在排队期间才建立）。
+   */
   async function enqueueRaindropSync(
     action: 'create' | 'update' | 'delete',
-    bookmark: { id: string; url?: string | null; title?: string | null; note?: string | null; raindropId?: string | null },
+    bookmark: {
+      id: string
+      url?: string | null
+      title?: string | null
+      note?: string | null
+      raindropId?: string | null
+      tags?: string[]
+      addTags?: string[]
+      srcCollection?: number
+      folderId?: string | null
+    },
   ): Promise<boolean> {
     try {
       if (!(await hasEnabledRaindropChannel())) return false
-      const payload = JSON.stringify({
+      const payload: Record<string, unknown> = {
         url: bookmark.url ?? undefined,
-        title: bookmark.title ?? undefined,
-        note: bookmark.note ?? undefined,
         raindropId: bookmark.raindropId ?? undefined,
-      })
-      await repository.syncQueue.enqueue(action, 'bookmark', bookmark.id, 'raindrop', payload)
+      }
+      if ('title' in bookmark) payload.title = bookmark.title ?? undefined
+      if ('note' in bookmark) payload.note = bookmark.note ?? undefined
+      if ('tags' in bookmark) payload.tags = bookmark.tags ?? undefined
+      if ('folderId' in bookmark) payload.folderId = bookmark.folderId ?? null
+      if ('addTags' in bookmark) payload.addTags = bookmark.addTags
+      if ('srcCollection' in bookmark) payload.srcCollection = bookmark.srcCollection
+      await repository.syncQueue.enqueue(action, 'bookmark', bookmark.id, 'raindrop', JSON.stringify(payload))
       // 入队即视为「待推送」，直到消费成功后由消费器标回 synced
       if (action !== 'delete') await repository.update(bookmark.id, { syncStatus: 'pending' })
       return true
     } catch {
       return false
     }
+  }
+
+  /**
+   * 批量加标签攒批的分组依据：书签远端当前所在集合。
+   * 优先本地 folder 映射（最新、最权威）；folder 未建/未映射时退回拉取时记录的
+   * raindropExtras.collectionId（覆盖「从 Unsorted 拉回」「收藏夹被删后 folder 置空」；
+   * -99 Trash 不可作作用域，排除）。都拿不到返回 null → 该条退回单条全量路径。
+   * 依赖调用方传入 folderRaindropMap（一次 folders.list() 的内存映射，Map<folderId, raindropId|null>）。
+   */
+  function resolveSrcCollection(
+    record: { folderId?: string | null; raindropExtras?: unknown },
+    folderRaindropMap: Map<string, number | null>,
+  ): number | null {
+    if (record.folderId) {
+      const mapped = folderRaindropMap.get(record.folderId)
+      if (mapped !== undefined && mapped !== null) return mapped
+    }
+    if (typeof record.raindropExtras === 'string' && record.raindropExtras) {
+      try {
+        const extras = JSON.parse(record.raindropExtras) as { collectionId?: unknown }
+        const id = Number(extras.collectionId)
+        if (Number.isInteger(id) && id !== 0 && id !== -99) return id
+      } catch { /* extras 不是 JSON 时忽略 */ }
+    }
+    return null
   }
 
   app.get('/health', (c) => c.json({ ok: true }))
@@ -663,9 +711,46 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
       if (existing) snapshots.push({ id: existing.id, status: existing.status ?? 'unread', folderId: existing.folderId ?? null, deleted: Boolean(existing.deletedAt) })
     }
     const result = await repository.batchUpdate(body.data as any)
-    // 批量同样按通道入队：删除走远端删除，其余走更新
-    for (const updated of result.updated) {
-      await enqueueRaindropSync(body.data.deleted ? 'delete' : 'update', updated as { id: string; url?: string; title?: string | null; note?: string | null; raindropId?: string | null })
+    // 批量同样按通道入队：删除走远端删除；更新只在触及回写范围（folder/tag）时入队——
+    // status/scene 等本地维度不回写（决策二/§3.3），不为一堆 no-op PUT 浪费 Raindrop 额度
+    if (body.data.deleted) {
+      for (const updated of result.updated) {
+        await enqueueRaindropSync('delete', updated as { id: string; raindropId?: string | null })
+      }
+    } else if (await hasEnabledRaindropChannel()) {
+      const touchesFolder = 'folderId' in body.data
+      const touchesTags = (body.data.addTagIds?.length ?? 0) > 0 || (body.data.removeTagIds?.length ?? 0) > 0
+      if (touchesFolder || touchesTags) {
+        type BatchRow = { id: string; url: string; raindropId: string | null; folderId: string | null; raindropExtras: string | null }
+        // 各映射一次取全，循环内只做内存查表（D1 子请求预算）
+        const folderRows = (await repository.folders.list()) as Array<{ id: string; raindropId: string | null }>
+        const folderRemote = new Map(folderRows.map((f) => [f.id, f.raindropId ? Number(f.raindropId) : null]))
+        const tagRows = touchesTags ? (await repository.tags.list()) as Array<{ id: string; name: string }> : []
+        const nameOfTag = new Map(tagRows.map((t) => [t.id, t.name]))
+        // 纯追加 = 只加标签、不动收藏夹也不删标签：可入 addTags 攒批路径
+        const addedNames = (body.data.addTagIds ?? []).map((id) => nameOfTag.get(id)).filter((n): n is string => Boolean(n))
+        const pureAdd = touchesTags && !(body.data.removeTagIds?.length) && !touchesFolder && addedNames.length > 0
+        const rows = result.updated as BatchRow[]
+        // 不能攒批的（无 raindropId / 源集合解析不到 / 非纯追加）退回全量替换路径，需查编辑后完整标签集
+        const needFullSet = touchesTags
+          ? rows.filter((row) => !pureAdd || !row.raindropId || resolveSrcCollection(row, folderRemote) === null)
+          : []
+        const tagIdsByBookmark = needFullSet.length ? await repository.findTagIdsByBookmarkIds(needFullSet.map((row) => row.id)) : new Map<string, string[]>()
+        for (const row of rows) {
+          const syncInput: Parameters<typeof enqueueRaindropSync>[1] = { id: row.id, url: row.url, raindropId: row.raindropId }
+          if (touchesFolder) syncInput.folderId = row.folderId
+          if (touchesTags) {
+            const bulkable = pureAdd && row.raindropId && resolveSrcCollection(row, folderRemote) !== null
+            if (bulkable) {
+              syncInput.addTags = addedNames
+              syncInput.srcCollection = resolveSrcCollection(row, folderRemote) as number
+            } else {
+              syncInput.tags = (tagIdsByBookmark.get(row.id) ?? []).map((id) => nameOfTag.get(id)).filter((n): n is string => Boolean(n))
+            }
+          }
+          await enqueueRaindropSync('update', syncInput)
+        }
+      }
     }
     const log = await repository.operationLog.append({
       actor: 'user',
@@ -717,10 +802,26 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
       }, 409)
     }
     const { confirmStructure: _confirmStructure, version: _version, ...changes } = input.data
-    const updated = await repository.update(c.req.param('bookmarkId'), changes)
+    const updated = await repository.update(c.req.param('bookmarkId'), changes) as
+      | { id: string; url: string; title: string | null; note: string | null; raindropId: string | null; folderId: string | null; tags?: Array<{ id: string; name: string }> }
+      | undefined
     if (!updated) return skillError(c, 'BOOKMARK_DELETED', 409, 'Bookmark is deleted')
     await repository.operationLog.append({ actor: 'user', action: 'update', targetType: 'bookmark', targetId: c.req.param('bookmarkId') })
-    await enqueueRaindropSync('update', updated as { id: string; url?: string; title?: string | null; note?: string | null; raindropId?: string | null })
+    // 只在编辑触及回写范围（title/note/folder/tag）时入队：status/scene/important 等
+    // 本地维度不回写 Raindrop（决策二/§3.3），推一次 no-op PUT 只是浪费额度
+    const touchCount = ['title', 'note', 'folderId', 'tagIds'].filter((key) => key in changes).length
+    if (touchCount > 0) {
+      await enqueueRaindropSync('update', {
+        id: updated.id,
+        url: updated.url,
+        raindropId: updated.raindropId ?? null,
+        ...('title' in changes ? { title: updated.title } : {}),
+        ...('note' in changes ? { note: updated.note } : {}),
+        ...('folderId' in changes ? { folderId: updated.folderId ?? null } : {}),
+        // updated.tags 经 readRelations 回读，是编辑后的完整集合（替换语义）
+        ...('tagIds' in changes ? { tags: ((updated.tags ?? []) as Array<{ name: string }>).map((t) => t.name) } : {}),
+      })
+    }
     return c.json(serializeBookmark(updated))
   })
 
