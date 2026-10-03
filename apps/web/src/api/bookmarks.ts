@@ -28,6 +28,13 @@ export const bookmarksApi = {
   list: (params?: BookmarkListParams) => api.get<PageResult<BookmarkResponse>>('/api/bookmarks', params as Record<string, string | undefined>),
   search: (params?: BookmarkListParams) => api.get<PageResult<BookmarkResponse>>('/api/bookmarks/search', params as Record<string, string | undefined>),
   /**
+   * 全选匹配项的数据源（P1b 集合操作，2026-10-03）：按当前筛选取**全部** id 的瘦投影。
+   * 筛选口径与 /api/bookmarks 完全一致——列表里看到的就是选中的。2000 条 CAP 截断时
+   * `truncated=true`，界面必须如实提示而不是暗示「这就是全部」。
+   */
+  ids: (params?: BookmarkListParams) =>
+    api.get<{ ids: string[]; total: number; truncated: boolean }>('/api/bookmarks/ids', params as Record<string, string | undefined>),
+  /**
    * 端侧全量检索的瘦投影（2026-10-02，批次 2）。刻意不含 cover / excerpt：
    * 3412 条要常驻浏览器内存，带大字段会让传输量与占用翻数倍。
    */

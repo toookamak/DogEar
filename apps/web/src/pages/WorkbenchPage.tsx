@@ -13,6 +13,7 @@ import { SuggestionPanel } from '../components/suggestions/SuggestionPanel.js'
 import { EmptyState } from '../components/feedback/EmptyState.js'
 import { Skeleton } from '../components/feedback/Skeleton.js'
 import { ErrorMessage } from '../components/feedback/ErrorMessage.js'
+import { ConfirmDialog } from '../components/feedback/ConfirmDialog.js'
 import { bookmarksApi } from '../api/bookmarks.js'
 import { organizationApi } from '../api/organization.js'
 import type { BookmarkListParams } from '../api/bookmarks.js'
@@ -22,6 +23,7 @@ import { toast, errorMessage } from '../toast.js'
 import { presentationForAerr, nextSortOnSceneChange, DEFAULT_PRESENTATION } from '../utils/scene-presentation.js'
 import { scenesForPicker } from '../utils/scene-filtering.js'
 import { EMPTY_FILTERS, buildListParams, hasActiveFilters, type WorkbenchFilters } from '../utils/filters.js'
+import { BATCH_CHUNK_SIZE, BATCH_CONFIRM_THRESHOLD, chunkIds } from '../utils/batch.js'
 import { onOrgChanged } from '../org-events.js'
 
 const VIEW_STORAGE_KEY = 'dogear.workbench.view'
@@ -60,6 +62,10 @@ export function WorkbenchPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedBookmark, setSelectedBookmark] = useState<BookmarkResponse | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  /** 全选匹配项进行中（ids 端点可能翻几十页，按钮要有进行中态） */
+  const [selectingAll, setSelectingAll] = useState(false)
+  /** 影响面确认（P1b-2）：超阈值的批量改动先停在这里等用户点头 */
+  const [pendingBatch, setPendingBatch] = useState<{ data: Parameters<typeof bookmarksApi.batchUpdate>[0]; description: string } | null>(null)
   /** 整理模式（v0.8.0）：叠加在浏览之上的可进可退态，不改变当前筛选与滚动位置 */
   const [organizing, setOrganizing] = useState(false)
   const [showSaveForm, setShowSaveForm] = useState(false)
@@ -278,21 +284,78 @@ export function WorkbenchPage() {
     })
   }
 
-  const runBatch = async (data: Parameters<typeof bookmarksApi.batchUpdate>[0]) => {
+  /**
+   * 批量执行（P1b 重构）：
+   * - 影响面 > 阈值时先弹确认（P1b-2），把「将改哪几条、改成什么」摆出来再动手；
+   * - id 按块分片顺序调用（P1b-1）：全选匹配项可能选中上千条，一次请求既超
+   *   服务端 100 上限、也会在轨 A 撞 Workers 50 子请求限制；
+   * - 多分块时不再挂 toast 撤销——撤销 id 是按单次请求记的，挂一个会误导撤销范围，
+   *   删除类操作本身有回收站兜底。
+   */
+  const executeBatch = async (data: Parameters<typeof bookmarksApi.batchUpdate>[0]) => {
+    const chunks = chunkIds(data.ids)
+    let updated = 0
+    let skipped = 0
+    let lastUndoId: string | undefined
     try {
-      const result = await bookmarksApi.batchUpdate(data)
+      for (const chunk of chunks) {
+        const result = await bookmarksApi.batchUpdate({ ...data, ids: chunk })
+        updated += result.updated?.length ?? 0
+        skipped += result.skipped?.length ?? 0
+        lastUndoId = result.undoId
+      }
       setSelectedIds(new Set())
-      // 双入口撤销：Toast 直带撤销按钮（状态栏保留兜底）
-      if (result.undoId) offerUndo({ undoId: result.undoId, message: data.deleted ? '删除' : '批量修改' })
       await loadBookmarks()
-      // 被跳过的条目要如实告知，避免「点了没反应」的误解
-      const skipped = result.skipped?.length ?? 0
-      if (skipped > 0) toast.info(`已处理，${skipped} 条被跳过（可能已被删除）`)
-      else if (result.undoId) toast.undoable(data.deleted ? '已移入回收站' : '已更新', result.undoId)
-      else toast.success(data.deleted ? '已移入回收站' : '已更新')
+      if (chunks.length > 1) {
+        toast.success(`已更新 ${updated} 条${skipped > 0 ? `，${skipped} 条被跳过` : ''}（分 ${chunks.length} 批执行）`)
+      } else {
+        // 双入口撤销：Toast 直带撤销按钮（状态栏保留兜底）
+        if (lastUndoId) offerUndo({ undoId: lastUndoId, message: data.deleted ? '删除' : '批量修改' })
+        if (skipped > 0) toast.info(`已处理，${skipped} 条被跳过（可能已被删除）`)
+        else if (lastUndoId) toast.undoable(data.deleted ? '已移入回收站' : '已更新', lastUndoId)
+        else toast.success(data.deleted ? '已移入回收站' : '已更新')
+      }
     } catch (e) {
       toast.error(errorMessage(e, '批量操作失败'))
     }
+  }
+
+  /** 批量入口：影响面超阈值先进确认，把「将改什么、影响几条」摆到用户眼前 */
+  const runBatch = async (data: Parameters<typeof bookmarksApi.batchUpdate>[0]) => {
+    if (data.ids.length > BATCH_CONFIRM_THRESHOLD) {
+      setPendingBatch({ data, description: describeBatchChange(data) })
+      return
+    }
+    await executeBatch(data)
+  }
+
+  /** 影响面预览文案：把所选改动翻译成一句白话（收藏夹/标签名就地查，查不到标「?」） */
+  const describeBatchChange = (data: Parameters<typeof bookmarksApi.batchUpdate>[0]): string => {
+    const n = data.ids.length
+    if (data.deleted) return `将把 ${n} 条书签移入回收站（可在回收站恢复）`
+    const parts: string[] = []
+    if (data.folderId) parts.push(`移入收藏夹「${folders.find((f) => f.id === data.folderId)?.name ?? '?'}」`)
+    if (data.addTagIds?.length) parts.push(`添加标签 ${data.addTagIds.map((id) => tags.find((t) => t.id === id)?.name ?? '?').join('、')}`)
+    if (data.removeTagIds?.length) parts.push(`移除标签 ${data.removeTagIds.map((id) => tags.find((t) => t.id === id)?.name ?? '?').join('、')}`)
+    if (data.addSceneIds?.length) parts.push(`加入场景「${scenes.find((s) => s.id === data.addSceneIds?.[0])?.name ?? '?'}」`)
+    if (data.status) parts.push('更改状态')
+    return `将把 ${n} 条书签${parts.length > 0 ? `：${parts.join('，')}` : '按所选条件修改'}`
+  }
+
+  /** 全选匹配项（P1b）：按当前筛选/搜索条件取全部 id，选中集合与列表所见同口径 */
+  const selectAllMatching = async () => {
+    setSelectingAll(true)
+    try {
+      // Inbox 视图的口径是「未读」：ids 端点走通用筛选，需显式补 status=unread
+      const params: BookmarkListParams = { ...queryParams(), ...(isInbox ? { status: 'unread' } : {}) }
+      const result = await bookmarksApi.ids(params)
+      setSelectedIds(new Set(result.ids))
+      if (result.truncated) toast.info(`已选前 ${result.ids.length} 条（匹配约 ${result.total} 条）——已达单次全选上限，建议先缩小筛选范围`)
+      else toast.info(`已选全部匹配的 ${result.ids.length} 条`)
+    } catch (e) {
+      toast.error(errorMessage(e, '全选失败'))
+    }
+    setSelectingAll(false)
   }
 
   /** 行内/看板改状态：单条 PATCH，成功后就地更新，避免整页重载 */
@@ -405,6 +468,18 @@ export function WorkbenchPage() {
       {selectedIds.size > 0 && (
         <div className="selection-bar">
           <span className="selection-bar-count">已选 {selectedIds.size}</span>
+          {/* 全选匹配项（P1b）：把「逐条勾选」升级为「对整个集合操作」——
+              先勾一条浮起批量条，再一键把当前筛选/搜索命中的全部条目纳入选择 */}
+          {total != null && total > selectedIds.size && (
+            <button
+              type="button"
+              className="btn btn--pill"
+              disabled={selectingAll}
+              onClick={() => { void selectAllMatching() }}
+            >
+              {selectingAll ? '全选中…' : `全选匹配项（共 ${total} 条）`}
+            </button>
+          )}
           {/* AI 建议落点②「整理时」：整理过程中就告知选中项里有多少条有建议待确认 */}
           {selectedSuggestionCount > 0 && (
             <button
@@ -561,6 +636,20 @@ export function WorkbenchPage() {
         onOpenBookmark={(id) => { void openBookmarkById(id) }}
         onClose={() => setShowCommand(false)}
         open={showCommand}
+      />
+
+      {/* 批量影响面确认（P1b-2）：大集合改动先把「将改什么、影响几条」摆出来再动手 */}
+      <ConfirmDialog
+        open={pendingBatch !== null}
+        title="批量修改确认"
+        message={pendingBatch?.description ?? ''}
+        confirmLabel={pendingBatch ? `应用（${pendingBatch.data.ids.length} 条）` : '应用'}
+        onConfirm={() => {
+          const pending = pendingBatch
+          setPendingBatch(null)
+          if (pending) void executeBatch(pending.data)
+        }}
+        onCancel={() => setPendingBatch(null)}
       />
     </div>
   )

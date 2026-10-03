@@ -528,6 +528,29 @@ describe('bookmark and access record API', () => {
     expect(await pending.json()).toEqual({ pendingCount: 0 })
   })
 
+  it('GET /api/bookmarks/ids returns id-only projection for select-all-matching (P1b)', async () => {
+    const repo = repository()
+    const app = createApp(repo, { password: 'secret' })
+    const { cookie } = await login(app)
+    for (const url of ['https://example.com/a', 'https://example.com/b']) {
+      await app.request('/api/bookmarks', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ url }),
+      })
+    }
+    const response = await app.request('/api/bookmarks/ids', { headers: { cookie } })
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.ids).toHaveLength(2)
+    expect(body.ids.every((id: string) => typeof id === 'string' && id.length > 0)).toBe(true)
+    expect(body.total).toBe(2)
+    expect(body.truncated).toBe(false)
+    // 未登录与其它 /api/bookmarks/* 同口径拒绝
+    const anon = await app.request('/api/bookmarks/ids')
+    expect(anon.status).toBe(401)
+  })
+
   it('creates and lists access records with server-generated timestamps', async () => {
     const repo = repository()
     const app = createApp(repo, { password: 'secret' })

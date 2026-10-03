@@ -458,25 +458,42 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
   return visible ? { navVisibleIds: ids } : { navExcludedIds: ids }
 }
 
+/**
+ * 列表 / 搜索 / ids 三个路由共用的筛选实参：查询串 → 仓储 filter 对象。
+ * 三处口径必须一致——「列表里看到的」就是「全选匹配项选中的」（P1b 集合操作）。
+ */
+async function bookmarkFiltersOf(
+  c: { req: { query(name: string): string | undefined } },
+  repository: BookmarkRepository,
+  navVisible: 'true' | 'false' | undefined,
+  createdFrom?: Date,
+  createdTo?: Date,
+) {
+  const navFilter = navVisible !== undefined ? await navVisibilityFilter(repository, navVisible === 'true') : {}
+  const importantQuery = c.req.query('important')
+  return {
+    q: c.req.query('q'),
+    status: c.req.query('status'),
+    sceneId: c.req.query('sceneId'),
+    folderId: c.req.query('folderId') === 'none' ? 'none' : c.req.query('folderId'),
+    tagId: c.req.query('tagId'),
+    lastOpenedBefore: parseLastOpenedBefore(c.req.query('lastOpenedBefore')),
+    important: importantQuery === undefined ? undefined : importantQuery === 'true',
+    source: c.req.query('source'),
+    createdFrom,
+    createdTo,
+    ...navFilter,
+  }
+}
+
   app.get('/api/bookmarks', async (c) => {
     const query = bookmarkListQuerySchema.safeParse(c.req.query())
     if (!query.success) return invalidRequest(c)
     const { limit, cursor, sort, createdFrom, createdTo, navVisible } = query.data
-    const importantQuery = c.req.query('important')
-    const navFilter = navVisible !== undefined ? await navVisibilityFilter(repository, navVisible === 'true') : {}
-    const result = await repository.list({
-      q: c.req.query('q'),
-      status: c.req.query('status'),
-      sceneId: c.req.query('sceneId'),
-      folderId: c.req.query('folderId') === 'none' ? 'none' : c.req.query('folderId'),
-      tagId: c.req.query('tagId'),
-      lastOpenedBefore: parseLastOpenedBefore(c.req.query('lastOpenedBefore')),
-      important: importantQuery === 'true' ? true : importantQuery === 'false' ? false : undefined,
-      source: c.req.query('source'),
-      createdFrom,
-      createdTo,
-      ...navFilter,
-    }, limit, cursor, { sort })
+    const result = await repository.list(
+      await bookmarkFiltersOf(c, repository, navVisible, createdFrom, createdTo),
+      limit, cursor, { sort },
+    )
     return c.json({ items: result.items.map(serializeBookmark), nextCursor: result.nextCursor, total: result.total })
   })
 
@@ -683,16 +700,39 @@ async function navVisibilityFilter(repository: BookmarkRepository, visible: bool
     const query = bookmarkListQuerySchema.safeParse(c.req.query())
     if (!query.success) return invalidRequest(c)
     const { limit, cursor, sort, createdFrom, createdTo, navVisible } = query.data
-    const navFilter = navVisible !== undefined ? await navVisibilityFilter(repository, navVisible === 'true') : {}
     const items = await repository.search({
-      q: c.req.query('q'), status: c.req.query('status'), sceneId: c.req.query('sceneId'),
-      folderId: c.req.query('folderId') === 'none' ? 'none' : c.req.query('folderId'),
-      tagId: c.req.query('tagId'),
-      lastOpenedBefore: parseLastOpenedBefore(c.req.query('lastOpenedBefore')), important: c.req.query('important') === undefined ? undefined : c.req.query('important') === 'true',
-      source: c.req.query('source'), includeDeleted: false,
-      createdFrom, createdTo, ...navFilter,
+      ...(await bookmarkFiltersOf(c, repository, navVisible, createdFrom, createdTo)),
+      includeDeleted: false,
     }, limit, cursor, { sort })
     return c.json({ items: items.items.map(serializeBookmark), nextCursor: items.nextCursor, total: items.total })
+  })
+
+  // 全选匹配项的数据源（P1b 集合操作）：按当前筛选取全部 id 的瘦投影。
+  // 不做写操作——批量仍走 PATCH /api/bookmarks/batch（前端按 ≤100 分块），
+  // 这里只负责把「集合」的边界算出来。CAP 内页循环是 keyset 游标，D1 开销 = 页数。
+  app.get('/api/bookmarks/ids', async (c) => {
+    const query = bookmarkListQuerySchema.safeParse(c.req.query())
+    if (!query.success) return invalidRequest(c)
+    const { createdFrom, createdTo, navVisible } = query.data
+    const SELECT_PAGE = 100
+    const SELECT_CAP = 2000
+    const filters = await bookmarkFiltersOf(c, repository, navVisible, createdFrom, createdTo)
+    const ids: string[] = []
+    let total: number | null = null
+    let cursor: string | undefined
+    for (;;) {
+      const result = await repository.list(filters, SELECT_PAGE, cursor, { sort: 'recent' })
+      total = typeof result.total === 'number' ? result.total : total
+      for (const row of result.items) {
+        const id = String((row as Record<string, unknown>).id ?? '')
+        if (id) ids.push(id)
+      }
+      cursor = result.nextCursor ?? undefined
+      if (!cursor || ids.length >= SELECT_CAP) break
+    }
+    // 撞上限且还有下一页才叫截断——如实告知，界面不得暗示「这就是全部」
+    const truncated = ids.length >= SELECT_CAP && cursor !== undefined
+    return c.json({ ids, total: total ?? ids.length, truncated })
   })
 
   app.get('/api/bookmarks/search-index', async (c) => {
