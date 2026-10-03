@@ -502,17 +502,18 @@ select.input {
   color: var(--faint);
 }
 
-/* 向左滑出的浮条（方案 D 镜像）。
- * justify-content: flex-end 是关键：内容贴住右缘，宽度由 0 增长时最右侧先出现、
- * 左侧后出现，读到的方向才是「向左生长」；用默认 flex-start 会读成向右展开。
+/* 浮条：多行面板，在胶囊**下方**展开、右缘对齐胶囊（2026-10-03 修正）。
+ * 旧单行胶囊时代是「顶栏内垂直居中、向左滑出」——多行化后浮条高了约 3 倍，
+ * 垂直居中会让上半截顶出屏幕外（胶囊本身就贴着屏幕顶）。改为下落式后任何行数都安全；
+ * max-width 从 0 展开、右缘固定，宽度仍是「从右往左出现」，生长方向不变。
  * visibility 参与过渡是为了把收起态的按钮移出 Tab 序列——只用 opacity 隐藏时
- * 键盘仍会聚焦到看不见的「拉取 / 推送」。
+ * 键盘仍会聚焦到看不见的「下载 / 上传」。
  * 不设 z-index：浮条在定位层里天然压住 .app-body 的普通流内容，而带 z-index 的
  * 遮罩（详情浮层的 backdrop）仍会正常盖住它。 */
 .sync-strip {
   position: absolute;
-  top: 50%;
-  right: calc(100% + var(--space-2));
+  top: calc(100% + var(--space-2));
+  right: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -533,7 +534,7 @@ select.input {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translateY(-50%) translateX(10px);
+  transform: translateY(-4px);
   transition: max-width 200ms ease, padding 200ms ease, opacity 150ms ease,
     transform 200ms ease, border-color 200ms ease, visibility 0s linear 200ms;
 }
@@ -546,7 +547,7 @@ select.input {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  transform: translateY(-50%);
+  transform: none;
   transition-delay: 0s;
 }
 
@@ -650,16 +651,15 @@ select.input {
     position: static;
   }
 
+  /* 窄屏：展开位置与宽屏相同（胶囊下方），只是右缘改对齐视口留白
+   * （syncbox 已 static，定位基准回到顶栏），并把最大宽压进视口 */
   .sync-strip {
-    top: calc(100% + var(--space-1));
     right: var(--space-4);
-    transform: translateY(-4px);
   }
 
   .syncbox:hover .sync-strip,
   .syncbox.is-open .sync-strip {
-    max-width: min(380px, calc(100vw - var(--space-8)));
-    transform: none;
+    max-width: min(480px, calc(100vw - var(--space-8)));
   }
 }
 
