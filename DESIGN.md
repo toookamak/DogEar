@@ -152,7 +152,7 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 - Toast：`--panel-raised` 底 + 左缘 2px 实色（成功=薄荷/失败=红/信息=橙），带撤销按钮时文字用橙
 
 ### 外壳常驻状态区（2026-09-27 新增；2026-10-03 按界面稿 v0.3 升级为双向差异口径）
-- **同步胶囊（顶栏右上角）**：折叠态 = 三色灯箱（绿=数据一致 / 黄=有修改未同步 / 红=出错 / 黄绿交替=正在同步）+ 差异数：**失败数压过一切**（红）；`↑领先 / ↓落后` 双计数并排（`--amber-strong`=本地动作 / `--blue`=远端信息，分隔线隔开），只有一侧时只显示那一侧，两侧皆 0 只留绿点 + 「已同步」不占视觉；差异探测失败显示「未知」——不知道远端状态就不得宣布「已同步」。胶囊本体仍是 `--radius-full-pill`、`--control-h` 32px。悬停或点击**向左**滑出**多行**操作浮条（`--radius-featured` 弹层圆角）：第一行「下载 / 上传」两个可单独决策的动作（下载=从 Raindrop 追平；上传=立即回写，改动本身会自动回写，按钮 title 写明）；其下按需各占一行——「待回写 ↑N」+ 领先明细（「N 条改标签 · M 条改收藏夹」，breakdown 只在展开时取，探测**不随状态轮询**，额度保护见功能重构计划 §3.6.2）、「落后 ↓N(+）（至少 N，不谎报总数）」、「失败 N」、「冲突 N · 管理冲突 →」、「上次操作失败」；底部一行「上次同步 · 查看日志 →」。其中「上次同步」取推送与拉取中**较晚**的一次——下载与上传是相邻的两个按钮，紧邻的「上次」必然被读成「上次我做的那个动作」，只取推送时间会在刚点完下载时显示「从未」；精确拆分（上次推送 / 上次拉取）放 `title`。失败原因常驻一行红字（进 `title`），因为错误 toast 6 秒后消失、界面不留痕。浮条内容**贴右缘**——宽度由 0 增长时最右侧先出现，读到的方向才是「向左生长」；收起态用 `visibility: hidden` 把内部按钮移出 Tab 序列（只用 `opacity` 时键盘仍会聚焦到看不见的按钮）。同步状态的**唯一入口**：底部状态栏不再重复展示
+- **同步胶囊（顶栏右上角）**：折叠态 = 三色灯箱（绿=数据一致 / 黄=有修改未同步 / 红=出错 / 黄绿交替=正在同步）+ 差异数：**失败数压过一切**（红）；`↑领先 / ↓落后` 双计数并排（`--amber-strong`=本地动作 / `--blue`=远端信息，分隔线隔开），只有一侧时只显示那一侧，两侧皆 0 只留绿点 + 「已同步」不占视觉；差异探测失败显示「未知」——不知道远端状态就不得宣布「已同步」。胶囊本体仍是 `--radius-full-pill`、`--control-h` 32px。悬停或点击在胶囊**下方**展开**多行**操作浮条（右缘对齐胶囊、宽度从右往左生长，`--radius-featured` 弹层圆角；**不得再垂直居中于胶囊**——多行面板高于胶囊，居中会把上半截顶出屏幕顶）：第一行「下载 / 上传」两个可单独决策的动作（下载=从 Raindrop 追平；上传=立即回写，改动本身会自动回写，按钮 title 写明）；其下按需各占一行——「待回写 ↑N」+ 领先明细（「N 条改标签 · M 条改收藏夹」，breakdown 只在展开时取，探测**不随状态轮询**，额度保护见功能重构计划 §3.6.2）、「落后 ↓N(+）（至少 N，不谎报总数）」、「失败 N」、「冲突 N · 管理冲突 →」、「上次操作失败」；底部一行「上次同步 · 查看日志 →」。其中「上次同步」取推送与拉取中**较晚**的一次——下载与上传是相邻的两个按钮，紧邻的「上次」必然被读成「上次我做的那个动作」，只取推送时间会在刚点完下载时显示「从未」；精确拆分（上次推送 / 上次拉取）放 `title`。失败原因常驻一行红字（进 `title`），因为错误 toast 6 秒后消失、界面不留痕。浮条内容**贴右缘**——宽度由 0 增长时最右侧先出现，读到的方向才是「向左生长」；收起态用 `visibility: hidden` 把内部按钮移出 Tab 序列（只用 `opacity` 时键盘仍会聚焦到看不见的按钮）。同步状态的**唯一入口**：底部状态栏不再重复展示
 - **账户菜单（侧栏左下角）**：侧栏贴底，弹层只能朝上。合并原「设置」单项 + 原顶栏的主题切换与退出。触发器 `--control-h` 32px，菜单 = 侧栏内容宽 + `--radius-lg` + `--modal-shadow`；「主题」行的浅 / 深两态写**显式偏好**（语义同删除前的顶栏按钮），「跟随系统」三态仍在设置页「外观」
 - 一般规则：**系统级动作（设置 / 主题 / 退出）收在一处，不放顶栏**；顶栏只放全局状态与全局入口，且同一动作不两处并列（「两个添加书签」是反例）
 
@@ -178,8 +178,8 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 | `--radius-sm` | 3px | 微件：`.topbar-kbd`、`.palette-kbd`、色点容器、骨架条、`.account-item`、`.account-seg` 内按钮 |
 | `--radius` | 4px | 输入与卡片：`.input` / `select` / `.textarea`、`.topbar-search`、`.toolbar-search`、`.card`、`.bm-card`、`.bm-tile`、`.bm-board-col`、`.bm-table`、`.stat-item`、`.empty-state`、`.chip`、`.btn--pill`、`.tag-pill`、`.tag-chip`、`.bm-card-chip`、`.bm-tile-icon`、`.view-btn`、`.account-seg` |
 | `--radius-lg` | 6px | 按钮与面板：`.btn--primary`、`.btn--ghost`、`.icon-btn`、`.nav-item`、`.settings-tab`、`.tab-btn`、`.settings-section`、`.filter-pop`、`.view-switcher`、`.toast`、`.selection-bar`、`.sidebar-group`（维度白卡）、`.account-trigger`、`.account-menu` |
-| `--radius-featured` | 8px | 弹层：`.modal`、`.palette`、`.auth-card` |
-| `--radius-full-pill` | 9999px | 仅计数徽标、状态 pill 与同步胶囊 / 浮条（`.sync-lamp`、`.sync-strip`） |
+| `--radius-featured` | 8px | 弹层：`.modal`、`.palette`、`.auth-card`、同步浮条 `.sync-strip`（多行化后从 pill 改弹层圆角，2026-10-03） |
+| `--radius-full-pill` | 9999px | 仅计数徽标、状态 pill 与同步胶囊（`.sync-lamp`） |
 
 例外（不算违规）：圆形元素（勾选键、状态点、favicon 圆标、`.account-avatar`、`.sync-lamp-dot`）的 `50%`、骨架屏齐边元素的 `0`。
 
@@ -187,7 +187,7 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 
 | Token | 值 | 归属 |
 | --- | --- | --- |
-| `--control-h` | 32px | `.btn` 全族、`.toolbar-search`、`.filter-toggle`、`.toolbar-sort`、`.view-switcher`、单行 `.input`、`.nav-item`、`.sync-lamp`、`.sync-strip`、`.account-trigger`、`.account-item`、`.account-row` |
+| `--control-h` | 32px | `.btn` 全族、`.toolbar-search`、`.filter-toggle`、`.toolbar-sort`、`.view-switcher`、单行 `.input`、`.nav-item`、`.sync-lamp`（浮条 `.sync-strip` 多行化后只保留 32px 为最小高，随行数增高）、`.account-trigger`、`.account-item`、`.account-row` |
 | `--control-h-sm` | 28px | `.chip` |
 | `--control-h-xs` | 24px | `.mini-btn`、`.sync-strip-btn`、`.account-seg` 内按钮 |
 | `--icon-btn-size` | 30px | `.icon-btn`（仅顶栏） |
@@ -226,8 +226,8 @@ DogEar 的默认主题是「**Notion 风 × Cloudflare 橙**」：纯白纸面�
 | 宽度 | 变化 |
 | --- | --- |
 | <768px | 侧栏转抽屉、内容留白降到 16px、网格单列、看板 78vw 横滚、顶栏搜索只留图标 |
-| <1366px | 同步浮条改为右锚定、落在顶栏下沿之下。原因：宽屏版浮条要在顶栏中段水平向左滑出，需要约 380px 空档（空档 ≈ `(视口宽 - 599) / 2`），中窄视口装不下会把搜索入口压住 |
-| ≥1366px | 完整外壳；同步浮条在顶栏内水平向左滑出 |
+| <1366px | 同步浮条仍在胶囊下方展开，但右缘改对齐视口留白、最大宽压进视口（syncbox 退为 static，定位基准回到顶栏） |
+| ≥1366px | 完整外壳；同步浮条在胶囊下方展开、右缘对齐胶囊（2026-10-03 起，宽窄屏统一「下落式」——旧「顶栏内垂直居中向左滑出」是单行胶囊的口径，多行面板垂直居中会顶出屏幕顶） |
 
 ## 9. Agent 指南（写界面时的快查）
 
