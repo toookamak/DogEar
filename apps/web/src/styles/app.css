@@ -744,6 +744,20 @@ select.input {
   padding: var(--space-2);
   border-right: 1px solid var(--line);
   background-color: var(--sidebar-bg, var(--panel));
+  /* 2026-10-04：侧栏自身不滚动，滚动交给 .sidebar-scroll。
+     此前 overflow-y 在这里，底部账户菜单是同一个滚动流里的最后一项——
+     维度条目一多就被一起推走，「设置」这个系统级入口不再随时可点。 */
+  overflow: hidden;
+}
+
+/* 侧栏可滚动区：导航 + 三个维度组。min-height: 0 是关键——
+ * flex 子项默认 min-height:auto，不置 0 就不会收缩到内容以下，内部滚动不生效。 */
+.sidebar-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -984,9 +998,12 @@ select.input {
 /* ---------------------------------------------------------- 账户菜单（左下角）
  * 2026-09-27：合并原「设置」单项 + 原顶栏的主题切换与退出。
  * 侧栏贴底，弹层只能朝上展开。顶栏不再保留主题入口，
- * 「跟随系统」三态仍在设置页「外观」（这里的浅/深写的是显式偏好，语义同删除前的顶栏按钮）。 */
+ * 「跟随系统」三态仍在设置页「外观」（这里的浅/深写的是显式偏好，语义同删除前的顶栏按钮）。
+ * 2026-10-04：贴底改由「在滚动区之外」保证（.sidebar-scroll 撑满剩余高度），
+ * margin-top: auto 只在内容不满时有效、溢出时形同虚设，故删除；
+ * flex-shrink: 0 则保证滚动区再矮，这一项也不被压扁。 */
 .sidebar-footer {
-  margin-top: auto;
+  flex-shrink: 0;
   padding-top: var(--space-2);
   border-top: 1px solid var(--line);
 }
